@@ -129,8 +129,11 @@ function _doAutoPick(leagueId, expectedPick, io) {
       }
 
       if (!available) {
-        // Best Available: prefer non-injured, fall back to anything if all injured
-        available = allAvailable.find(p => !p.injury_flagged) || allAvailable[0] || null;
+        // Best Available: sort by ETP (not raw PPG), skip injured if possible
+        const sorted = [...allAvailable].sort((a, b) =>
+          calcETP(b.season_ppg, b.seed, !!b.is_first_four) - calcETP(a.season_ppg, a.seed, !!a.is_first_four)
+        );
+        available = sorted.find(p => !p.injury_flagged) || sorted[0] || null;
       }
     }
 
