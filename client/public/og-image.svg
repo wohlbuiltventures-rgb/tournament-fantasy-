@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <!-- Dark background gradient -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#0a0e17"/>
+      <stop offset="100%" stop-color="#0d1520"/>
+    </linearGradient>
+
+    <!-- Brand blue glow -->
+    <radialGradient id="glow" cx="50%" cy="50%" r="60%">
+      <stop offset="0%"   stop-color="#378ADD" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#378ADD" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Basketball gradient -->
+    <radialGradient id="ball" cx="36%" cy="30%" r="65%" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#F4943A"/>
+      <stop offset="55%"  stop-color="#E07820"/>
+      <stop offset="100%" stop-color="#B85A10"/>
+    </radialGradient>
+
+    <!-- Court line blur -->
+    <filter id="soft">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Ambient glow -->
+  <ellipse cx="600" cy="315" rx="550" ry="300" fill="url(#glow)"/>
+
+  <!-- Subtle court lines -->
+  <circle cx="600" cy="315" r="200" stroke="#378ADD" stroke-width="1" fill="none" opacity="0.08" filter="url(#soft)"/>
+  <circle cx="600" cy="315" r="350" stroke="#378ADD" stroke-width="1" fill="none" opacity="0.05" filter="url(#soft)"/>
+  <line x1="600" y1="0" x2="600" y2="630" stroke="#378ADD" stroke-width="1" opacity="0.05" filter="url(#soft)"/>
+
+  <!-- Left decorative bar -->
+  <rect x="80" y="120" width="4" height="390" rx="2" fill="#378ADD" opacity="0.4"/>
+
+  <!-- Basketball icon -->
+  <g transform="translate(108, 235)">
+    <circle cx="80" cy="80" r="75" fill="url(#ball)"/>
+    <circle cx="80" cy="80" r="75" stroke="#1a0900" stroke-width="3" fill="none"/>
+    <line x1="5"  y1="80" x2="155" y2="80" stroke="#1a0900" stroke-width="7" stroke-linecap="round"/>
+    <line x1="80" y1="5"  x2="80"  y2="155" stroke="#1a0900" stroke-width="7" stroke-linecap="round"/>
+    <path d="M80 5 C50 28 50 132 80 155" stroke="#1a0900" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M80 5 C110 28 110 132 80 155" stroke="#1a0900" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <ellipse cx="55" cy="48" rx="20" ry="12" fill="white" opacity="0.12" transform="rotate(-30 55 48)"/>
+  </g>
+
+  <!-- TourneyRun wordmark -->
+  <!-- "tourney" light -->
+  <text x="320" y="320" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="90" font-weight="300" fill="#B5D4F4" letter-spacing="-2">tourney</text>
+  <!-- "run" bold blue — measured: "tourney" at 90px weight 300 ≈ 390px wide -->
+  <text x="696" y="320" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="90" font-weight="800" fill="#378ADD" letter-spacing="-2">run</text>
+
+  <!-- Tagline -->
+  <text x="320" y="374" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="400" fill="#6B7280" letter-spacing="6">PLAYER POOL FANTASY</text>
+
+  <!-- Divider -->
+  <line x1="320" y1="408" x2="900" y2="408" stroke="#1f2937" stroke-width="1"/>
+
+  <!-- Description -->
+  <text x="320" y="450" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="26" font-weight="400" fill="#9CA3AF">Draft college basketball players. Win real money.</text>
+
+  <!-- Bottom brand strip -->
+  <rect x="0" y="608" width="1200" height="4" fill="#378ADD" opacity="0.6"/>
+
+  <!-- URL hint -->
+  <text x="1120" y="596" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="18" font-weight="500" fill="#374151" text-anchor="end">tourneyrun.app</text>
+</svg>

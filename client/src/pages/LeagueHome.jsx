@@ -1,0 +1,846 @@
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import api from '../api';
+import Disclaimer from '../components/Disclaimer';
+import TeamAvatar from '../components/TeamAvatar';
+import { useDocTitle } from '../hooks/useDocTitle';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmt(n) {
+  if (!n && n !== 0) return '$0';
+  return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
+}
+
+// ── Status badge ──────────────────────────────────────────────────────────────
+const STATUS = {
+  pending_payment: { label: 'Awaiting Payment', dot: 'bg-yellow-400', badge: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400' },
+  lobby:           { label: 'Waiting for Draft', dot: 'bg-yellow-400', badge: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400' },
+  drafting:        { label: 'Live Draft',         dot: 'bg-brand-400',  badge: 'bg-brand-500/15 border-brand-500/30 text-brand-400'   },
+  active:          { label: 'Season Active',      dot: 'bg-green-400',  badge: 'bg-green-500/15 border-green-500/30 text-green-400'   },
+  completed:       { label: 'Season Complete',    dot: 'bg-gray-500',   badge: 'bg-gray-800 border-gray-700 text-gray-400'            },
+};
+
+function StatusBadge({ status }) {
+  const s = STATUS[status] || STATUS.lobby;
+  return (
+    <span className={`inline-flex items-center gap-2 border px-3 py-1 rounded-full text-sm font-semibold ${s.badge}`}>
+      <span className={`w-2 h-2 rounded-full ${s.dot} animate-pulse`} />
+      {s.label}
+    </span>
+  );
+}
+
+function PaymentBadge({ status }) {
+  if (status === 'paid') return (
+    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">✓ Paid</span>
+  );
+  return (
+    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Pending</span>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export default function LeagueHome() {
+  const { id } = useParams();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [league, setLeague]       = useState(null);
+  useDocTitle(league ? `${league.name} | TourneyRun` : 'TourneyRun');
+  const [members, setMembers]     = useState([]);
+  const [settings, setSettings]   = useState(null);
+  const [myPicks, setMyPicks]     = useState([]);
+  const [tab, setTab]             = useState('overview');
+  const [loading, setLoading]     = useState(true);
+  const [copied, setCopied]       = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [starting, setStarting]   = useState(false);
+
+  const [paymentInfo, setPaymentInfo]         = useState(null);
+  const [paymentLoading, setPaymentLoading]   = useState(false);
+  const [entryPayLoading, setEntryPayLoading] = useState(false);
+  const [populateLoading, setPopulateLoading] = useState(false);
+  const [populateResult, setPopulateResult]   = useState(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError]         = useState('');
+  const [instrCopied, setInstrCopied]         = useState(false);
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    setAvatarError('');
+    try {
+      const fd = new FormData();
+      fd.append('avatar', file);
+      fd.append('leagueId', id);
+      await api.post('/upload/avatar', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await fetchData();
+    } catch (err) {
+      setAvatarError(err.response?.data?.error || 'Upload failed');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  useEffect(() => { fetchData(); }, [id]);
+
+  const fetchData = async () => {
+    try {
+      const [leagueRes, payRes] = await Promise.all([
+        api.get(`/leagues/${id}`),
+        api.get(`/payments/league/${id}/status`).catch(() => null),
+      ]);
+
+      setLeague(leagueRes.data.league);
+      setMembers(leagueRes.data.members);
+      setSettings(leagueRes.data.settings);
+      if (payRes) setPaymentInfo(payRes.data);
+
+      if (['active', 'drafting', 'completed'].includes(leagueRes.data.league.status)) {
+        const draftRes = await api.get(`/draft/${id}/state`);
+        setMyPicks(draftRes.data.picks.filter(p => p.user_id === user.id));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPaymentInfo = async () => {
+    setPaymentLoading(true);
+    try {
+      const res = await api.get(`/payments/league/${id}/status`);
+      setPaymentInfo(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'payments' && !paymentInfo) fetchPaymentInfo();
+  }, [tab]);
+
+  const startDraft = async () => {
+    setStarting(true);
+    try {
+      await api.post(`/admin/leagues/${id}/start-draft`);
+      navigate(`/league/${id}/draft`);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to start draft');
+      setStarting(false);
+    }
+  };
+
+  const copyInviteCode = () => {
+    navigator.clipboard.writeText(league.invite_code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handlePopulateTestLeague = async () => {
+    setPopulateLoading(true);
+    setPopulateResult(null);
+    try {
+      const res = await api.post(`/admin/leagues/${id}/populate-test`);
+      setPopulateResult(res.data);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to populate test league');
+    } finally {
+      setPopulateLoading(false);
+    }
+  };
+
+  const handlePayEntryFee = async () => {
+    setEntryPayLoading(true);
+    try {
+      const res = await api.post('/payments/entry-checkout', { leagueId: id });
+      window.location.href = res.data.url;
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to start payment');
+      setEntryPayLoading(false);
+    }
+  };
+
+  // ── Loading skeleton ──────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-12">
+        <div className="animate-pulse space-y-4">
+          <div className="h-14 bg-gray-800 rounded-xl w-2/3" />
+          <div className="h-6 bg-gray-800 rounded-full w-36" />
+          <div className="grid grid-cols-4 gap-3 mt-6">
+            {[0,1,2,3].map(i => <div key={i} className="h-28 bg-gray-800 rounded-2xl" />)}
+          </div>
+          <div className="h-48 bg-gray-800 rounded-2xl" />
+          <div className="h-48 bg-gray-800 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!league) return <div className="text-center py-12 text-gray-400">League not found</div>;
+
+  // ── Derived state ─────────────────────────────────────────────────────────
+  const isCommissioner = league.commissioner_id === user?.id;
+  const buyIn          = league.buy_in_amount || 0;
+  const prizePool      = buyIn * members.length;
+  const maxPrizePool   = buyIn * league.max_teams;
+  const spotsLeft      = league.max_teams - members.length;
+
+  const myPayment    = paymentInfo?.payments?.find(p => p.user_id === user?.id);
+  const myPaymentDue = myPayment?.status === 'pending';
+  const paidCount    = paymentInfo?.paid_count ?? 0;
+  const totalCount   = paymentInfo?.total_count ?? 0;
+  const allPaid      = totalCount > 0 && paidCount === totalCount;
+
+  const paymentMap = {};
+  paymentInfo?.payments?.forEach(p => { paymentMap[p.user_id] = p.status; });
+
+  const tabs = [
+    { id: 'overview',  label: 'Overview'  },
+    { id: 'roster',    label: 'My Roster' },
+    { id: 'standings', label: 'Standings' },
+    { id: 'payments',  label: 'Payments', dot: myPaymentDue },
+    ...(isCommissioner ? [{ id: 'admin', label: 'Admin' }] : []),
+  ];
+
+  const statCards = [
+    {
+      icon: '👥', label: 'Teams',
+      value: `${members.length}/${league.max_teams}`,
+      sub: spotsLeft > 0 ? `${spotsLeft} spots left` : 'League full',
+      gold: false,
+    },
+    {
+      icon: '📋', label: 'Draft Rounds',
+      value: league.total_rounds,
+      sub: `${league.total_rounds * league.max_teams} total picks`,
+      gold: false,
+    },
+    {
+      icon: '⏱', label: 'Pick Timer',
+      value: `${league.pick_time_limit}s`,
+      sub: 'per pick',
+      gold: false,
+    },
+    buyIn > 0
+      ? { icon: '🏆', label: 'Prize Pool', value: fmt(prizePool), sub: `up to ${fmt(maxPrizePool)}`, gold: true }
+      : { icon: '🏆', label: 'Prize Pool', value: 'No buy-in', sub: 'free league', gold: true },
+  ];
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-8">
+
+      {/* ── Header ── */}
+      <div className="relative mb-8">
+        <div className="absolute -inset-6 bg-brand-500/5 rounded-3xl blur-2xl pointer-events-none" />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-4xl sm:text-5xl font-black text-white mb-3 leading-tight">
+              {league.name}
+            </h1>
+            <StatusBadge status={league.status} />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {league.status === 'drafting' && (
+              <Link to={`/league/${id}/draft`} className="btn-primary px-5 py-2.5 flex items-center gap-2 text-base">
+                🚀 Enter Draft Room
+              </Link>
+            )}
+            {(league.status === 'active' || league.status === 'completed') && (
+              <Link to={`/league/${id}/leaderboard`} className="btn-secondary px-5 py-2.5">
+                Leaderboard
+              </Link>
+            )}
+            {isCommissioner && league.status === 'active' && (
+              <Link to={`/league/${id}/admin`} className="btn-secondary px-5 py-2.5">
+                Enter Stats
+              </Link>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Access fee banner ── */}
+      {myPaymentDue && (
+        <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-4 mb-6 flex items-center justify-between gap-4">
+          <div>
+            <div className="text-red-300 font-semibold">Access Fee Due</div>
+            <div className="text-red-400/80 text-sm">Pay your $5.00 access fee to participate in the draft.</div>
+          </div>
+          <button onClick={handlePayEntryFee} disabled={entryPayLoading}
+            className="bg-red-600 hover:bg-red-500 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap shrink-0">
+            {entryPayLoading ? 'Loading...' : 'Pay $5.00'}
+          </button>
+        </div>
+      )}
+
+      {/* ── Pill tabs ── */}
+      <div className="flex gap-2 mb-8 overflow-x-auto pb-1">
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`relative flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200 ${
+              tab === t.id
+                ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+            }`}>
+            {t.label}
+            {t.dot && <span className="w-2 h-2 bg-red-500 rounded-full" />}
+          </button>
+        ))}
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* OVERVIEW TAB                                                         */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {tab === 'overview' && (
+        <div className="space-y-6">
+
+          {/* ── Stat cards ── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {statCards.map(card => (
+              <div key={card.label}
+                className={`relative group rounded-2xl p-5 border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+                  card.gold
+                    ? 'bg-gradient-to-br from-amber-900/30 to-gray-900 border-amber-500/30 hover:border-amber-500/60 hover:shadow-amber-500/10'
+                    : 'bg-gray-900 border-gray-800 hover:border-brand-500/30 hover:shadow-brand-500/10'
+                }`}>
+                <div className="text-2xl mb-2">{card.icon}</div>
+                <div className={`text-2xl font-black mb-0.5 ${card.gold ? 'text-amber-400' : 'text-brand-400'}`}>
+                  {card.value}
+                </div>
+                <div className="text-gray-200 text-sm font-semibold">{card.label}</div>
+                <div className="text-gray-500 text-xs mt-0.5">{card.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Prize pool card ── */}
+          {buyIn > 0 && (
+            <div className="relative overflow-hidden rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-900/20 via-gray-900 to-gray-900 p-6">
+              <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative space-y-5">
+
+                {/* Total */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-amber-500 text-xs font-bold uppercase tracking-widest mb-2">Prize Pool</div>
+                    <div className="flex items-end gap-3 flex-wrap">
+                      <span className="text-5xl sm:text-6xl font-black text-white">{fmt(prizePool)}</span>
+                      {members.length < league.max_teams && (
+                        <span className="text-amber-400/50 text-xl font-bold mb-2">/ {fmt(maxPrizePool)} max</span>
+                      )}
+                    </div>
+                    <div className="text-gray-400 text-sm mt-1">{fmt(buyIn)} × {members.length} managers</div>
+                  </div>
+                  <span className="text-6xl select-none" aria-hidden>🏆</span>
+                </div>
+
+                {/* Progress bar */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-300 text-sm font-medium">
+                      {members.length} of {league.max_teams} managers joined
+                    </span>
+                    {spotsLeft > 0
+                      ? <span className="text-red-400 text-sm font-bold">{spotsLeft} {spotsLeft === 1 ? 'spot' : 'spots'} left!</span>
+                      : <span className="text-green-400 text-sm font-bold">League full 🔥</span>
+                    }
+                  </div>
+                  <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="h-3 rounded-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-700 ease-out"
+                      style={{ width: `${(members.length / league.max_teams) * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Payout breakdown */}
+                {(league.payout_first > 0 || league.payout_second > 0 || league.payout_third > 0 || league.payout_bonus > 0) && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { icon: '🥇', label: '1st Place',  pct: league.payout_first,  ring: 'border-yellow-500/40 bg-yellow-500/10',   text: 'text-yellow-400' },
+                      { icon: '🥈', label: '2nd Place',  pct: league.payout_second, ring: 'border-gray-400/30 bg-gray-400/10',       text: 'text-gray-300'  },
+                      { icon: '🥉', label: '3rd Place',  pct: league.payout_third,  ring: 'border-amber-700/40 bg-amber-900/20',     text: 'text-amber-600' },
+                    ].filter(p => p.pct > 0).map(p => {
+                      const cur = prizePool * p.pct / 100;
+                      const max = maxPrizePool * p.pct / 100;
+                      return (
+                        <div key={p.label} className={`rounded-xl border p-3 ${p.ring}`}>
+                          <div className="text-xl mb-1">{p.icon}</div>
+                          <div className={`text-xl font-black ${p.text}`}>{fmt(cur)}</div>
+                          {members.length < league.max_teams && (
+                            <div className="text-gray-500 text-xs">up to {fmt(max)}</div>
+                          )}
+                          <div className="text-gray-400 text-xs mt-0.5">{p.label} · {p.pct}%</div>
+                        </div>
+                      );
+                    })}
+                    {league.payout_bonus > 0 && (
+                      <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 p-3">
+                        <div className="text-xl mb-1">🎯</div>
+                        <div className="text-xl font-black text-brand-400">{fmt(league.payout_bonus)}</div>
+                        <div className="text-gray-400 text-xs mt-0.5">Single game bonus</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Payment instructions */}
+                {league.payment_instructions && (
+                  <div className="border-t border-amber-500/10 pt-4">
+                    <div className="text-gray-400 text-xs font-bold uppercase tracking-wide mb-2">How to Pay Your Buy-in</div>
+                    <div className="flex items-center justify-between gap-3 bg-gray-800/80 rounded-xl px-4 py-3">
+                      <span className="text-gray-200 text-sm">{league.payment_instructions}</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(league.payment_instructions);
+                          setInstrCopied(true);
+                          setTimeout(() => setInstrCopied(false), 2000);
+                        }}
+                        className="text-brand-400 hover:text-brand-300 text-xs font-bold shrink-0 transition-colors"
+                      >
+                        {instrCopied ? '✓ Copied' : 'Copy'}
+                      </button>
+                    </div>
+                    <p className="text-gray-600 text-xs mt-2">Paid outside the app · {fmt(buyIn)} per manager</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Auto-start / scheduled draft banner ── */}
+          {league.status === 'lobby' && (league.auto_start_on_full || league.draft_start_time) && (
+            <div className="flex items-start gap-3 bg-brand-500/10 border border-brand-500/25 rounded-xl p-4">
+              <span className="text-2xl shrink-0">{league.auto_start_on_full ? '⚡' : '🕐'}</span>
+              <div>
+                <div className="text-brand-400 font-bold">
+                  {league.auto_start_on_full ? 'Auto-start enabled' : 'Draft scheduled'}
+                </div>
+                <p className="text-gray-400 text-sm mt-0.5">
+                  {league.auto_start_on_full
+                    ? `Draft will begin automatically once all ${league.max_teams} managers have joined and paid.`
+                    : `Draft starts at ${new Date(league.draft_start_time).toLocaleString()}`}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Draft live banner ── */}
+          {league.status === 'drafting' && (
+            <div className="text-center bg-brand-500/10 border border-brand-500/25 rounded-2xl p-10">
+              <div className="text-6xl mb-3">⚡</div>
+              <h3 className="text-2xl font-black text-white mb-2">Draft Is Live!</h3>
+              <p className="text-gray-400 mb-6">Get in there before your pick timer runs out.</p>
+              <Link to={`/league/${id}/draft`} className="btn-primary px-10 py-3 text-lg inline-flex items-center gap-2">
+                🚀 Enter Draft Room
+              </Link>
+            </div>
+          )}
+
+          {/* ── Invite code (lobby only) ── */}
+          {league.status === 'lobby' && (
+            <div className="rounded-2xl border border-gray-700 bg-gray-900 overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+                <h3 className="font-bold text-white">Invite Your League</h3>
+                {spotsLeft > 0 && (
+                  <span className="text-red-400 text-sm font-bold">
+                    {spotsLeft} {spotsLeft === 1 ? 'spot' : 'spots'} left — fill up fast!
+                  </span>
+                )}
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-gray-800/60 rounded-xl p-6 text-center">
+                  <p className="text-gray-500 text-xs uppercase tracking-widest mb-3">Invite Code</p>
+                  <p className="text-brand-400 font-mono font-black text-5xl sm:text-6xl tracking-[0.25em] mb-5 select-all">
+                    {league.invite_code}
+                  </p>
+                  <div className="flex gap-3 justify-center flex-wrap">
+                    <button onClick={copyInviteCode}
+                      className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
+                        copied
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                          : 'bg-brand-500 hover:bg-brand-400 text-white hover:scale-105'
+                      }`}>
+                      {copied ? '✓ Copied!' : '📋 Copy Code'}
+                    </button>
+                    <button onClick={() => {
+                        const text = `Join my TourneyRun league "${league.name}"!\nInvite code: ${league.invite_code}\n${window.location.origin}/join`;
+                        navigator.clipboard.writeText(text);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }}
+                      className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm border transition-all duration-200 ${
+                        linkCopied
+                          ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                          : 'bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600 hover:scale-105'
+                      }`}>
+                      {linkCopied ? '✓ Copied!' : '🔗 Share Link'}
+                    </button>
+                  </div>
+                </div>
+                <p className="text-gray-600 text-xs text-center">
+                  Friends enter the code at{' '}
+                  <span className="text-gray-400 font-mono">{window.location.origin}/join</span>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Teams grid ── */}
+          <div className="rounded-2xl border border-gray-800 bg-gray-900 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+              <h3 className="font-bold text-white">Teams</h3>
+              <span className="text-gray-500 text-sm">{members.length} / {league.max_teams} joined</span>
+            </div>
+            <div className="p-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {/* Filled slots */}
+              {members.map(member => (
+                <div key={member.id}
+                  className="group flex items-center gap-3 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/40 hover:border-brand-500/30 rounded-xl p-3 transition-all duration-200">
+                  <div className="relative group/av shrink-0">
+                    <TeamAvatar avatarUrl={member.avatar_url} teamName={member.team_name} size="md" />
+                    {member.user_id === user?.id && (
+                      <label
+                        className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover/av:opacity-100 transition-opacity cursor-pointer flex items-center justify-center"
+                        title="Upload team logo"
+                      >
+                        <span className="text-white text-[9px] font-bold">✏️</span>
+                        <input
+                          type="file" accept=".jpg,.jpeg,.png,.gif" className="hidden"
+                          onChange={handleAvatarUpload} disabled={avatarUploading}
+                        />
+                      </label>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white font-semibold text-sm truncate">{member.team_name}</div>
+                    <div className="text-gray-500 text-xs truncate">@{member.username}</div>
+                    {member.venmo_handle && (
+                      <div className="text-green-400/70 text-[10px] truncate mt-0.5" title="Venmo/Zelle">
+                        💸 {member.venmo_handle}
+                      </div>
+                    )}
+                    {member.user_id === user?.id && avatarError && (
+                      <div className="text-red-400 text-[10px] mt-0.5">{avatarError}</div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {member.user_id === league.commissioner_id && (
+                      <span className="text-[9px] font-bold text-brand-400 bg-brand-500/15 border border-brand-500/25 px-1.5 py-0.5 rounded-full">
+                        COMM
+                      </span>
+                    )}
+                    {paymentMap[member.user_id] && (
+                      <PaymentBadge status={paymentMap[member.user_id]} />
+                    )}
+                    {member.total_points > 0 && (
+                      <span className="text-brand-400 font-bold text-xs">{member.total_points}pt</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Empty slots */}
+              {Array.from({ length: spotsLeft }).map((_, i) => (
+                <div key={`empty-${i}`}
+                  className="flex items-center gap-3 bg-gray-800/20 border border-dashed border-gray-700/40 rounded-xl p-3">
+                  <div className="w-9 h-9 rounded-full bg-gray-700/40 flex items-center justify-center text-gray-600 font-bold shrink-0">
+                    +
+                  </div>
+                  <div>
+                    <div className="text-gray-600 text-sm font-medium">Open Slot</div>
+                    <div className="text-gray-700 text-xs">Waiting for manager</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Start draft button (commissioner + lobby) ── */}
+          {isCommissioner && league.status === 'lobby' && (
+            <div className="space-y-2">
+              <button
+                onClick={startDraft}
+                disabled={starting || members.length < 2}
+                className="w-full py-5 text-xl font-black bg-brand-500 hover:bg-brand-400 disabled:opacity-40 text-white rounded-2xl transition-all duration-200 hover:scale-[1.01] hover:shadow-2xl hover:shadow-brand-500/30 disabled:hover:scale-100 flex items-center justify-center gap-3"
+              >
+                <span className="text-3xl">🚀</span>
+                {starting ? 'Starting Draft...' : 'Start Draft'}
+              </button>
+              {members.length < 2 && (
+                <p className="text-yellow-400 text-sm text-center">Need at least 2 teams to start</p>
+              )}
+              {!allPaid && totalCount > 0 && members.length >= 2 && (
+                <p className="text-yellow-400/70 text-xs text-center">
+                  {totalCount - paidCount} manager{totalCount - paidCount !== 1 ? 's' : ''} {totalCount - paidCount !== 1 ? 'haven\'t' : 'hasn\'t'} paid yet — you can still start manually.
+                </p>
+              )}
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* MY ROSTER TAB                                                        */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {tab === 'roster' && (
+        <div>
+          {myPicks.length === 0 ? (
+            <div className="card p-12 text-center text-gray-400">
+              <div className="text-4xl mb-3">📋</div>
+              <p>No players drafted yet.</p>
+              {league.status === 'drafting' && (
+                <Link to={`/league/${id}/draft`} className="btn-primary mt-4 inline-block px-6">
+                  Go to Draft Room
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {myPicks.map(pick => (
+                <div key={pick.id} className="card px-4 py-3 flex items-center gap-4">
+                  <span className="text-gray-500 text-sm w-8">R{pick.round}</span>
+                  <div className="flex-1">
+                    <div className="text-white font-semibold">{pick.player_name}</div>
+                    <div className="text-gray-400 text-sm">{pick.team} · {pick.position}</div>
+                  </div>
+                  <div className="text-right text-sm text-gray-400">
+                    {pick.season_ppg} PPG
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* STANDINGS TAB                                                        */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {tab === 'standings' && (
+        <div>
+          <div className="flex justify-end mb-4">
+            <Link to={`/league/${id}/leaderboard`} className="text-brand-400 hover:text-brand-300 text-sm font-medium">
+              Full Leaderboard →
+            </Link>
+          </div>
+          <div className="card overflow-hidden">
+            <div className="divide-y divide-gray-800">
+              {[...members].sort((a, b) => b.total_points - a.total_points).map((member, i) => (
+                <div key={member.id} className="flex items-center justify-between px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                      i === 0 ? 'bg-yellow-500/20 text-yellow-400' :
+                      i === 1 ? 'bg-gray-400/20 text-gray-300'   :
+                      i === 2 ? 'bg-amber-900/30 text-amber-600'  :
+                                'bg-gray-800 text-gray-500'
+                    }`}>{i + 1}</span>
+                    <TeamAvatar avatarUrl={member.avatar_url} teamName={member.team_name} size="sm" />
+                    <div>
+                      <div className="text-white font-medium">{member.team_name}</div>
+                      <div className="text-gray-500 text-xs">@{member.username}</div>
+                    </div>
+                  </div>
+                  <div className="text-brand-400 font-bold">{member.total_points} pts</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* PAYMENTS TAB                                                         */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {tab === 'payments' && (
+        <div className="space-y-5">
+          {paymentLoading ? (
+            <div className="card p-12 text-center text-gray-400 animate-pulse">Loading payment info...</div>
+          ) : (
+            <>
+              {myPaymentDue && (
+                <div className="card p-5 border-red-500/30">
+                  <h3 className="font-bold text-white mb-1">Access Fee Due</h3>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Pay the $5.00 TourneyRun access fee to participate in the draft.
+                  </p>
+                  <div className="bg-brand-500/10 border border-brand-500/30 rounded-lg p-3 text-sm text-brand-300 mb-4">
+                    Test card: <span className="font-mono font-semibold">4242 4242 4242 4242</span> — any future date, any CVC
+                  </div>
+                  <button onClick={handlePayEntryFee} disabled={entryPayLoading}
+                    className="btn-primary px-6 py-2.5 text-lg">
+                    {entryPayLoading ? 'Redirecting...' : 'Pay $5.00 Access Fee'}
+                  </button>
+                </div>
+              )}
+
+              {league.status === 'lobby' && paymentInfo && (
+                <div className={`rounded-xl p-4 text-sm ${
+                  allPaid
+                    ? 'bg-green-900/20 border border-green-700/40 text-green-300'
+                    : 'bg-yellow-900/20 border border-yellow-700/40 text-yellow-300'
+                }`}>
+                  {allPaid
+                    ? `All ${totalCount} managers have paid — the draft is ready to start.`
+                    : `${paidCount} of ${totalCount} managers have paid. Draft cannot begin until everyone pays.`}
+                </div>
+              )}
+
+              {paymentInfo?.payments?.length > 0 && (
+                <div className="card overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-800">
+                    <h3 className="font-bold text-white">
+                      {isCommissioner ? 'All Member Payments' : 'Payment Status'}
+                    </h3>
+                  </div>
+                  <div className="divide-y divide-gray-800">
+                    {(isCommissioner
+                      ? paymentInfo.payments
+                      : paymentInfo.payments.filter(p => p.user_id === user?.id)
+                    ).map(p => (
+                      <div key={p.user_id} className="flex items-center justify-between px-5 py-3">
+                        <div>
+                          <div className="text-white text-sm font-medium">{p.username}</div>
+                          {p.paid_at && (
+                            <div className="text-gray-500 text-xs">
+                              Paid {new Date(p.paid_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-gray-400 text-sm">${p.amount?.toFixed(2)}</span>
+                          <PaymentBadge status={p.status} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {isCommissioner && (
+                    <div className="px-5 py-3 bg-gray-800/50 border-t border-gray-800 text-sm text-gray-400">
+                      {paidCount} of {totalCount} paid
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Disclaimer className="text-center pt-2" />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* ADMIN TAB                                                            */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {tab === 'admin' && isCommissioner && (
+        <div className="space-y-4">
+          <div className="card p-5">
+            <h3 className="font-bold text-white mb-4">Commissioner Controls</h3>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {league.status === 'lobby' && (
+                <button onClick={startDraft} disabled={starting || members.length < 2}
+                  className="btn-primary py-3 text-center disabled:opacity-50 flex items-center justify-center gap-2">
+                  🚀 {starting ? 'Starting...' : 'Start Draft'}
+                </button>
+              )}
+              {league.status === 'drafting' && (
+                <Link to={`/league/${id}/draft`} className="btn-primary py-3 text-center block">
+                  Go to Draft Room
+                </Link>
+              )}
+              {(league.status === 'active' || league.status === 'completed') && (
+                <Link to={`/league/${id}/admin`} className="btn-primary py-3 text-center block">
+                  Enter Game Stats
+                </Link>
+              )}
+              <Link to={`/league/${id}/leaderboard`} className="btn-secondary py-3 text-center block">
+                View Leaderboard
+              </Link>
+            </div>
+          </div>
+
+          {settings && (
+            <div className="card p-5">
+              <h3 className="font-bold text-white text-sm mb-1">Scoring</h3>
+              <p className="text-gray-400 text-sm">
+                <span className="text-brand-400 font-bold">+{settings.pts_per_point} fantasy pt</span> per point scored
+              </p>
+            </div>
+          )}
+
+          <div className="card p-5">
+            <h3 className="font-bold text-white text-sm mb-3">League Info</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">TourneyRun Access Fee</span>
+                <span className="text-white">$5.00 per manager</span>
+              </div>
+              {buyIn > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Group Buy-in</span>
+                  <span className="text-amber-400 font-semibold">{fmt(buyIn)} per manager</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Status</span>
+                <StatusBadge status={league.status} />
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Invite Code</span>
+                <span className="text-brand-400 font-mono font-bold tracking-widest">{league.invite_code}</span>
+              </div>
+            </div>
+            {league.payment_instructions && (
+              <div className="mt-3 pt-3 border-t border-gray-700">
+                <div className="text-gray-400 text-xs font-medium mb-1">Payment Instructions</div>
+                <div className="text-gray-300 text-sm">{league.payment_instructions}</div>
+              </div>
+            )}
+          </div>
+
+          {league.status === 'lobby' && (
+            <div className="card p-5 border-dashed border-yellow-700/40">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-bold text-white text-sm">Test Tools</h3>
+                <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full">
+                  dev only
+                </span>
+              </div>
+              <p className="text-gray-400 text-sm mb-3">
+                Fill remaining slots with test accounts (
+                <span className="font-mono text-gray-300">testuser01</span>–
+                <span className="font-mono text-gray-300">testuser12</span>,
+                password: <span className="font-mono text-gray-300">testpass123</span>).
+                All payments auto-marked paid.
+              </p>
+              {populateResult && (
+                <div className="bg-green-900/20 border border-green-700/40 rounded-lg p-3 text-sm text-green-300 mb-3">
+                  {populateResult.message}
+                  {populateResult.added?.length > 0 && (
+                    <div className="mt-1 text-green-400/70 font-mono text-xs">
+                      {populateResult.added.map(u => u.username).join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
+              <button onClick={handlePopulateTestLeague} disabled={populateLoading}
+                className="bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
+                {populateLoading ? 'Populating...' : 'Populate Test League'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+    </div>
+  );
+}

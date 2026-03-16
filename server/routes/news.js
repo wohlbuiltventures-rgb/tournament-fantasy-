@@ -1,0 +1,40 @@
+const express = require('express');
+const db = require('../db');
+const authMiddleware = require('../middleware/auth');
+
+const router = express.Router();
+
+// GET /api/news?tag=strategy&limit=40
+router.get('/', authMiddleware, (req, res) => {
+  try {
+    const { tag, limit = 40 } = req.query;
+    let query = 'SELECT * FROM news_articles';
+    const params = [];
+    if (tag) {
+      query += ' WHERE feed_tag = ?';
+      params.push(tag);
+    }
+    // When fetching all, show injuries first so urgent info surfaces immediately
+    if (!tag) {
+      query += " ORDER BY CASE WHEN feed_tag = 'injuries' THEN 0 ELSE 1 END, fetched_at DESC";
+    } else {
+      query += ' ORDER BY fetched_at DESC';
+    }
+    query += ' LIMIT ?';
+    params.push(parseInt(limit) || 40);
+
+    const articles = db.prepare(query).all(...params);
+
+    // Always include the latest injury article timestamp so the client can badge-detect
+    const latestInjury = db.prepare(
+      "SELECT fetched_at FROM news_articles WHERE feed_tag = 'injuries' ORDER BY fetched_at DESC LIMIT 1"
+    ).get();
+
+    res.json({ articles, latestInjuryAt: latestInjury?.fetched_at || null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+module.exports = router;

@@ -1,0 +1,14 @@
+{
+  "name": "tournament-fantasy",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "start": "concurrently \"cd server && npm start\" \"cd client && npm run preview\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

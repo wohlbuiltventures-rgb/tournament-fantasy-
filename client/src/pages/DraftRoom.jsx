@@ -1,0 +1,1413 @@
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import api from '../api';
+import socket from '../socket';
+import TeamAvatar from '../components/TeamAvatar';
+import { useDocTitle } from '../hooks/useDocTitle';
+
+// ─── Position styling (complete Tailwind strings — no dynamic construction) ──
+
+const POS_STYLES = {
+  G:  { badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/40',   dot: 'bg-blue-400',    cell: 'bg-blue-500/10 border-blue-500/30 text-blue-300'   },
+  PG: { badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/40',   dot: 'bg-blue-400',    cell: 'bg-blue-500/10 border-blue-500/30 text-blue-300'   },
+  SG: { badge: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40', dot: 'bg-emerald-400', cell: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' },
+  F:  { badge: 'bg-orange-500/20 text-orange-400 border border-orange-500/40', dot: 'bg-orange-400',  cell: 'bg-orange-500/10 border-orange-500/30 text-orange-300' },
+  SF: { badge: 'bg-orange-500/20 text-orange-400 border border-orange-500/40', dot: 'bg-orange-400',  cell: 'bg-orange-500/10 border-orange-500/30 text-orange-300' },
+  PF: { badge: 'bg-purple-500/20 text-purple-400 border border-purple-500/40', dot: 'bg-purple-400',  cell: 'bg-purple-500/10 border-purple-500/30 text-purple-300' },
+  C:  { badge: 'bg-red-500/20 text-red-400 border border-red-500/40',      dot: 'bg-red-400',     cell: 'bg-red-500/10 border-red-500/30 text-red-300'       },
+};
+const FALLBACK_STYLE = { badge: 'bg-gray-700 text-gray-400 border border-gray-600', dot: 'bg-gray-500', cell: 'bg-gray-800 border-gray-700 text-gray-400' };
+
+function ps(pos) { return POS_STYLES[pos] || FALLBACK_STYLE; }
+
+// ─── Region styling ───────────────────────────────────────────────────────────
+
+const REGION_STYLES = {
+  South:   { badge: 'bg-orange-500/20 text-orange-400 border border-orange-500/30',  btn: 'bg-orange-500 text-white', dim: 'bg-orange-500/15 text-orange-400 border-orange-500/25' },
+  East:    { badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',         btn: 'bg-blue-500 text-white',   dim: 'bg-blue-500/15 text-blue-400 border-blue-500/25'       },
+  West:    { badge: 'bg-green-500/20 text-green-400 border border-green-500/30',      btn: 'bg-green-600 text-white',  dim: 'bg-green-500/15 text-green-400 border-green-500/25'    },
+  Midwest: { badge: 'bg-purple-500/20 text-purple-400 border border-purple-500/30',   btn: 'bg-purple-600 text-white', dim: 'bg-purple-500/15 text-purple-400 border-purple-500/25' },
+};
+const REGION_FALLBACK = { badge: 'bg-gray-700 text-gray-400 border border-gray-600', btn: 'bg-gray-600 text-white', dim: 'bg-gray-700 text-gray-400 border-gray-600' };
+function rs(region) { return REGION_STYLES[region] || REGION_FALLBACK; }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getCurrentPicker(currentPick, numTeams, members) {
+  if (!members?.length) return null;
+  const round = Math.ceil(currentPick / numTeams);
+  const pickInRound = (currentPick - 1) % numTeams;
+  const draftPos = round % 2 === 1 ? pickInRound + 1 : numTeams - pickInRound;
+  return members.find(m => m.draft_order === draftPos);
+}
+
+function r64Opp(seed) {
+  return seed >= 1 && seed <= 16 ? 17 - seed : null;
+}
+
+// ─── ETP (Expected Tournament Points) ────────────────────────────────────────
+// Historical NCAA tournament win probabilities → expected games per seed
+
+const ETP_GAMES = {
+  1: 3.8, 2: 3.0, 3: 2.5, 4: 2.2, 5: 1.8, 6: 1.7, 7: 1.6,
+  8: 1.3, 9: 1.2, 10: 1.1, 11: 1.0, 12: 0.9,
+};
+
+function expectedGames(seed) {
+  if (!seed) return null;
+  const n = parseInt(seed);
+  return ETP_GAMES[n] ?? (n >= 13 && n <= 16 ? 0.5 : null);
+}
+
+function calcETP(ppg, seed) {
+  const games = expectedGames(seed);
+  if (!games || !ppg) return null;
+  return Math.round(ppg * games * 10) / 10;
+}
+
+// ─── Confetti ─────────────────────────────────────────────────────────────────
+
+function launchConfetti(scale = 1) {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:9999';
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const colors = ['#378ADD', '#22C55E', '#F97316', '#A855F7', '#EF4444', '#EAB308', '#EC4899'];
+    const pieces = Array.from({ length: Math.floor(55 * scale) }, () => ({
+      x: Math.random() * canvas.width,
+      y: -20 - Math.random() * 80,
+      w: Math.random() * 10 + 4, h: Math.random() * 5 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 4, vy: Math.random() * 3 + 2,
+      rot: Math.random() * 360, spin: (Math.random() - 0.5) * 8, opacity: 1,
+    }));
+    let frame = 0;
+    function tick() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      let active = false;
+      for (const p of pieces) {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.rot += p.spin;
+        if (frame > 70) p.opacity = Math.max(0, p.opacity - 0.022);
+        if (p.opacity > 0 && p.y < canvas.height + 20) active = true;
+        ctx.save(); ctx.globalAlpha = p.opacity; ctx.translate(p.x, p.y);
+        ctx.rotate((p.rot * Math.PI) / 180); ctx.fillStyle = p.color;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
+      }
+      frame++;
+      if (active) requestAnimationFrame(tick); else canvas.remove();
+    }
+    tick();
+  } catch (e) {}
+}
+
+// ─── Web Audio ────────────────────────────────────────────────────────────────
+
+let _audioCtx = null;
+function getAudioCtx() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+function playTone(freq, dur, type = 'sine', vol = 0.25, delay = 0) {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = type; osc.frequency.value = freq;
+    const t = ctx.currentTime + delay;
+    gain.gain.setValueAtTime(0, t); gain.gain.linearRampToValueAtTime(vol, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  } catch (e) {}
+}
+function playYourTurnChime() {
+  playTone(523, 0.18, 'sine', 0.3, 0.00);
+  playTone(659, 0.18, 'sine', 0.3, 0.16);
+  playTone(784, 0.30, 'sine', 0.3, 0.32);
+}
+function playCountdownTick(urgent) {
+  playTone(urgent ? 900 : 520, 0.06, 'square', urgent ? 0.18 : 0.08);
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function PosBadge({ pos, small }) {
+  const style = ps(pos);
+  return (
+    <span className={`inline-flex items-center rounded font-bold ${style.badge} ${small ? 'px-1 py-px text-[9px]' : 'px-1.5 py-0.5 text-[10px]'}`}>
+      {pos}
+    </span>
+  );
+}
+
+function SeedBadge({ seed }) {
+  if (!seed) return null;
+  const n = parseInt(seed);
+  const cls = n <= 4 ? 'text-yellow-400' : n <= 8 ? 'text-gray-300' : n <= 12 ? 'text-gray-500' : 'text-gray-600';
+  return <span className={`font-mono font-bold text-[10px] ${cls}`}>#{seed}</span>;
+}
+
+function RegionBadge({ region }) {
+  if (!region) return null;
+  const style = rs(region);
+  return (
+    <span className={`inline-flex items-center rounded border px-1 py-px font-bold text-[9px] ${style.badge}`}>
+      {region}
+    </span>
+  );
+}
+
+function InjuryBadge({ player, isCommissioner, onClear }) {
+  if (!player.injury_flagged) return null;
+  const tip = player.injury_headline
+    ? `⚠️ ${player.injury_headline}`
+    : '⚠️ Injury alert — verify before drafting';
+  return (
+    <span className="relative group/inj inline-flex items-center gap-0.5 bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 rounded px-1 py-px text-[9px] font-bold cursor-help">
+      ⚠️ INJ
+      <span className="pointer-events-none absolute bottom-full left-0 mb-1.5 w-max max-w-[260px] rounded bg-gray-950 border border-gray-800 px-2 py-1.5 text-[10px] leading-snug text-gray-200 opacity-0 group-hover/inj:opacity-100 transition-opacity duration-150 z-50 text-left shadow-lg whitespace-normal">
+        {tip}
+      </span>
+      {isCommissioner && (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onClear(player.id); }}
+          className="ml-0.5 text-yellow-600 hover:text-yellow-300 pointer-events-auto"
+          title="Clear injury flag"
+        >✕</button>
+      )}
+    </span>
+  );
+}
+
+// Draft board grid
+function DraftBoardGrid({ league, members, picks, currentPick, currentPicker, numTeams, userId, etpByPlayerId = {} }) {
+  const rounds = league?.total_rounds || 0;
+  const pickMap = {};
+  for (const p of picks) {
+    if (!pickMap[p.round]) pickMap[p.round] = {};
+    pickMap[p.round][p.user_id] = p;
+  }
+  const currentRound = currentPick && numTeams ? Math.ceil(currentPick / numTeams) : null;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="border-collapse text-[10px]" style={{ minWidth: `${members.length * 90 + 48}px` }}>
+        <thead>
+          <tr>
+            <th className="sticky left-0 bg-gray-950 z-10 w-12 pb-2 text-left">
+              <span className="text-gray-600 uppercase tracking-wider text-[9px]">Rd</span>
+            </th>
+            {members.map(m => (
+              <th key={m.id} className="px-1 pb-2 text-center w-[88px]">
+                <div className={`font-bold truncate ${m.user_id === userId ? 'text-brand-400' : 'text-gray-400'}`}>
+                  {m.team_name}
+                </div>
+                <div className="text-gray-600 text-[9px] truncate">{m.username}</div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rounds }, (_, ri) => {
+            const round = ri + 1;
+            const isActive = round === currentRound;
+            return (
+              <tr key={round} className={isActive ? 'bg-gray-900/50' : ''}>
+                <td className="sticky left-0 bg-gray-950 z-10 py-0.5 pr-1 text-gray-600 font-mono">
+                  <div className="flex items-center gap-0.5">
+                    <span className="w-4">{round}</span>
+                    <span className="text-gray-700 text-[8px]">{round % 2 === 1 ? '→' : '←'}</span>
+                  </div>
+                </td>
+                {members.map(m => {
+                  const pick = pickMap[round]?.[m.user_id];
+                  const isActivePick = isActive && currentPicker?.user_id === m.user_id;
+                  const style = pick ? ps(pick.position) : null;
+                  return (
+                    <td key={m.id} className="px-0.5 py-0.5">
+                      {pick ? (
+                        <div className={`rounded border px-1 py-0.5 text-center ${style.cell}`} style={{ height: 36 }}>
+                          <div className="font-semibold truncate leading-tight" style={{ fontSize: 9 }}>
+                            {pick.player_name.split(' ').slice(-1)[0]}
+                          </div>
+                          <div className="opacity-60 truncate" style={{ fontSize: 8 }}>
+                            {etpByPlayerId[pick.player_id]
+                              ? <>{etpByPlayerId[pick.player_id]} etp</>
+                              : <>{pick.position} {pick.seed ? `#${pick.seed}` : ''}</>
+                            }
+                          </div>
+                        </div>
+                      ) : isActivePick ? (
+                        <div className="rounded border-2 border-brand-500 bg-brand-500/10 flex items-center justify-center animate-pulse" style={{ height: 36 }}>
+                          <span className="text-brand-400 font-bold" style={{ fontSize: 9 }}>PICK</span>
+                        </div>
+                      ) : (
+                        <div className="rounded border border-gray-800/40 bg-gray-900/10" style={{ height: 36 }} />
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Live pick ticker
+function PickTicker({ picks, userId }) {
+  const recent = [...picks].reverse().slice(0, 6);
+  if (!recent.length) {
+    return <p className="text-gray-600 text-xs text-center py-4">Picks appear here</p>;
+  }
+  return (
+    <div className="space-y-1">
+      {recent.map((pick, i) => {
+        const style = ps(pick.position);
+        return (
+          <div key={pick.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
+            i === 0 ? 'bg-gray-800 border border-gray-700' : 'bg-gray-900/40'
+          } ${pick.user_id === userId ? 'border-brand-500/40' : ''}`}>
+            <span className="text-gray-600 font-mono text-[10px] w-5 shrink-0">#{pick.pick_number}</span>
+            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} />
+            <div className="flex-1 min-w-0">
+              <div className={`font-semibold truncate ${pick.user_id === userId ? 'text-brand-400' : 'text-white'}`} style={{ fontSize: 10 }}>
+                {pick.player_name}
+              </div>
+              <div className="text-gray-600 truncate" style={{ fontSize: 9 }}>{pick.username}</div>
+            </div>
+            <PosBadge pos={pick.position} small />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Manager roster card
+function ManagerRosterCard({ member, picks, currentPicker, userId }) {
+  const myPicks = picks.filter(p => p.user_id === member.user_id);
+  const isOnClock = currentPicker?.user_id === member.user_id;
+  const isMe = member.user_id === userId;
+
+  return (
+    <div className={`rounded-xl border p-2.5 transition-all duration-300 ${
+      isOnClock ? 'border-brand-500 bg-brand-500/5 shadow-md shadow-brand-500/10'
+        : isMe ? 'border-brand-500/30 bg-brand-500/5'
+        : 'border-gray-800 bg-gray-900/30'
+    }`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <TeamAvatar avatarUrl={member.avatar_url} teamName={member.team_name} size="xs" />
+          <div className="min-w-0 flex-1">
+          <div className={`font-bold truncate text-[11px] ${isMe ? 'text-brand-400' : 'text-white'}`}>
+            {member.team_name}
+          </div>
+          <div className="text-gray-600 truncate" style={{ fontSize: 9 }}>{member.username}</div>
+          </div>
+        </div>
+        {isOnClock && (
+          <span className="ml-1.5 shrink-0 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-brand-500 text-white animate-pulse">
+            Clock
+          </span>
+        )}
+      </div>
+      {myPicks.length > 0 ? (
+        <div className="space-y-0.5 max-h-28 overflow-y-auto">
+          {myPicks.map(p => (
+            <div key={p.id} className="flex items-center gap-1">
+              <div className={`w-1 h-1 rounded-full shrink-0 ${ps(p.position).dot}`} />
+              <span className="text-gray-300 truncate" style={{ fontSize: 9 }}>{p.player_name}</span>
+              {p.seed ? <SeedBadge seed={p.seed} /> : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-gray-700 text-[9px]">No picks yet</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Draft Chat ───────────────────────────────────────────────────────────────
+
+function DraftChat({ leagueId, user, token, members }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [typingUsers, setTypingUsers] = useState({});
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifSearch, setGifSearch] = useState('');
+  const [gifResults, setGifResults] = useState([]);
+  const [gifLoading, setGifLoading] = useState(false);
+
+  const bottomRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const typingClearRefs = useRef({});
+
+  // Join chat room and wire socket events
+  useEffect(() => {
+    socket.emit('chat_join', { leagueId, token });
+
+    socket.on('chat_history', history => setMessages(history));
+
+    socket.on('chat_message', msg => {
+      setMessages(prev => [...prev, msg].slice(-50));
+    });
+
+    socket.on('chat_typing', ({ userId, username }) => {
+      setTypingUsers(prev => ({ ...prev, [userId]: username }));
+      if (typingClearRefs.current[userId]) clearTimeout(typingClearRefs.current[userId]);
+      typingClearRefs.current[userId] = setTimeout(() => {
+        setTypingUsers(prev => { const n = { ...prev }; delete n[userId]; return n; });
+      }, 3500);
+    });
+
+    socket.on('chat_stop_typing', ({ userId }) => {
+      if (typingClearRefs.current[userId]) clearTimeout(typingClearRefs.current[userId]);
+      setTypingUsers(prev => { const n = { ...prev }; delete n[userId]; return n; });
+    });
+
+    return () => {
+      socket.off('chat_history');
+      socket.off('chat_message');
+      socket.off('chat_typing');
+      socket.off('chat_stop_typing');
+    };
+  }, [leagueId, token]);
+
+  // Auto-scroll to latest message
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const sendTyping = () => {
+    socket.emit('chat_typing', { leagueId, token });
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit('chat_stop_typing', { leagueId, token });
+    }, 2000);
+  };
+
+  const sendMessage = (text = input, gifUrl = null) => {
+    const trimmed = text.trim();
+    if (!trimmed && !gifUrl) return;
+    socket.emit('chat_send', { leagueId, token, text: trimmed, gifUrl });
+    setInput('');
+    setShowGifPicker(false);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    socket.emit('chat_stop_typing', { leagueId, token });
+  };
+
+  const loadGifs = async (q) => {
+    setGifLoading(true);
+    try {
+      const endpoint = q.trim()
+        ? `/giphy/search?q=${encodeURIComponent(q)}&limit=12`
+        : '/giphy/trending?limit=12';
+      const res = await api.get(endpoint);
+      setGifResults(res.data.results || []);
+    } catch (err) {
+      console.error('GIF search error', err);
+      setGifResults([]);
+    } finally {
+      setGifLoading(false);
+    }
+  };
+
+  // Load trending GIFs when picker opens
+  useEffect(() => {
+    if (showGifPicker && gifResults.length === 0) loadGifs('');
+  }, [showGifPicker]);
+
+  const handleGifSearch = (val) => {
+    setGifSearch(val);
+    if (val.length === 0 || val.length > 1) loadGifs(val);
+  };
+
+  const typingNames = Object.values(typingUsers);
+
+  return (
+    <div className="card overflow-hidden flex flex-col" style={{ height: 400 }}>
+      {/* Header */}
+      <div className="px-3 py-2 border-b border-gray-800 shrink-0 flex items-center justify-between">
+        <h3 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+          Chat
+        </h3>
+        <span className="text-gray-600 text-[10px]">{members.length} managers</span>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3">
+        {messages.length === 0 && (
+          <p className="text-center text-gray-600 text-xs py-4">No messages yet. Say something!</p>
+        )}
+        {messages.map(msg => {
+          if (msg.isSystem) {
+            return (
+              <div key={msg.id} className="text-center py-0.5">
+                <span className="text-[10px] text-brand-400/80 bg-brand-500/10 border border-brand-500/20 px-2.5 py-1 rounded-full">
+                  {msg.text}
+                </span>
+              </div>
+            );
+          }
+          const isMe = msg.userId === user?.id;
+          const member = members.find(m => m.user_id === msg.userId);
+          return (
+            <div key={msg.id} className={`flex items-end gap-1.5 ${isMe ? 'flex-row-reverse' : ''}`}>
+              {/* Avatar */}
+              <TeamAvatar
+                avatarUrl={member?.avatar_url}
+                teamName={msg.teamName || msg.username}
+                size="xs"
+                className="shrink-0 mb-0.5"
+              />
+              <div className={`max-w-[78%] flex flex-col gap-0.5 ${isMe ? 'items-end' : 'items-start'}`}>
+                {/* Name above bubble */}
+                <span className={`text-[10px] px-1 font-semibold ${isMe ? 'text-brand-400' : 'text-gray-400'}`}>
+                  {isMe
+                    ? (msg.teamName || 'You')
+                    : <>{msg.username} <span className="text-gray-600 font-normal">· {msg.teamName}</span></>
+                  }
+                </span>
+                {msg.gifUrl ? (
+                  <div className={`rounded-xl overflow-hidden border border-gray-700 ${isMe ? 'rounded-br-sm' : 'rounded-bl-sm'}`}>
+                    <img src={msg.gifUrl} alt="GIF" className="max-w-[160px] max-h-28 object-cover block" />
+                  </div>
+                ) : (
+                  <div className={`px-3 py-1.5 text-xs leading-relaxed break-words ${
+                    isMe
+                      ? 'bg-brand-500 text-white rounded-2xl rounded-br-sm'
+                      : 'bg-gray-800 text-gray-200 rounded-2xl rounded-bl-sm'
+                  }`}>
+                    {msg.text}
+                  </div>
+                )}
+                <span className="text-[9px] text-gray-600 px-1">
+                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Typing indicator */}
+        {typingNames.length > 0 && (
+          <div className="flex items-center gap-1.5 pl-1">
+            <div className="flex gap-0.5">
+              {[0, 150, 300].map(d => (
+                <span key={d} className="w-1.5 h-1.5 rounded-full bg-gray-500 animate-bounce"
+                  style={{ animationDelay: `${d}ms` }} />
+              ))}
+            </div>
+            <span className="text-[10px] text-gray-500">
+              {typingNames.slice(0, 2).join(', ')}
+              {typingNames.length > 2 ? ` +${typingNames.length - 2}` : ''}
+              {' '}{typingNames.length === 1 ? 'is' : 'are'} typing
+            </span>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* GIF picker */}
+      {showGifPicker && (
+        <div className="border-t border-gray-800 bg-gray-900/90 shrink-0">
+          <div className="p-2">
+            <input
+              type="text"
+              className="input text-xs py-1 w-full mb-1.5"
+              placeholder="Search GIFs..."
+              value={gifSearch}
+              onChange={e => handleGifSearch(e.target.value)}
+              autoFocus
+            />
+            {gifLoading ? (
+              <div className="text-center text-gray-500 text-xs py-3">Loading...</div>
+            ) : gifResults.length === 0 ? (
+              <div className="text-center text-gray-600 text-xs py-3">No GIFs found</div>
+            ) : (
+              <div className="grid grid-cols-3 gap-1 max-h-36 overflow-y-auto">
+                {gifResults.map(result => {
+                  const url = result.media_formats?.tinygif?.url || result.media_formats?.gif?.url;
+                  if (!url) return null;
+                  return (
+                    <button
+                      key={result.id}
+                      onClick={() => sendMessage('', url)}
+                      className="rounded overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    >
+                      <img src={url} alt={result.title || 'GIF'} className="w-full h-14 object-cover" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Input bar */}
+      <div className="border-t border-gray-800 px-2 py-2 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => { setShowGifPicker(v => !v); setGifSearch(''); }}
+            className={`shrink-0 text-[10px] font-bold px-1.5 py-1 rounded border transition-colors ${
+              showGifPicker
+                ? 'bg-brand-500/20 text-brand-400 border-brand-500/40'
+                : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'
+            }`}
+            title="Send a GIF"
+          >
+            GIF
+          </button>
+          <input
+            type="text"
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-full px-3 py-1.5 text-xs text-white placeholder-gray-500 outline-none focus:border-brand-500/50 transition-colors"
+            placeholder="Message the league..."
+            value={input}
+            maxLength={200}
+            onChange={e => { setInput(e.target.value); if (e.target.value) sendTyping(); }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+          />
+          <button
+            onClick={() => sendMessage()}
+            disabled={!input.trim()}
+            className="shrink-0 w-7 h-7 rounded-full bg-brand-500 disabled:bg-gray-700 flex items-center justify-center text-white disabled:text-gray-500 transition-colors"
+            title="Send"
+          >
+            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        </div>
+        {input.length > 160 && (
+          <div className={`text-right text-[9px] mt-0.5 ${input.length >= 200 ? 'text-red-400' : 'text-gray-500'}`}>
+            {input.length}/200
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Tooltip ──────────────────────────────────────────────────────────────────
+
+function Tip({ text, children }) {
+  return (
+    <span className="relative group/tip inline-flex">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-max max-w-[220px] rounded bg-gray-950 border border-gray-800 px-2 py-1.5 text-[10px] leading-snug text-gray-200 opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 z-50 text-center whitespace-normal shadow-lg">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+const SORT_OPTIONS = [
+  { value: 'etp',  label: 'ETP',  tip: 'Expected Tournament Points — projected total points based on the player\'s PPG and how far their team is expected to go in the tournament' },
+  { value: 'ppg',  label: 'PPG',  tip: 'Points Per Game — player\'s scoring average this season' },
+  { value: 'seed', label: 'Seed', tip: null },
+  { value: 'name', label: 'Name', tip: null },
+];
+
+export default function DraftRoom() {
+  useDocTitle('🏀 Draft Live | TourneyRun');
+  const { id: leagueId } = useParams();
+  const { user, token } = useAuth();
+
+  const [state, setState] = useState(null);
+  const [availablePlayers, setAvailablePlayers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [posFilter, setPosFilter] = useState('All');
+  const [regionFilter, setRegionFilter] = useState('All');
+  const [sortBy, setSortBy] = useState('etp');
+  const [playerTab, setPlayerTab] = useState('available'); // 'available' | 'queue'
+  const [mobilePanel, setMobilePanel] = useState('players'); // 'board' | 'players' | 'teams'
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [loading, setLoading] = useState(true);
+  const [picking, setPicking] = useState(false);
+  const [error, setError] = useState('');
+  const [autoDraftToast, setAutoDraftToast] = useState(null);
+  const [draftConfirm, setDraftConfirm] = useState(null); // player to confirm drafting despite injury flag
+
+  // Watchlist stored in localStorage per user per league
+  const [watchlist, setWatchlist] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`dq_${leagueId}_${user?.id}`) || '[]'); }
+    catch { return []; }
+  });
+
+  const timerRef = useRef(null);
+  const isMyTurnRef = useRef(false);
+  const wasMyTurnRef = useRef(false);
+  const pickingRef = useRef(false);
+  const availablePlayersRef = useRef([]);
+  const watchlistRef = useRef(watchlist);
+  // Cache all player data so we can look up seed/ppg even after a player is drafted
+  const playerCacheRef = useRef({});
+
+  // Keep refs in sync
+  useEffect(() => { availablePlayersRef.current = availablePlayers; }, [availablePlayers]);
+  useEffect(() => {
+    watchlistRef.current = watchlist;
+    localStorage.setItem(`dq_${leagueId}_${user?.id}`, JSON.stringify(watchlist));
+  }, [watchlist]);
+
+  const updateWatchlist = useCallback((fn) => {
+    setWatchlist(prev => fn(prev));
+  }, []);
+
+  const addToQueue = useCallback((playerId) => {
+    updateWatchlist(prev => prev.includes(playerId) ? prev : [...prev, playerId]);
+  }, [updateWatchlist]);
+
+  const removeFromQueue = useCallback((playerId) => {
+    updateWatchlist(prev => prev.filter(id => id !== playerId));
+  }, [updateWatchlist]);
+
+  const moveInQueue = useCallback((playerId, dir) => {
+    updateWatchlist(prev => {
+      const idx = prev.indexOf(playerId);
+      if (idx < 0) return prev;
+      const next = [...prev];
+      const target = idx + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  }, [updateWatchlist]);
+
+  const resetTimer = useCallback((limit) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setTimeLeft(limit || 60);
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) { clearInterval(timerRef.current); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  const fetchAvailablePlayers = useCallback(async () => {
+    try {
+      const res = await api.get(`/players/available/${leagueId}`);
+      const players = res.data.players;
+      // Populate cache
+      for (const p of players) playerCacheRef.current[p.id] = p;
+      setAvailablePlayers(players);
+    } catch (err) { console.error('Failed to fetch players', err); }
+  }, [leagueId]);
+
+  // ── Sound: chime on your turn ────────────────────────────────────────────
+  useEffect(() => {
+    if (!state) return;
+    const isMyTurn = !state.draftComplete && state.currentPicker?.user_id === user?.id;
+    isMyTurnRef.current = isMyTurn;
+    if (isMyTurn && !wasMyTurnRef.current) playYourTurnChime();
+    wasMyTurnRef.current = isMyTurn;
+  }, [state?.currentPicker?.user_id, state?.draftComplete]);
+
+  // ── Countdown ticks + auto-draft ─────────────────────────────────────────
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      if (isMyTurnRef.current && !pickingRef.current) {
+        const available = availablePlayersRef.current;
+        const availableSet = new Set(available.map(p => p.id));
+        // Queue-first auto-draft
+        const queuedId = watchlistRef.current.find(id => availableSet.has(id));
+        const targetId = queuedId || [...available].sort((a, b) => {
+          const etpA = calcETP(a.season_ppg, a.seed) ?? a.season_ppg;
+          const etpB = calcETP(b.season_ppg, b.seed) ?? b.season_ppg;
+          return etpB - etpA;
+        })[0]?.id;
+        if (targetId) {
+          const picked = playerCacheRef.current[targetId] || available.find(p => p.id === targetId);
+          setAutoDraftToast({ playerName: picked?.name || 'a player', fromQueue: !!queuedId });
+          setTimeout(() => setAutoDraftToast(null), 4000);
+          pickingRef.current = true;
+          setPicking(true);
+          socket.emit('make_pick', { leagueId, playerId: targetId, token });
+        }
+      }
+      return;
+    }
+    if (timeLeft <= 10 && isMyTurnRef.current) playCountdownTick(timeLeft <= 3);
+  }, [timeLeft]);
+
+  // ── Socket setup ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    socket.connect();
+
+    socket.emit('join_draft_room', { leagueId, token });
+
+    socket.on('draft_state', (data) => {
+      setState(data);
+      setLoading(false);
+      if (data.league?.status === 'drafting' && !data.draftComplete) resetTimer(data.league.pick_time_limit);
+    });
+
+    socket.on('draft_started', (data) => {
+      setState(data);
+      setLoading(false);
+      resetTimer(data.league?.pick_time_limit);
+      fetchAvailablePlayers();
+    });
+
+    socket.on('pick_made', (data) => {
+      setState(prev => {
+        if (!prev) return prev;
+        const numTeams = prev.members.length;
+        const nextPicker = data.draftComplete ? null : getCurrentPicker(data.currentPick, numTeams, prev.members);
+        return {
+          ...prev,
+          picks: [...prev.picks, data.pick],
+          currentPick: data.currentPick,
+          currentPicker: nextPicker,
+          draftComplete: data.draftComplete,
+          league: { ...prev.league, current_pick: data.currentPick },
+        };
+      });
+      // Confetti — bigger burst for your own pick
+      launchConfetti(data.pick.user_id === user?.id ? 1.4 : 0.5);
+      fetchAvailablePlayers();
+      if (!data.draftComplete) resetTimer(state?.league?.pick_time_limit || 60);
+      else if (timerRef.current) clearInterval(timerRef.current);
+      pickingRef.current = false;
+      setPicking(false);
+    });
+
+    socket.on('draft_completed', (data) => {
+      setState(data);
+      if (timerRef.current) clearInterval(timerRef.current);
+    });
+
+    socket.on('error', (data) => {
+      setError(data.message || 'An error occurred');
+      pickingRef.current = false;
+      setPicking(false);
+      setTimeout(() => setError(''), 4000);
+    });
+
+    Promise.all([api.get(`/draft/${leagueId}/state`), fetchAvailablePlayers()])
+      .then(([draftRes]) => {
+        const data = draftRes.data;
+        setState(data);
+        setLoading(false);
+        if (data.league?.status === 'drafting' && !data.draftComplete) resetTimer(data.league.pick_time_limit);
+      })
+      .catch(() => setLoading(false));
+
+    return () => {
+      socket.off('draft_state');
+      socket.off('draft_started');
+      socket.off('pick_made');
+      socket.off('draft_completed');
+      socket.off('error');
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [leagueId, token]);
+
+  const makePick = useCallback((playerId) => {
+    if (pickingRef.current) return;
+    pickingRef.current = true;
+    setPicking(true);
+    socket.emit('make_pick', { leagueId, playerId, token });
+  }, [leagueId, token]);
+
+  // Shows injury warning modal if the player is flagged; otherwise picks immediately
+  const requestPick = useCallback((player) => {
+    if (!player) return;
+    if (player.injury_flagged) {
+      setDraftConfirm(player);
+    } else {
+      makePick(player.id);
+    }
+  }, [makePick]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const clearInjuryFlag = useCallback(async (playerId) => {
+    try {
+      await api.delete(`/players/${playerId}/injury-flag`);
+      // Update available list (shown in Available tab)
+      setAvailablePlayers(prev => prev.map(p => p.id === playerId ? { ...p, injury_flagged: 0, injury_headline: '' } : p));
+      // Update cache so the Queue tab also reflects the change immediately
+      if (playerCacheRef.current[playerId]) {
+        playerCacheRef.current[playerId] = { ...playerCacheRef.current[playerId], injury_flagged: 0, injury_headline: '' };
+      }
+    } catch (err) {
+      console.error('Failed to clear injury flag:', err);
+    }
+  }, []);
+
+  // ── Derived values ────────────────────────────────────────────────────────
+
+  const availableIds = new Set(availablePlayers.map(p => p.id));
+  const queuedPlayers = watchlist
+    .map(id => playerCacheRef.current[id])
+    .filter(p => p && availableIds.has(p.id));
+
+  const POSITIONS = ['All', 'G', 'F', 'C', 'PG', 'SG', 'SF', 'PF'];
+  const uniquePositions = ['All', ...new Set(availablePlayers.map(p => p.position))];
+  const REGIONS = ['All', 'South', 'East', 'West', 'Midwest'];
+
+  // Map { region -> { seed -> teamName } } built from all seen players
+  const regionSeedMap = useMemo(() => {
+    const map = {};
+    for (const p of Object.values(playerCacheRef.current)) {
+      if (p.region && p.seed) {
+        if (!map[p.region]) map[p.region] = {};
+        map[p.region][p.seed] = p.team;
+      }
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availablePlayers]);
+
+  // ETP lookup map for draft board cells (keyed by player_id)
+  const etpByPlayerId = useMemo(() => {
+    const map = {};
+    for (const p of Object.values(playerCacheRef.current)) {
+      const etp = calcETP(p.season_ppg, p.seed);
+      if (etp !== null) map[p.id] = etp;
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availablePlayers]);
+
+  const filteredSorted = availablePlayers
+    .filter(p => {
+      const matchPos = posFilter === 'All' || p.position === posFilter;
+      const matchRegion = regionFilter === 'All' || p.region === regionFilter;
+      const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.team.toLowerCase().includes(search.toLowerCase());
+      return matchPos && matchRegion && matchSearch;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'etp') {
+        const ea = calcETP(a.season_ppg, a.seed) ?? -1;
+        const eb = calcETP(b.season_ppg, b.seed) ?? -1;
+        return eb - ea;
+      }
+      if (sortBy === 'seed') return (a.seed || 99) - (b.seed || 99);
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      return b.season_ppg - a.season_ppg;
+    });
+
+  // ── Loading / error states ────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-3 animate-bounce">🏀</div>
+          <p className="text-gray-400 text-lg">Loading draft room...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!state) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-400">Draft room not available</p>
+        <Link to={`/league/${leagueId}`} className="text-brand-400 mt-2 inline-block">Back to league</Link>
+      </div>
+    );
+  }
+
+  const { league, members, picks, currentPick, currentPicker, totalPicks, draftComplete } = state;
+  const isMyTurn = !draftComplete && currentPicker?.user_id === user?.id;
+  const isCommissioner = league?.commissioner_id === user?.id;
+  const numTeams = members.length;
+  const timerPercent = Math.round((timeLeft / (league?.pick_time_limit || 60)) * 100);
+  const timerColor = timeLeft <= 3 ? '#ef4444' : timeLeft <= 10 ? '#f59e0b' : '#378ADD';
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="max-w-[1600px] mx-auto px-3 py-3 pb-20 lg:pb-4">
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h1 className="text-lg font-bold text-white flex items-center gap-2">
+          🎯 <span className="text-brand-400">{league.name}</span>
+          <span className="text-gray-600 font-normal text-sm">— Draft Room</span>
+        </h1>
+        <Link to={`/league/${leagueId}`} className="text-gray-500 hover:text-white text-sm transition-colors">
+          ← Back
+        </Link>
+      </div>
+
+      {/* ── Error banner ── */}
+      {error && (
+        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg p-2.5 text-sm mb-3">
+          {error}
+        </div>
+      )}
+
+      {/* ── Auto-draft toast ── */}
+      {autoDraftToast && (
+        <div className="bg-yellow-900/40 border border-yellow-700/60 text-yellow-300 rounded-lg p-2.5 text-sm mb-3 flex items-center gap-2">
+          <span>⚡</span>
+          <span>
+            Auto-drafted <span className="font-semibold">{autoDraftToast.playerName}</span>
+            {autoDraftToast.fromQueue ? ' (from your queue)' : ' (highest available ETP)'}
+          </span>
+        </div>
+      )}
+
+      {/* ── On the clock bar ── */}
+      {!draftComplete && league.status === 'drafting' && (
+        <div className={`rounded-xl border-2 p-3 mb-3 transition-colors duration-300 ${
+          isMyTurn ? 'border-brand-500 bg-brand-500/5' : 'border-gray-800 bg-gray-900/40'
+        }`}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              {/* Timer ring */}
+              <div className="relative w-12 h-12 shrink-0">
+                <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#1f2937" strokeWidth="3" />
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke={timerColor}
+                    strokeWidth="3" strokeDasharray={`${timerPercent} 100`} strokeLinecap="round"
+                    style={{ transition: 'stroke-dasharray 1s linear, stroke 0.3s' }} />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center font-bold text-sm"
+                  style={{ color: timerColor }}>
+                  {timeLeft}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Pick #{currentPick} of {totalPicks}</div>
+                {isMyTurn ? (
+                  <div className="text-brand-400 font-bold text-base animate-pulse">Your turn to pick!</div>
+                ) : (
+                  <div className="text-white font-semibold text-sm">
+                    On the clock: <span className="text-brand-400">{currentPicker?.team_name}</span>
+                    <span className="text-gray-500 text-xs ml-1">({currentPicker?.username})</span>
+                  </div>
+                )}
+                {timeLeft <= 10 && isMyTurn && (
+                  <div className={`text-xs font-bold ${timeLeft <= 3 ? 'text-red-400' : 'text-yellow-400'}`}>
+                    {timeLeft <= 3 ? '⚠ Pick now or auto-draft fires!' : 'Auto-draft in ' + timeLeft + 's'}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Draft order strip */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 flex-1 min-w-0">
+              {members.map(m => (
+                <div key={m.id} className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all duration-300 ${
+                  m.user_id === currentPicker?.user_id
+                    ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30 scale-105'
+                    : m.user_id === user?.id
+                    ? 'bg-brand-500/15 text-brand-400 border border-brand-500/30'
+                    : 'bg-gray-800/60 text-gray-500'
+                }`}>
+                  <TeamAvatar avatarUrl={m.avatar_url} teamName={m.team_name} size="xs" />
+                  <div className="font-bold">{m.draft_order}. {m.team_name}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Draft complete banner ── */}
+      {draftComplete && (
+        <div className="card p-6 text-center mb-4 border-green-500/30 bg-green-500/5">
+          <div className="text-4xl mb-2">🎉</div>
+          <h2 className="text-xl font-bold text-white mb-1">Draft Complete!</h2>
+          <p className="text-gray-400 mb-4">All {totalPicks} picks have been made. Good luck!</p>
+          <Link to={`/league/${leagueId}/leaderboard`} className="btn-primary px-6 py-2 inline-block">
+            View Standings →
+          </Link>
+        </div>
+      )}
+
+      {league.status === 'lobby' && (
+        <div className="card p-8 text-center mb-4">
+          <div className="text-4xl mb-2">⏳</div>
+          <h2 className="text-xl font-bold text-white mb-1">Draft Not Started</h2>
+          <p className="text-gray-400">Waiting for the commissioner to start the draft.</p>
+        </div>
+      )}
+
+      {/* ── Mobile panel tabs ── */}
+      <div className="flex lg:hidden gap-1 mb-3 bg-gray-900 rounded-lg p-1">
+        {[
+          { id: 'board', label: '🗂 Board' },
+          { id: 'players', label: '👤 Players' },
+          { id: 'teams', label: '📋 Teams' },
+          { id: 'chat', label: '💬 Chat' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setMobilePanel(t.id)}
+            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              mobilePanel === t.id ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Three-panel layout ── */}
+      <div className="lg:grid lg:grid-cols-12 gap-3">
+
+        {/* ── LEFT: Draft Board Grid ── */}
+        <div className={`lg:col-span-5 ${mobilePanel !== 'board' ? 'hidden lg:block' : ''}`}>
+          <div className="card overflow-hidden">
+            <div className="px-3 py-2.5 border-b border-gray-800 flex items-center justify-between">
+              <h2 className="font-bold text-white text-sm">Draft Board</h2>
+              <span className="text-xs text-gray-500">{picks.length} / {totalPicks} picks</span>
+            </div>
+            <div className="p-2 overflow-x-auto max-h-[calc(100vh-280px)] overflow-y-auto">
+              <DraftBoardGrid
+                league={league} members={members} picks={picks}
+                currentPick={currentPick} currentPicker={currentPicker}
+                numTeams={numTeams} userId={user?.id}
+                etpByPlayerId={etpByPlayerId}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ── CENTER: Player Pool ── */}
+        <div className={`lg:col-span-4 ${mobilePanel !== 'players' ? 'hidden lg:block' : ''}`}>
+          <div className="card overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 240px)' }}>
+            {/* Player pool tabs */}
+            <div className="px-3 pt-3 pb-2 border-b border-gray-800 shrink-0">
+              <div className="flex gap-1 mb-2">
+                <button onClick={() => setPlayerTab('available')}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    playerTab === 'available' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                  }`}>
+                  Available ({availablePlayers.length})
+                </button>
+                <button onClick={() => setPlayerTab('queue')}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors relative ${
+                    playerTab === 'queue' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                  }`}>
+                  My Queue
+                  {queuedPlayers.length > 0 && (
+                    <span className="ml-1 bg-yellow-500 text-black text-[9px] font-bold px-1 rounded-full">
+                      {queuedPlayers.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {playerTab === 'available' && (
+                <>
+                  <input type="text" className="input text-xs mb-2 py-1.5"
+                    placeholder="Search name or team..." value={search}
+                    onChange={e => setSearch(e.target.value)} />
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {uniquePositions.slice(0, 6).map(pos => (
+                      <button key={pos} type="button" onClick={() => setPosFilter(pos)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                          posFilter === pos ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                        }`}>
+                        {pos}
+                      </button>
+                    ))}
+                    <div className="ml-auto flex items-center gap-1">
+                      <span
+                        className="text-[10px] text-gray-600 cursor-help"
+                        title="ETP = Expected Tournament Points — PPG × projected games based on seed. Cooper Flagg: 19.5 PPG × 3.8 games (1-seed) = 74.1 ETP"
+                      >Sort <span className="text-gray-700">ⓘ</span></span>
+                      {SORT_OPTIONS.map(s => (
+                        <button key={s.value} type="button" onClick={() => setSortBy(s.value)}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                            sortBy === s.value ? 'bg-brand-500/30 text-brand-400' : 'text-gray-500 hover:text-gray-300'
+                          }`}>
+                          {s.tip ? <Tip text={s.tip}>{s.label}</Tip> : s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Region filters */}
+                  <div className="flex items-center gap-1 flex-wrap mt-1">
+                    {REGIONS.map(r => {
+                      const active = regionFilter === r;
+                      const style = r !== 'All' ? rs(r) : null;
+                      return (
+                        <button key={r} type="button" onClick={() => setRegionFilter(r)}
+                          className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${
+                            active
+                              ? r === 'All'
+                                ? 'bg-gray-600 text-white border-gray-500'
+                                : `${style.btn} border-transparent`
+                              : r === 'All'
+                              ? 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white'
+                              : `${style.dim} hover:opacity-80`
+                          }`}>
+                          {r}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Injury disclaimer */}
+            {availablePlayers.some(p => p.injury_flagged) && (
+              <div className="px-3 py-1.5 bg-yellow-500/5 border-b border-yellow-500/20 text-yellow-600/80 text-[10px] leading-snug">
+                ⚠️ Injury alerts sourced from news — always verify before drafting.
+              </div>
+            )}
+
+            {/* Player list */}
+            <div className="overflow-y-auto flex-1">
+              {playerTab === 'queue' ? (
+                queuedPlayers.length === 0 ? (
+                  <div className="text-center py-10 text-gray-600 text-sm">
+                    <div className="text-2xl mb-2">📋</div>
+                    <p>Your queue is empty.</p>
+                    <p className="text-xs mt-1">Star (☆) players in the Available tab to queue them.</p>
+                  </div>
+                ) : (
+                  queuedPlayers.map((player, i) => {
+                    const oppSeed = r64Opp(player.seed);
+                    const oppName = oppSeed && player.region ? (regionSeedMap[player.region]?.[oppSeed] || `#${oppSeed}`) : null;
+                    const canPick = isMyTurn && !picking;
+                    const etp = calcETP(player.season_ppg, player.seed);
+                    return (
+                      <div key={player.id}
+                        className={`flex items-center gap-2 px-3 py-2.5 border-b border-gray-800/50 transition-all ${
+                          canPick ? 'hover:bg-brand-500/8 cursor-pointer' : 'cursor-default'
+                        }`}
+                        onClick={() => canPick && requestPick(player)}>
+                        <span className="text-gray-600 font-mono text-[10px] w-4 shrink-0">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`font-semibold text-sm ${player.injury_flagged ? 'text-gray-400' : 'text-white'}`}>
+                              {player.name}
+                            </span>
+                            <PosBadge pos={player.position} small />
+                            {player.seed ? <SeedBadge seed={player.seed} /> : null}
+                            {player.region ? <RegionBadge region={player.region} /> : null}
+                            <InjuryBadge player={player} isCommissioner={isCommissioner} onClear={clearInjuryFlag} />
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-gray-500 text-[10px]">{player.team}</span>
+                            {oppName && <span className="text-gray-600 text-[10px]">vs {oppName}</span>}
+                          </div>
+                        </div>
+                        {/* ETP / PPG display */}
+                        <div className="text-right shrink-0 min-w-[42px]">
+                          {etp !== null ? (
+                            <>
+                              <div className="text-brand-400 text-xs font-bold">{etp}</div>
+                              <Tip text="Expected Tournament Points — projected total points based on the player's PPG and how far their team is expected to go in the tournament">
+                                <div className="text-gray-600 text-[9px] leading-none cursor-help">ETP</div>
+                              </Tip>
+                              <div className="text-gray-700 text-[9px] leading-none mt-0.5">{player.season_ppg}ppg</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-brand-400 text-xs font-bold">{player.season_ppg}</div>
+                              <Tip text="Points Per Game — player's scoring average this season">
+                                <div className="text-gray-600 text-[9px] cursor-help">PPG</div>
+                              </Tip>
+                            </>
+                          )}
+                        </div>
+                        {/* Queue management — always active */}
+                        <div className="flex flex-col gap-0.5 shrink-0">
+                          <button type="button" onClick={e => { e.stopPropagation(); moveInQueue(player.id, -1); }}
+                            className="text-gray-600 hover:text-gray-300 text-[10px] leading-none px-1" title="Move up">▲</button>
+                          <button type="button" onClick={e => { e.stopPropagation(); moveInQueue(player.id, 1); }}
+                            className="text-gray-600 hover:text-gray-300 text-[10px] leading-none px-1" title="Move down">▼</button>
+                          <button type="button" onClick={e => { e.stopPropagation(); removeFromQueue(player.id); }}
+                            className="text-red-600 hover:text-red-400 text-[10px] leading-none px-1" title="Remove from queue">✕</button>
+                        </div>
+                        {/* Draft button — only active on your turn */}
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); if (canPick) requestPick(player); }}
+                          title={canPick ? 'Draft this player' : 'Wait for your turn to pick'}
+                          className={`w-7 h-7 rounded text-xs font-bold flex items-center justify-center transition-colors shrink-0 ${
+                            canPick
+                              ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-sm shadow-brand-500/30'
+                              : 'bg-gray-800/40 text-gray-700 cursor-not-allowed'
+                          }`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    );
+                  })
+                )
+              ) : filteredSorted.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 text-sm">No players found</div>
+              ) : (
+                filteredSorted.map(player => {
+                  const oppSeed = r64Opp(player.seed);
+                  const oppName = oppSeed && player.region ? (regionSeedMap[player.region]?.[oppSeed] || `#${oppSeed}`) : null;
+                  const inQueue = watchlist.includes(player.id);
+                  const canPick = isMyTurn && !picking;
+                  const etp = calcETP(player.season_ppg, player.seed);
+                  return (
+                    <div key={player.id}
+                      className={`flex items-center gap-2 px-3 py-2.5 border-b border-gray-800/40 transition-all group ${
+                        canPick ? 'hover:bg-brand-500/8 cursor-pointer hover:border-brand-500/20' : 'cursor-default'
+                      }`}
+                      onClick={() => canPick && requestPick(player)}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`font-semibold text-sm ${player.injury_flagged ? 'text-gray-400' : 'text-white'}`}>
+                            {player.name}
+                          </span>
+                          <PosBadge pos={player.position} small />
+                          {player.seed ? <SeedBadge seed={player.seed} /> : null}
+                          {player.region ? <RegionBadge region={player.region} /> : null}
+                          <InjuryBadge player={player} isCommissioner={isCommissioner} onClear={clearInjuryFlag} />
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-gray-500 text-[10px]">{player.team}</span>
+                          {oppName && <span className="text-gray-600 text-[10px]">vs {oppName}</span>}
+                        </div>
+                      </div>
+                      {/* Metric display — ETP primary, PPG secondary */}
+                      <div className="text-right shrink-0 min-w-[42px]">
+                        {etp !== null ? (
+                          <>
+                            <div className="text-brand-400 text-xs font-bold">{etp}</div>
+                            <Tip text="Expected Tournament Points — projected total points based on the player's PPG and how far their team is expected to go in the tournament">
+                              <div className="text-gray-600 text-[9px] leading-none cursor-help">ETP</div>
+                            </Tip>
+                            <div className="text-gray-700 text-[9px] leading-none mt-0.5">{player.season_ppg}ppg</div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-brand-400 text-xs font-bold">{player.season_ppg}</div>
+                            <Tip text="Points Per Game — player's scoring average this season">
+                              <div className="text-gray-600 text-[9px] cursor-help">PPG</div>
+                            </Tip>
+                          </>
+                        )}
+                      </div>
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Queue star — always active regardless of turn */}
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); inQueue ? removeFromQueue(player.id) : addToQueue(player.id); }}
+                          className={`w-7 h-7 rounded text-sm flex items-center justify-center transition-colors ${
+                            inQueue
+                              ? 'bg-yellow-500/20 text-yellow-400 hover:bg-red-500/20 hover:text-red-400'
+                              : 'bg-gray-800 text-gray-500 hover:bg-yellow-500/20 hover:text-yellow-400'
+                          }`}
+                          title={inQueue ? 'Remove from watchlist' : 'Add to watchlist'}
+                        >
+                          {inQueue ? '★' : '☆'}
+                        </button>
+                        {/* Draft button — only active on your turn */}
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); if (canPick) requestPick(player); }}
+                          title={canPick ? 'Draft this player' : "Wait for your turn to pick"}
+                          className={`w-7 h-7 rounded text-xs font-bold flex items-center justify-center transition-colors ${
+                            canPick
+                              ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-sm shadow-brand-500/30'
+                              : 'bg-gray-800/40 text-gray-700 cursor-not-allowed'
+                          }`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── RIGHT: Ticker + Manager Cards ── */}
+        <div className={`lg:col-span-3 space-y-3 ${mobilePanel !== 'teams' && mobilePanel !== 'chat' ? 'hidden lg:block' : ''}`}>
+          {/* Live ticker */}
+          <div className="card p-3">
+            <h3 className="font-bold text-white text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+              Live Feed
+            </h3>
+            <PickTicker picks={picks} userId={user?.id} />
+          </div>
+
+          {/* Manager cards — hidden on mobile when chat tab is active */}
+          <div className={mobilePanel === 'chat' ? 'hidden lg:block' : ''}>
+            <div className="card p-3">
+              <h3 className="font-bold text-white text-xs uppercase tracking-wider mb-2">Teams</h3>
+              <div className="space-y-2 max-h-[30vh] overflow-y-auto">
+                {members.map(m => (
+                  <ManagerRosterCard
+                    key={m.id} member={m} picks={picks}
+                    currentPicker={draftComplete ? null : currentPicker}
+                    userId={user?.id}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Chat panel — always visible on desktop, only on mobile when chat tab active */}
+          <div className={mobilePanel !== 'chat' ? 'hidden lg:block' : ''}>
+            <DraftChat
+              leagueId={leagueId}
+              user={user}
+              token={token}
+              members={members}
+            />
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── Injury Draft Confirmation Modal ── */}
+      {draftConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-yellow-500/40 rounded-xl shadow-2xl max-w-sm w-full p-6">
+            <div className="text-2xl mb-3">⚠️</div>
+            <h3 className="text-white font-bold text-lg mb-1">Injury Alert</h3>
+            <p className="text-gray-300 text-sm mb-2">
+              <span className="text-white font-semibold">{draftConfirm.name}</span> has been flagged in recent injury news.
+            </p>
+            {draftConfirm.injury_headline && (
+              <p className="text-yellow-400/80 text-xs bg-yellow-500/10 border border-yellow-500/20 rounded px-3 py-2 mb-4 leading-snug">
+                "{draftConfirm.injury_headline}"
+              </p>
+            )}
+            <p className="text-gray-500 text-xs mb-5">Injury alerts are sourced from news feeds and may not be current. Verify before drafting.</p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDraftConfirm(null)}
+                className="flex-1 px-4 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { makePick(draftConfirm.id); setDraftConfirm(null); }}
+                className="flex-1 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-sm font-bold transition-colors"
+              >
+                Draft Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
