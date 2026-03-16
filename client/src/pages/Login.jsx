@@ -12,6 +12,7 @@ export default function Login() {
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw]   = useState(false);
+  const [showForgotJoke, setShowForgotJoke] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -72,9 +73,23 @@ export default function Login() {
         </div>
 
         <div className="flex justify-end -mt-1">
-          <span className="text-xs text-gray-600 hover:text-gray-400 transition-colors cursor-default">
-            Forgot password? Contact your commissioner 😄
-          </span>
+          {!showForgotJoke ? (
+            <button
+              type="button"
+              onClick={() => setShowForgotJoke(true)}
+              className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+            >
+              Forgot password?
+            </button>
+          ) : (
+            <p className="text-xs text-gray-400 text-right leading-relaxed">
+              Forgot your password? Contact your commissioner… just kidding,{' '}
+              <Link to="/forgot-password" className="text-brand-400 hover:text-brand-300 font-semibold transition-colors">
+                click here to reset it
+              </Link>
+              .
+            </p>
+          )}
         </div>
 
         <button

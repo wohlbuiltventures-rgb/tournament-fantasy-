@@ -181,6 +181,9 @@ try { db.exec('ALTER TABLE leagues ADD COLUMN payout_first INTEGER DEFAULT 70');
 try { db.exec('ALTER TABLE leagues ADD COLUMN payout_second INTEGER DEFAULT 20'); } catch (e) {}
 try { db.exec('ALTER TABLE leagues ADD COLUMN payout_third INTEGER DEFAULT 10'); } catch (e) {}
 try { db.exec('ALTER TABLE leagues ADD COLUMN payout_bonus REAL DEFAULT 0'); } catch (e) {}
+// Password reset tokens
+try { db.exec('ALTER TABLE users ADD COLUMN password_reset_token TEXT'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN password_reset_expires DATETIME'); } catch (e) {}
 // Injury news-scraping flags
 try { db.exec('ALTER TABLE players ADD COLUMN injury_flagged INTEGER DEFAULT 0'); } catch (e) {}
 try { db.exec("ALTER TABLE players ADD COLUMN injury_headline TEXT DEFAULT ''"); } catch (e) {}

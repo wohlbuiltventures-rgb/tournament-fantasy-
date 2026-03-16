@@ -16,6 +16,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "socket.io": "^4.7.4",
+    "nodemailer": "^6.9.13",
     "stripe": "^14.21.0",
     "uuid": "^9.0.1"
   },

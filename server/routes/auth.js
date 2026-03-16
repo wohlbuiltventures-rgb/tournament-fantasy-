@@ -1,9 +1,11 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const { sendPasswordReset } = require('../mailer');
 
 const router = express.Router();
 
@@ -67,6 +69,60 @@ router.post('/login', async (req, res) => {
     res.json({ token, user: { id: user.id, email: user.email, username: user.username } });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email);
+    // Always respond with success to avoid email enumeration
+    if (!user) return res.json({ message: 'If that email exists, a reset link has been sent.' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+    db.prepare('UPDATE users SET password_reset_token = ?, password_reset_expires = ? WHERE id = ?')
+      .run(token, expires, user.id);
+
+    const clientUrl = process.env.CLIENT_URL
+      ? process.env.CLIENT_URL.replace(/\/$/, '')
+      : `https://${req.get('host')}`;
+    const resetUrl = `${clientUrl}/reset-password?token=${token}`;
+
+    await sendPasswordReset(user.email, resetUrl);
+    res.json({ message: 'If that email exists, a reset link has been sent.' });
+  } catch (err) {
+    console.error('forgot-password error:', err);
+    res.status(500).json({ error: 'Failed to send reset email' });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'Token and password are required' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    const user = db.prepare(
+      'SELECT id FROM users WHERE password_reset_token = ? AND password_reset_expires > ?'
+    ).get(token, new Date().toISOString());
+
+    if (!user) return res.status(400).json({ error: 'Reset link is invalid or has expired' });
+
+    const password_hash = await bcrypt.hash(password, 12);
+    db.prepare(
+      'UPDATE users SET password_hash = ?, password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?'
+    ).run(password_hash, user.id);
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('reset-password error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

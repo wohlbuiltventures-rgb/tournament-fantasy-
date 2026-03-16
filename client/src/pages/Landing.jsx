@@ -427,7 +427,7 @@ export default function Landing() {
 
             {[
               { icon: '🏀', num: '01', title: 'Commissioner creates a league', desc: 'Free to create. Name it, set the draft rules, and invite your crew.' },
-              { icon: '📨', num: '02', title: 'Managers each pay $5 to join', desc: 'Secure entry for every manager. No free riders, no ghosting.' },
+              { icon: '📨', num: '02', title: '$5 per team to join — everyone\'s in, no free riders', desc: 'Secure entry for every manager. No free riders, no ghosting.' },
               { icon: '⏱',  num: '03', title: 'Snake draft your player pool', desc: 'Live real-time draft with countdown timer and auto-pick fallback.' },
               { icon: '🏆', num: '04', title: 'Watch your players ball out', desc: '3 weeks of live scoring. Every bucket, every upset, every hero.' },
             ].map(step => (
