@@ -247,12 +247,17 @@ export default function Landing() {
         <div className="relative max-w-7xl mx-auto w-full grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left — copy */}
           <div>
-            <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/30 text-brand-400 text-xs font-bold px-4 py-1.5 rounded-full mb-6 uppercase tracking-wider">
+            <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/30 text-brand-400 text-xs font-bold px-4 py-1.5 rounded-full mb-5 uppercase tracking-wider">
               <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-ping" />
               2026 College Basketball Fantasy
             </div>
 
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] mb-6">
+            {/* Hook line — mobile-first, reads first */}
+            <p className="text-gray-400 text-base sm:text-lg font-semibold mb-3 leading-snug">
+              Tired of busting your bracket on day one? 🤦
+            </p>
+
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] mb-5">
               <span className="bg-gradient-to-br from-white to-gray-300 bg-clip-text text-transparent block">
                 Your Players.
               </span>
@@ -265,9 +270,9 @@ export default function Landing() {
             </h1>
 
             <p className="text-gray-300 text-lg sm:text-xl leading-relaxed mb-8 max-w-xl">
-              Draft real college basketball players and win real money.{' '}
-              <span className="text-white font-semibold">The most exciting 3 weeks in sports</span>{' '}
-              just got better.
+              Unlike bracket challenges,{' '}
+              <span className="text-white font-semibold">your players score your points</span>{' '}
+              all tournament long — every bucket counts.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 mb-10">
