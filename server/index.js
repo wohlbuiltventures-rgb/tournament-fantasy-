@@ -63,6 +63,15 @@ app.use('/uploads', express.static(uploadsDir));
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Serve built React client in production
+const clientDist = path.join(__dirname, '../client/dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
 // Socket.io draft logic
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
