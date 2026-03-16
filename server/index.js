@@ -30,12 +30,16 @@ const server = http.createServer(app);
 
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
+// Allow both the configured CLIENT_URL and localhost dev server so CORS
+// doesn't break local dev or production when CLIENT_URL changes.
+const CORS_ORIGINS = [CLIENT_URL, 'http://localhost:5173', 'http://localhost:3001'].filter(Boolean);
+const corsOptions = {
+  origin: (origin, cb) => cb(null, !origin || CORS_ORIGINS.some(o => origin.startsWith(o))),
+  credentials: true,
+};
+
 const io = new Server(server, {
-  cors: {
-    origin: CLIENT_URL,
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
+  cors: { ...corsOptions, methods: ['GET', 'POST'] },
 });
 
 app.set('io', io);
@@ -49,7 +53,7 @@ app.set('io', io);
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
 // Global middleware
-app.use(cors({ origin: CLIENT_URL, credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Routes
