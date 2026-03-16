@@ -7,6 +7,15 @@ const router = express.Router();
 const ENTRY_FEE       = 5.00; // Flat $5 platform fee per league
 const SMART_DRAFT_FEE = 2.99; // Smart Draft upgrade per user per league
 
+// ── Promo codes (server-side only — never sent to client bundle) ─────────────
+const PROMO_CODES = {
+  FOUNDINGMEMBER: {
+    discountPct:    100,
+    appliesToEntry: true,
+    message:        'Promo applied — $5 fee waived!',
+  },
+};
+
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('STRIPE_SECRET_KEY environment variable is not set');
@@ -23,12 +32,28 @@ function getClientUrl(req) {
 }
 
 // ---------------------------------------------------------------------------
+// POST /api/payments/validate-promo
+// Validates a promo code without creating a checkout session.
+// Returns { valid, message } — never reveals the code list.
+// ---------------------------------------------------------------------------
+router.post('/validate-promo', authMiddleware, (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ valid: false, error: 'No code provided' });
+  const promo = PROMO_CODES[code.toUpperCase().trim()];
+  if (!promo) return res.json({ valid: false, error: 'Invalid promo code' });
+  res.json({ valid: true, discountPct: promo.discountPct, message: promo.message });
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/payments/entry-checkout
 // Create a Stripe Checkout session for the $5 league access fee.
+// Accepts optional promoCode — if valid 100% discount, entry fee is waived:
+//   • No Smart Draft → marks paid immediately, returns { free: true }
+//   • With Smart Draft → Stripe session for $2.99 only, entry marked paid now
 // ---------------------------------------------------------------------------
 router.post('/entry-checkout', authMiddleware, async (req, res) => {
   try {
-    const { leagueId, includeSmartDraft } = req.body;
+    const { leagueId, includeSmartDraft, promoCode } = req.body;
     if (!leagueId) return res.status(400).json({ error: 'leagueId is required' });
 
     const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(leagueId);
@@ -45,14 +70,73 @@ router.post('/entry-checkout', authMiddleware, async (req, res) => {
       return res.status(409).json({ error: 'Already paid for this league' });
     }
 
+    // ── Evaluate promo code ──────────────────────────────────────────────────
+    let entryFeeAmount = ENTRY_FEE;
+    let promoApplied   = false;
+    if (promoCode) {
+      const promo = PROMO_CODES[promoCode.toUpperCase().trim()];
+      if (promo && promo.appliesToEntry) {
+        entryFeeAmount = ENTRY_FEE * (1 - promo.discountPct / 100);
+        promoApplied   = true;
+        console.log(`[checkout] promo "${promoCode.toUpperCase().trim()}" applied — entry fee: $${entryFeeAmount}`);
+      }
+    }
+
+    const { v4: uuidv4 } = require('uuid');
+
+    // ── Entry fee fully waived ───────────────────────────────────────────────
+    if (entryFeeAmount === 0) {
+      // Mark entry payment as paid immediately (no Stripe needed for $0)
+      db.prepare(`
+        UPDATE member_payments
+        SET status = 'paid', paid_at = CURRENT_TIMESTAMP, amount = 0, stripe_session_id = 'promo_waived'
+        WHERE league_id = ? AND user_id = ?
+      `).run(leagueId, req.user.id);
+      console.log(`[checkout] entry fee waived by promo for user=${req.user.id} league=${leagueId}`);
+
+      if (!includeSmartDraft) {
+        // Nothing left to charge — return free
+        return res.json({ free: true, message: 'Access fee waived — welcome, Founding Member! 🎉' });
+      }
+
+      // Smart Draft still needs to be charged — create a Stripe session for $2.99 only
+      const clientUrl = getClientUrl(req);
+      const stripe    = getStripe();
+
+      const sdSession = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency:     'usd',
+            product_data: { name: `Smart Draft Upgrade ⚡ – ${league.name}` },
+            unit_amount:  Math.round(SMART_DRAFT_FEE * 100),
+          },
+          quantity: 1,
+        }],
+        mode:        'payment',
+        success_url: `${clientUrl}/league/${leagueId}?payment=success`,
+        cancel_url:  `${clientUrl}/league/${leagueId}?payment=cancelled`,
+        metadata:    { type: 'smart_draft', league_id: leagueId, user_id: req.user.id },
+      });
+
+      db.prepare(`
+        INSERT INTO smart_draft_upgrades (id, user_id, league_id, stripe_session_id, status)
+        VALUES (?, ?, ?, ?, 'pending')
+        ON CONFLICT(user_id, league_id) DO UPDATE SET stripe_session_id = excluded.stripe_session_id, status = 'pending'
+      `).run(uuidv4(), req.user.id, leagueId, sdSession.id);
+
+      return res.json({ url: sdSession.url });
+    }
+
+    // ── Standard Stripe checkout (entry fee > $0) ────────────────────────────
     const clientUrl = getClientUrl(req);
-    const stripe = getStripe();
+    const stripe    = getStripe();
 
     const lineItems = [{
       price_data: {
-        currency: 'usd',
+        currency:     'usd',
         product_data: { name: `TourneyRun League Access – ${league.name}` },
-        unit_amount: Math.round(ENTRY_FEE * 100),
+        unit_amount:  Math.round(entryFeeAmount * 100),
       },
       quantity: 1,
     }];
@@ -60,9 +144,9 @@ router.post('/entry-checkout', authMiddleware, async (req, res) => {
     if (includeSmartDraft) {
       lineItems.push({
         price_data: {
-          currency: 'usd',
+          currency:     'usd',
           product_data: { name: `Smart Draft Upgrade ⚡ – ${league.name}` },
-          unit_amount: Math.round(SMART_DRAFT_FEE * 100),
+          unit_amount:  Math.round(SMART_DRAFT_FEE * 100),
         },
         quantity: 1,
       });
@@ -70,27 +154,23 @@ router.post('/entry-checkout', authMiddleware, async (req, res) => {
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: lineItems,
-      mode: 'payment',
+      line_items:  lineItems,
+      mode:        'payment',
       success_url: `${clientUrl}/league/${leagueId}?payment=success`,
-      cancel_url: `${clientUrl}/league/${leagueId}?payment=cancelled`,
+      cancel_url:  `${clientUrl}/league/${leagueId}?payment=cancelled`,
       metadata: {
-        league_id: leagueId,
-        user_id: req.user.id,
+        league_id:            leagueId,
+        user_id:              req.user.id,
         includes_smart_draft: includeSmartDraft ? '1' : '0',
       },
     });
     console.log(`[checkout] session created — redirect base: ${clientUrl}, smart_draft=${!!includeSmartDraft}`);
 
-    const { v4: uuidv4 } = require('uuid');
-
-    // Update payment record with session ID and correct total amount
-    const totalAmount = ENTRY_FEE + (includeSmartDraft ? SMART_DRAFT_FEE : 0);
+    const totalAmount = entryFeeAmount + (includeSmartDraft ? SMART_DRAFT_FEE : 0);
     db.prepare(
       'UPDATE member_payments SET stripe_session_id = ?, amount = ? WHERE league_id = ? AND user_id = ?'
     ).run(session.id, totalAmount, leagueId, req.user.id);
 
-    // Pre-create a pending smart_draft_upgrades row so webhook can activate it
     if (includeSmartDraft) {
       db.prepare(`
         INSERT INTO smart_draft_upgrades (id, user_id, league_id, stripe_session_id, status)

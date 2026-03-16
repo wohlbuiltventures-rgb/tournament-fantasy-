@@ -115,6 +115,42 @@ function SmartDraftBanner({ leagueId }) {
   );
 }
 
+// ── Promo code input ─────────────────────────────────────────────────────────
+function PromoInput({ code, onCodeChange, status, message, onApply }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={code}
+          onChange={e => onCodeChange(e.target.value.toUpperCase())}
+          onKeyDown={e => e.key === 'Enter' && onApply()}
+          placeholder="Promo code"
+          disabled={status === 'valid'}
+          className={`flex-1 bg-gray-800 border rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none transition-colors ${
+            status === 'valid'   ? 'border-green-500/60 bg-green-950/20' :
+            status === 'invalid' ? 'border-red-500/60' :
+            'border-gray-700 focus:border-brand-500'
+          }`}
+        />
+        <button
+          type="button"
+          onClick={onApply}
+          disabled={!code.trim() || status === 'loading' || status === 'valid'}
+          className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-40 bg-gray-700 hover:bg-gray-600 text-white whitespace-nowrap"
+        >
+          {status === 'loading' ? '…' : status === 'valid' ? '✓ Applied' : 'Apply'}
+        </button>
+      </div>
+      {message && (
+        <p className={`text-xs font-medium ${status === 'valid' ? 'text-green-400' : 'text-red-400'}`}>
+          {status === 'valid' ? '🎉 ' : '⚠️ '}{message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function LeagueHome() {
   const { id } = useParams();
@@ -138,6 +174,10 @@ export default function LeagueHome() {
   const [paymentInfo, setPaymentInfo]         = useState(null);
   const [paymentLoading, setPaymentLoading]   = useState(false);
   const [entryPayLoading, setEntryPayLoading] = useState(false);
+  const [promoCode, setPromoCode]       = useState('');
+  const [promoStatus, setPromoStatus]   = useState(''); // '' | 'loading' | 'valid' | 'invalid'
+  const [promoMessage, setPromoMessage] = useState('');
+  const [promoWaived, setPromoWaived]   = useState(false); // true when 100% off
   const [populateLoading, setPopulateLoading] = useState(false);
   const [populateResult, setPopulateResult]   = useState(null);
   const [randomizing, setRandomizing]         = useState(false);
@@ -303,11 +343,43 @@ export default function LeagueHome() {
     }
   };
 
+  const applyPromo = async () => {
+    if (!promoCode.trim()) return;
+    setPromoStatus('loading');
+    setPromoMessage('');
+    try {
+      const res = await api.post('/payments/validate-promo', { code: promoCode.trim() });
+      if (res.data.valid) {
+        setPromoStatus('valid');
+        setPromoMessage(res.data.message);
+        setPromoWaived(res.data.discountPct === 100);
+      } else {
+        setPromoStatus('invalid');
+        setPromoMessage(res.data.error || 'Invalid promo code');
+        setPromoWaived(false);
+      }
+    } catch {
+      setPromoStatus('invalid');
+      setPromoMessage('Could not validate code');
+      setPromoWaived(false);
+    }
+  };
+
   const handlePayEntryFee = async () => {
     setEntryPayLoading(true);
     try {
-      const res = await api.post('/payments/entry-checkout', { leagueId: id });
-      window.location.href = res.data.url;
+      const body = { leagueId: id };
+      if (promoStatus === 'valid') body.promoCode = promoCode.trim();
+      const res = await api.post('/payments/entry-checkout', body);
+      if (res.data.free) {
+        await fetchData();
+        setPromoCode('');
+        setPromoStatus('');
+        setPromoMessage('');
+        setPromoWaived(false);
+      } else {
+        window.location.href = res.data.url;
+      }
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to start payment');
       setEntryPayLoading(false);
@@ -442,15 +514,24 @@ export default function LeagueHome() {
 
       {/* ── Access fee banner ── */}
       {myPaymentDue && (
-        <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-4 mb-6 flex items-center justify-between gap-4">
-          <div>
-            <div className="text-red-300 font-semibold">Access Fee Due</div>
-            <div className="text-red-400/80 text-sm">Pay your $5.00 access fee to participate in the draft.</div>
+        <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-4 mb-6 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-red-300 font-semibold">Access Fee Due</div>
+              <div className="text-red-400/80 text-sm">
+                {promoWaived ? 'Your $5 access fee has been waived 🎉' : 'Pay your $5.00 access fee to participate in the draft.'}
+              </div>
+            </div>
+            <button onClick={handlePayEntryFee} disabled={entryPayLoading}
+              className="bg-red-600 hover:bg-red-500 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap shrink-0">
+              {entryPayLoading ? 'Loading...' : promoWaived ? 'Claim Free Access' : 'Pay $5.00'}
+            </button>
           </div>
-          <button onClick={handlePayEntryFee} disabled={entryPayLoading}
-            className="bg-red-600 hover:bg-red-500 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors whitespace-nowrap shrink-0">
-            {entryPayLoading ? 'Loading...' : 'Pay $5.00'}
-          </button>
+          <PromoInput
+            code={promoCode} onCodeChange={setPromoCode}
+            status={promoStatus} message={promoMessage}
+            onApply={applyPromo}
+          />
         </div>
       )}
 
@@ -893,17 +974,28 @@ export default function LeagueHome() {
           ) : (
             <>
               {myPaymentDue && (
-                <div className="card p-5 border-red-500/30">
-                  <h3 className="font-bold text-white mb-1">Access Fee Due</h3>
-                  <p className="text-gray-400 text-sm mb-4">
-                    Pay the $5.00 TourneyRun access fee to participate in the draft.
-                  </p>
-                  <div className="bg-brand-500/10 border border-brand-500/30 rounded-lg p-3 text-sm text-brand-300 mb-4">
+                <div className="card p-5 border-red-500/30 space-y-4">
+                  <div>
+                    <h3 className="font-bold text-white mb-1">Access Fee Due</h3>
+                    <p className="text-gray-400 text-sm">
+                      {promoWaived
+                        ? 'Your $5 access fee has been waived by a promo code 🎉'
+                        : 'Pay the $5.00 TourneyRun access fee to participate in the draft.'}
+                    </p>
+                  </div>
+                  <PromoInput
+                    code={promoCode} onCodeChange={setPromoCode}
+                    status={promoStatus} message={promoMessage}
+                    onApply={applyPromo}
+                  />
+                  <div className="bg-brand-500/10 border border-brand-500/30 rounded-lg p-3 text-sm text-brand-300">
                     Test card: <span className="font-mono font-semibold">4242 4242 4242 4242</span> — any future date, any CVC
                   </div>
                   <button onClick={handlePayEntryFee} disabled={entryPayLoading}
-                    className="btn-primary px-6 py-2.5 text-lg">
-                    {entryPayLoading ? 'Redirecting...' : 'Pay $5.00 Access Fee'}
+                    className="btn-primary px-6 py-2.5 text-lg w-full">
+                    {entryPayLoading
+                      ? (promoWaived ? 'Activating...' : 'Redirecting...')
+                      : promoWaived ? 'Claim Free Access 🎉' : 'Pay $5.00 Access Fee'}
                   </button>
                 </div>
               )}
