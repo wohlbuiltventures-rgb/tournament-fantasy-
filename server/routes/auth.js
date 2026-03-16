@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
-const { sendPasswordReset } = require('../mailer');
+const { sendPasswordReset, sendWelcome } = require('../mailer');
 
 const router = express.Router();
 
@@ -40,6 +40,9 @@ router.post('/register', async (req, res) => {
     const user = { id, email, username };
     const token = signToken(user);
     res.status(201).json({ token, user });
+
+    // Send welcome email — fire and forget, don't block registration
+    sendWelcome(email, username).catch(err => console.error('Welcome email failed:', err));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

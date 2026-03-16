@@ -296,8 +296,25 @@ io.on('connection', (socket) => {
   });
 });
 
-// Initialize DB and seed
-seedPlayers();
+// Initialize DB: ESPN bracket pull is the source of truth.
+// seedPlayers() only runs as a fallback when the DB is completely empty
+// AND the ESPN pull fails (e.g. offline dev environment).
+const { pullBracket } = require('./bracketPoller');
+setTimeout(async () => {
+  try {
+    const result = await pullBracket();
+    if (!result.success) {
+      console.warn('[startup] ESPN bracket pull failed — falling back to seed.js');
+      seedPlayers();
+    }
+  } catch (err) {
+    console.error('[startup] Bracket pull threw:', err.message, '— falling back to seed.js');
+    seedPlayers();
+  }
+}, 5000);
+
+// Re-pull bracket every 24 hours to catch roster updates before the tournament
+setInterval(pullBracket, 24 * 60 * 60 * 1000);
 
 // Scheduled draft poller — checks every 30 seconds for leagues whose start time has passed
 setInterval(() => {

@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const { performStartDraft } = require('../draftUtils');
+const { pullBracket } = require('../bracketPoller');
 const { clearAutoPick } = require('../draftTimer');
 const { getDraftState } = require('./draft');
 
@@ -491,6 +492,18 @@ router.post('/create-test-league', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('create-test-league error:', err);
     res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+// POST /api/admin/pull-bracket — manually trigger ESPN bracket + roster pull
+router.post('/pull-bracket', authMiddleware, async (req, res) => {
+  // Any authenticated user can trigger this (it's read-only from ESPN)
+  try {
+    const result = await pullBracket();
+    res.json(result);
+  } catch (err) {
+    console.error('[admin] pull-bracket error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

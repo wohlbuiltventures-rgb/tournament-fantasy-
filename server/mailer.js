@@ -39,4 +39,129 @@ async function sendPasswordReset(toEmail, resetUrl) {
   });
 }
 
-module.exports = { sendPasswordReset };
+async function sendWelcome(toEmail, username) {
+  const transport = getTransport();
+  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
+  const baseUrl = process.env.CLIENT_URL
+    ? process.env.CLIENT_URL.replace(/\/$/, '')
+    : 'https://tourneyrun.com';
+
+  await transport.sendMail({
+    from: `"TourneyRun" <${from}>`,
+    to: toEmail,
+    subject: 'Welcome to TourneyRun 🏀',
+    text: `Hey ${username},\n\nYou're in. Now create a league, draft your players, and win some money. The 2026 Tournament starts March 20th — don't sleep on it.\n\nCreate a League: ${baseUrl}/create-league\nJoin a League: ${baseUrl}/join-league\n\nHow it works:\n• Draft real college basketball players\n• Score points every time they score\n• Win your league's prize pool\n\nGood luck out there. May your players stay healthy and your seeds hold.\n— The TourneyRun Team`,
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+
+        <!-- Top accent line -->
+        <tr><td style="background:linear-gradient(90deg,transparent,#378ADD,transparent);height:2px;border-radius:2px;"></td></tr>
+
+        <!-- Card -->
+        <tr><td style="background:#111113;border:1px solid #1f2937;border-top:none;border-radius:0 0 16px 16px;padding:36px 36px 32px;">
+
+          <!-- Logo -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr>
+              <td align="center">
+                <span style="font-size:40px;line-height:1;">🏀</span>
+                <div style="margin-top:8px;">
+                  <span style="font-size:22px;font-weight:300;color:#B5D4F4;letter-spacing:-0.02em;">tourney</span><span style="font-size:22px;font-weight:800;color:#378ADD;letter-spacing:-0.02em;">run</span>
+                </div>
+                <div style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#555;margin-top:3px;">Player Pool Fantasy</div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Headline -->
+          <h1 style="margin:0 0 12px;font-size:26px;font-weight:900;color:#ffffff;text-align:center;line-height:1.2;">
+            Welcome to TourneyRun, ${username}!
+          </h1>
+
+          <!-- Subhead -->
+          <p style="margin:0 0 28px;font-size:15px;color:#9ca3af;text-align:center;line-height:1.6;">
+            You're in. Now create a league, draft your players, and win some money.<br>
+            <span style="color:#ffffff;font-weight:600;">The 2026 Tournament starts March 20th</span> — don't sleep on it.
+          </p>
+
+          <!-- CTA buttons -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+            <tr>
+              <td align="center" style="padding:0 4px;">
+                <a href="${baseUrl}/create-league"
+                  style="display:inline-block;background:linear-gradient(135deg,#378ADD,#2563EB);color:#ffffff;font-weight:800;font-size:14px;text-decoration:none;padding:13px 28px;border-radius:10px;letter-spacing:0.01em;">
+                  Create a League →
+                </a>
+              </td>
+              <td align="center" style="padding:0 4px;">
+                <a href="${baseUrl}/join-league"
+                  style="display:inline-block;background:transparent;border:1.5px solid #374151;color:#d1d5db;font-weight:700;font-size:14px;text-decoration:none;padding:12px 28px;border-radius:10px;">
+                  Join a League
+                </a>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Divider -->
+          <div style="border-top:1px solid #1f2937;margin-bottom:24px;"></div>
+
+          <!-- How it works -->
+          <p style="margin:0 0 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;color:#378ADD;">How it works</p>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:28px;">
+            <tr>
+              <td style="padding:8px 0;border-bottom:1px solid #1a1f2a;">
+                <table cellpadding="0" cellspacing="0"><tr>
+                  <td style="font-size:18px;padding-right:12px;vertical-align:middle;">🎯</td>
+                  <td style="font-size:14px;color:#d1d5db;vertical-align:middle;">Draft real college basketball players</td>
+                </tr></table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 0;border-bottom:1px solid #1a1f2a;">
+                <table cellpadding="0" cellspacing="0"><tr>
+                  <td style="font-size:18px;padding-right:12px;vertical-align:middle;">📊</td>
+                  <td style="font-size:14px;color:#d1d5db;vertical-align:middle;">Score points every time they score</td>
+                </tr></table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 0;">
+                <table cellpadding="0" cellspacing="0"><tr>
+                  <td style="font-size:18px;padding-right:12px;vertical-align:middle;">💵</td>
+                  <td style="font-size:14px;color:#d1d5db;vertical-align:middle;">Win your league's prize pool</td>
+                </tr></table>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Footer message -->
+          <div style="background:#0d1117;border:1px solid #1f2937;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+            <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;font-style:italic;">
+              Good luck out there. May your players stay healthy and your seeds hold.
+            </p>
+            <p style="margin:6px 0 0;font-size:13px;color:#378ADD;font-weight:600;">— The TourneyRun Team</p>
+          </div>
+
+          <!-- Legal footer -->
+          <p style="margin:0;font-size:11px;color:#374151;text-align:center;line-height:1.6;">
+            TourneyRun · Skill-based fantasy game · Payments powered by Stripe<br>
+            Not available in WA, ID, MT, NV, LA
+          </p>
+
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+    `,
+  });
+}
+
+module.exports = { sendPasswordReset, sendWelcome };

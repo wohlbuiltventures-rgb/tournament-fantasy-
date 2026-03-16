@@ -181,6 +181,8 @@ try { db.exec('ALTER TABLE leagues ADD COLUMN payout_first INTEGER DEFAULT 70');
 try { db.exec('ALTER TABLE leagues ADD COLUMN payout_second INTEGER DEFAULT 20'); } catch (e) {}
 try { db.exec('ALTER TABLE leagues ADD COLUMN payout_third INTEGER DEFAULT 10'); } catch (e) {}
 try { db.exec('ALTER TABLE leagues ADD COLUMN payout_bonus REAL DEFAULT 0'); } catch (e) {}
+// ESPN bracket integration
+try { db.exec('ALTER TABLE players ADD COLUMN espn_team_id TEXT'); } catch (e) {}
 // Password reset tokens
 try { db.exec('ALTER TABLE users ADD COLUMN password_reset_token TEXT'); } catch (e) {}
 try { db.exec('ALTER TABLE users ADD COLUMN password_reset_expires DATETIME'); } catch (e) {}
