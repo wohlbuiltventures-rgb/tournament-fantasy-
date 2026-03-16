@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 
 // ─── Fake Excel Data ─────────────────────────────────────────────────────────
 const EXCEL_ROWS = [
@@ -339,6 +340,8 @@ const rowNum = {
 // ─── Main BossMode Component ─────────────────────────────────────────────────
 export default function BossMode() {
   const [mode, setMode] = useState(null); // null | 'excel' | 'gmail'
+  const { pathname } = useLocation();
+  const isDraft = pathname.includes('/draft');
 
   const dismiss = useCallback(() => setMode(null), []);
 
@@ -358,8 +361,8 @@ export default function BossMode() {
 
   return (
     <>
-      {/* The button — subtle, fixed bottom-right */}
-      {mode === null && (
+      {/* The button — subtle, fixed bottom-right — hidden in draft room */}
+      {mode === null && !isDraft && (
         <button
           onClick={() => setMode('excel')}
           title="Boss is coming… (B = Excel, G = Gmail)"
