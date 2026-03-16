@@ -113,7 +113,7 @@ router.post('/:leagueId/pick', authMiddleware, (req, res) => {
     const draftComplete = nextPick > totalPicks;
 
     if (draftComplete) {
-      db.prepare("UPDATE leagues SET current_pick = ?, status = 'active' WHERE id = ?").run(nextPick, leagueId);
+      db.prepare("UPDATE leagues SET current_pick = ?, status = 'active', draft_status = 'completed' WHERE id = ?").run(nextPick, leagueId);
     } else {
       db.prepare('UPDATE leagues SET current_pick = ? WHERE id = ?').run(nextPick, leagueId);
     }

@@ -345,4 +345,19 @@ try {
   db.prepare("UPDATE users SET role = 'superadmin' WHERE email = 'cwohlfert@gmail.com'").run();
 } catch (e) {}
 
+// ── Fix leagues where all picks were made but draft_status was never updated ──
+// Both draft.js and draftTimer.js forgot to write draft_status='completed'.
+// This migration corrects any stuck league on every server start (idempotent).
+try {
+  const fixed = db.prepare(`
+    UPDATE leagues
+    SET draft_status = 'completed'
+    WHERE draft_status != 'completed'
+      AND current_pick > (max_teams * total_rounds)
+  `).run();
+  if (fixed.changes > 0) {
+    console.log(`[db] Fixed ${fixed.changes} league(s) stuck with draft_status='pending' after draft completion`);
+  }
+} catch (e) { console.error('[db] draft_status migration error:', e.message); }
+
 module.exports = db;
