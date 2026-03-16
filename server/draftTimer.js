@@ -1,6 +1,7 @@
 const db = require('./db');
 const { v4: uuidv4 } = require('uuid');
 const { addMessage, makeSystemMsg } = require('./chatStore');
+const { selectSmartDraftPlayer } = require('./smartDraft');
 
 // Per-league timeout handles — keyed by leagueId
 const timers = {};
@@ -8,15 +9,10 @@ const timers = {};
 /**
  * Schedule a server-side auto-pick for the current pick in a league.
  * Fires (pick_time_limit + 2) seconds after being called, then checks
- * whether the pick was already made. If not, auto-selects the highest-PPG
- * available player and emits pick_made to the room.
- *
- * Call this:
- *   - When a draft starts (after performStartDraft)
- *   - After every successful manual or auto pick (to cover the next turn)
+ * whether the pick was already made. If not, auto-selects a player using
+ * Smart Draft (if purchased or enabled by league default) or Best Available.
  */
 function scheduleAutoPick(leagueId, io) {
-  // Cancel any pending timer for this league
   if (timers[leagueId]) {
     clearTimeout(timers[leagueId]);
     delete timers[leagueId];
@@ -52,33 +48,54 @@ function _doAutoPick(leagueId, expectedPick, io) {
       WHERE lm.league_id = ? ORDER BY lm.draft_order
     `).all(leagueId);
 
-    const numTeams = members.length;
+    const numTeams  = members.length;
     const totalPicks = numTeams * league.total_rounds;
     if (expectedPick > totalPicks) return;
 
     // Snake draft: determine who is on the clock
-    const round = Math.ceil(expectedPick / numTeams);
-    const pickInRound = (expectedPick - 1) % numTeams;
-    const draftPos = round % 2 === 1 ? pickInRound + 1 : numTeams - pickInRound;
+    const round        = Math.ceil(expectedPick / numTeams);
+    const pickInRound  = (expectedPick - 1) % numTeams;
+    const draftPos     = round % 2 === 1 ? pickInRound + 1 : numTeams - pickInRound;
     const currentPicker = members.find(m => m.draft_order === draftPos);
     if (!currentPicker) return;
 
-    // Best available player by PPG (not already drafted)
-    const available = db.prepare(`
+    // ── Smart Draft check ────────────────────────────────────────────────────
+    const hasSmart = db.prepare(
+      "SELECT id FROM smart_draft_upgrades WHERE user_id = ? AND league_id = ? AND status = 'active'"
+    ).get(currentPicker.user_id, leagueId);
+
+    const useSmartDraft = !!(hasSmart || league.autodraft_mode === 'smart_draft');
+
+    // ── Fetch all available players ──────────────────────────────────────────
+    const allAvailable = db.prepare(`
       SELECT * FROM players
       WHERE id NOT IN (SELECT player_id FROM draft_picks WHERE league_id = ?)
       ORDER BY season_ppg DESC, name ASC
-      LIMIT 1
-    `).get(leagueId);
+    `).all(leagueId);
+
+    let available     = null;
+    let usedSmartDraft = false;
+
+    if (useSmartDraft && allAvailable.length) {
+      available = selectSmartDraftPlayer(leagueId, currentPicker.user_id, allAvailable);
+      if (available) usedSmartDraft = true;
+    }
+
+    if (!available) {
+      // Best Available: prefer non-injured, fall back to anything if all injured
+      available = allAvailable.find(p => !p.injury_flagged) || allAvailable[0] || null;
+    }
+
     if (!available) return;
 
+    // ── Insert the pick ──────────────────────────────────────────────────────
     const pickId = uuidv4();
     db.prepare(`
       INSERT INTO draft_picks (id, league_id, user_id, player_id, pick_number, round)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(pickId, leagueId, currentPicker.user_id, available.id, expectedPick, round);
 
-    const nextPick = expectedPick + 1;
+    const nextPick     = expectedPick + 1;
     const draftComplete = nextPick > totalPicks;
 
     if (draftComplete) {
@@ -87,35 +104,38 @@ function _doAutoPick(leagueId, expectedPick, io) {
       db.prepare('UPDATE leagues SET current_pick = ? WHERE id = ?').run(nextPick, leagueId);
     }
 
-    // Determine next picker for the event payload
-    const nextRound = Math.ceil(nextPick / numTeams);
+    // Determine next picker
+    const nextRound       = Math.ceil(nextPick / numTeams);
     const nextPickInRound = (nextPick - 1) % numTeams;
-    const nextDraftPos = nextRound % 2 === 1 ? nextPickInRound + 1 : numTeams - nextPickInRound;
-    const nextPicker = draftComplete ? null : members.find(m => m.draft_order === nextDraftPos);
+    const nextDraftPos    = nextRound % 2 === 1 ? nextPickInRound + 1 : numTeams - nextPickInRound;
+    const nextPicker      = draftComplete ? null : members.find(m => m.draft_order === nextDraftPos);
 
     io.to(`draft_${leagueId}`).emit('pick_made', {
       pick: {
-        id: pickId,
-        league_id: leagueId,
-        user_id: currentPicker.user_id,
-        player_id: available.id,
+        id:          pickId,
+        league_id:   leagueId,
+        user_id:     currentPicker.user_id,
+        player_id:   available.id,
         pick_number: expectedPick,
         round,
         player_name: available.name,
-        team: available.team,
-        position: available.position,
-        seed: available.seed,
-        username: currentPicker.username,
+        team:        available.team,
+        position:    available.position,
+        seed:        available.seed,
+        username:    currentPicker.username,
+        auto_picked:      true,
+        smart_drafted:    usedSmartDraft,
       },
-      nextPickUserId: nextPicker?.user_id || null,
-      nextPickUsername: nextPicker?.username || null,
+      nextPickUserId:   nextPicker?.user_id   || null,
+      nextPickUsername: nextPicker?.username  || null,
       draftComplete,
       currentPick: nextPick,
     });
 
     // System chat message
+    const label  = usedSmartDraft ? ' (Smart Draft ⚡)' : '';
     const sysMsg = makeSystemMsg(
-      `${currentPicker.team_name} selected ${available.name} with pick #${expectedPick}`
+      `${currentPicker.team_name} selected ${available.name} with pick #${expectedPick}${label}`
     );
     addMessage(leagueId, sysMsg);
     io.to(`draft_${leagueId}`).emit('chat_message', sysMsg);
@@ -124,11 +144,11 @@ function _doAutoPick(leagueId, expectedPick, io) {
       const { getDraftState } = require('./routes/draft');
       io.to(`draft_${leagueId}`).emit('draft_completed', getDraftState(leagueId));
     } else {
-      // Schedule auto-pick for the next turn
       scheduleAutoPick(leagueId, io);
     }
 
-    console.log(`[auto-pick] ${leagueId} pick #${expectedPick}: ${available.name} (${available.season_ppg} PPG) → ${currentPicker.username}`);
+    const algo = usedSmartDraft ? 'Smart Draft' : 'Best Available';
+    console.log(`[auto-pick] ${leagueId} pick #${expectedPick}: ${available.name} (${algo}) → ${currentPicker.username}`);
   } catch (err) {
     console.error('[auto-pick] error:', err);
   }

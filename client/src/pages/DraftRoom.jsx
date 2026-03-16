@@ -301,7 +301,7 @@ function PickTicker({ picks, userId }) {
 }
 
 // Manager roster card
-function ManagerRosterCard({ member, picks, currentPicker, userId }) {
+function ManagerRosterCard({ member, picks, currentPicker, userId, hasSmartDraft }) {
   const myPicks = picks.filter(p => p.user_id === member.user_id);
   const isOnClock = currentPicker?.user_id === member.user_id;
   const isMe = member.user_id === userId;
@@ -317,7 +317,7 @@ function ManagerRosterCard({ member, picks, currentPicker, userId }) {
           <TeamAvatar avatarUrl={member.avatar_url} teamName={member.team_name} size="xs" />
           <div className="min-w-0 flex-1">
           <div className={`font-bold truncate text-[11px] ${isMe ? 'text-brand-400' : 'text-white'}`}>
-            {member.team_name}
+            {member.team_name}{hasSmartDraft ? ' ⚡' : ''}
           </div>
           <div className="text-gray-600 truncate" style={{ fontSize: 9 }}>{member.username}</div>
           </div>
@@ -655,6 +655,13 @@ export default function DraftRoom() {
   const [draftConfirm, setDraftConfirm] = useState(null); // player to confirm drafting despite injury flag
   const [pickConfirm, setPickConfirm] = useState(null);   // accidental-pick confirmation modal
 
+  // Smart Draft
+  const [mySmartDraft, setMySmartDraft]           = useState(false);
+  const [smartDraftUsers, setSmartDraftUsers]     = useState(new Set());
+  const [sdCheckoutLoading, setSdCheckoutLoading] = useState(false);
+  const [sdUpsellOpen, setSdUpsellOpen]           = useState(false); // "How it works" expanded
+  const mySmartDraftRef = useRef(false);
+
   // Watchlist stored in localStorage per user per league
   const [watchlist, setWatchlist] = useState(() => {
     try { return JSON.parse(localStorage.getItem(`dq_${leagueId}_${user?.id}`) || '[]'); }
@@ -735,18 +742,59 @@ export default function DraftRoom() {
   useEffect(() => {
     if (timeLeft <= 0) {
       if (isMyTurnRef.current && !pickingRef.current) {
-        const available = availablePlayersRef.current;
+        const available    = availablePlayersRef.current;
         const availableSet = new Set(available.map(p => p.id));
-        // Queue-first auto-draft
+
+        // Queue-first (queue players can be injured — draft room already warned)
         const queuedId = watchlistRef.current.find(id => availableSet.has(id));
-        const targetId = queuedId || [...available].sort((a, b) => {
-          const etpA = calcETP(a.season_ppg, a.seed) ?? a.season_ppg;
-          const etpB = calcETP(b.season_ppg, b.seed) ?? b.season_ppg;
-          return etpB - etpA;
-        })[0]?.id;
+
+        let targetId   = queuedId || null;
+        let fromSmart  = false;
+
+        if (!targetId) {
+          // Skip injured players if possible
+          const healthy = available.filter(p => !p.injury_flagged);
+          const pool    = healthy.length ? healthy : available;
+
+          if (mySmartDraftRef.current) {
+            // Client-side smart draft: penalise stacked teams, boost mid-seeds
+            // (simplified — full algo runs server-side as authoritative backup)
+            const myPickIds = new Set(
+              (state?.picks || []).filter(p => p.user_id === user?.id).map(p => p.player_id)
+            );
+            const myTeams = {};
+            for (const pk of (state?.picks || [])) {
+              if (pk.user_id === user?.id) {
+                const cached = playerCacheRef.current[pk.player_id];
+                if (cached?.team) myTeams[cached.team] = (myTeams[cached.team] || 0) + 1;
+              }
+            }
+            targetId = [...pool].sort((a, b) => {
+              const score = p => {
+                const base = calcETP(p.season_ppg, p.seed) ?? p.season_ppg ?? 0;
+                let s = base;
+                if (p.team && (myTeams[p.team] || 0) >= 2) s *= 0.60;
+                return s;
+              };
+              return score(b) - score(a);
+            })[0]?.id || null;
+            fromSmart = true;
+          } else {
+            targetId = [...pool].sort((a, b) => {
+              const etpA = calcETP(a.season_ppg, a.seed) ?? a.season_ppg ?? 0;
+              const etpB = calcETP(b.season_ppg, b.seed) ?? b.season_ppg ?? 0;
+              return etpB - etpA;
+            })[0]?.id || null;
+          }
+        }
+
         if (targetId) {
           const picked = playerCacheRef.current[targetId] || available.find(p => p.id === targetId);
-          setAutoDraftToast({ playerName: picked?.name || 'a player', fromQueue: !!queuedId });
+          setAutoDraftToast({
+            playerName: picked?.name || 'a player',
+            fromQueue:  !!queuedId,
+            fromSmart:  !queuedId && fromSmart,
+          });
           setTimeout(() => setAutoDraftToast(null), 4000);
           pickingRef.current = true;
           setPicking(true);
@@ -861,6 +909,29 @@ export default function DraftRoom() {
       console.error('Failed to clear injury flag:', err);
     }
   }, []);
+
+  // ── Smart Draft fetch ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!leagueId) return;
+    api.get(`/payments/smart-draft/${leagueId}/status`)
+      .then(res => {
+        setMySmartDraft(res.data.purchased);
+        mySmartDraftRef.current = res.data.purchased;
+        setSmartDraftUsers(new Set(res.data.purchasedUsers));
+      })
+      .catch(() => {});
+  }, [leagueId]);
+
+  const handleSmartDraftCheckout = async () => {
+    setSdCheckoutLoading(true);
+    try {
+      const res = await api.post('/payments/smart-draft-checkout', { leagueId });
+      window.location.href = res.data.url;
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not start checkout');
+      setSdCheckoutLoading(false);
+    }
+  };
 
   // ── Derived values ────────────────────────────────────────────────────────
 
@@ -979,7 +1050,11 @@ export default function DraftRoom() {
           <span>⚡</span>
           <span>
             Auto-drafted <span className="font-semibold">{autoDraftToast.playerName}</span>
-            {autoDraftToast.fromQueue ? ' (from your queue)' : ' (highest available ETP)'}
+            {autoDraftToast.fromQueue
+              ? ' (from your queue)'
+              : autoDraftToast.fromSmart
+              ? ' — Smart Draft ⚡'
+              : ' (highest available ETP)'}
           </span>
         </div>
       )}
@@ -1033,7 +1108,7 @@ export default function DraftRoom() {
                     : 'bg-gray-800/60 text-gray-500'
                 }`}>
                   <TeamAvatar avatarUrl={m.avatar_url} teamName={m.team_name} size="xs" />
-                  <div className="font-bold">{m.draft_order}. {m.team_name}</div>
+                  <div className="font-bold">{m.draft_order}. {m.team_name}{smartDraftUsers.has(m.user_id) ? ' ⚡' : ''}</div>
                 </div>
               ))}
             </div>
@@ -1058,6 +1133,46 @@ export default function DraftRoom() {
           <div className="text-4xl mb-2">⏳</div>
           <h2 className="text-xl font-bold text-white mb-1">Draft Not Started</h2>
           <p className="text-gray-400">Waiting for the commissioner to start the draft.</p>
+        </div>
+      )}
+
+      {/* ── Smart Draft upsell banner ── */}
+      {!mySmartDraft && !draftComplete && league.status === 'drafting' && (
+        <div className="rounded-xl border border-brand-500/30 bg-brand-500/5 p-3 mb-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-lg shrink-0">⚡</span>
+              <div className="min-w-0">
+                <div className="text-white font-semibold text-sm">Running late? Smart Draft has your back 🏀</div>
+                <div className="text-gray-400 text-xs">
+                  Our AI picks like a pro if your timer runs out — avoids injuries, balances your roster.{' '}
+                  <button
+                    onClick={() => setSdUpsellOpen(v => !v)}
+                    className="text-brand-400 hover:text-brand-300 underline underline-offset-2"
+                  >
+                    {sdUpsellOpen ? 'Hide details' : 'How it works'}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleSmartDraftCheckout}
+              disabled={sdCheckoutLoading}
+              className="shrink-0 bg-brand-500 hover:bg-brand-400 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
+            >
+              {sdCheckoutLoading ? 'Loading…' : 'Add Smart Draft — $2.99'}
+            </button>
+          </div>
+          {sdUpsellOpen && (
+            <div className="mt-3 pt-3 border-t border-brand-500/20 text-xs text-gray-300 space-y-1">
+              <p className="font-semibold text-white mb-1">Smart Draft is an AI-powered algorithm that drafts for you when you can't make it. It automatically:</p>
+              <p>✓ Avoids injured players</p>
+              <p>✓ Balances your roster across regions and teams</p>
+              <p>✓ Targets high ETP players with the best tournament upside</p>
+              <p>✓ Fills position needs intelligently</p>
+              <p className="text-gray-500 mt-1">Much smarter than just grabbing the highest rated player available.</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -1374,6 +1489,7 @@ export default function DraftRoom() {
                     key={m.id} member={m} picks={enrichedPicks}
                     currentPicker={draftComplete ? null : currentPicker}
                     userId={user?.id}
+                    hasSmartDraft={smartDraftUsers.has(m.user_id)}
                   />
                 ))}
               </div>

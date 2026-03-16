@@ -4,7 +4,8 @@ const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
-const ENTRY_FEE = 5.00; // Flat $5 platform fee per league
+const ENTRY_FEE       = 5.00; // Flat $5 platform fee per league
+const SMART_DRAFT_FEE = 2.99; // Smart Draft upgrade per user per league
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -75,6 +76,83 @@ router.post('/entry-checkout', authMiddleware, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/payments/smart-draft-checkout
+// Create a Stripe Checkout session for the $2.99 Smart Draft upgrade.
+// ---------------------------------------------------------------------------
+router.post('/smart-draft-checkout', authMiddleware, async (req, res) => {
+  try {
+    const { leagueId } = req.body;
+    if (!leagueId) return res.status(400).json({ error: 'leagueId is required' });
+
+    const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(leagueId);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+
+    // Check if already purchased
+    const existing = db.prepare(
+      "SELECT * FROM smart_draft_upgrades WHERE user_id = ? AND league_id = ? AND status = 'active'"
+    ).get(req.user.id, leagueId);
+    if (existing) return res.status(409).json({ error: 'Smart Draft already active for this league' });
+
+    const { v4: uuidv4 } = require('uuid');
+    const clientUrl = getClientUrl(req);
+    const stripe    = getStripe();
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency:     'usd',
+          product_data: { name: `TourneyRun Smart Draft — ${league.name}` },
+          unit_amount:  Math.round(SMART_DRAFT_FEE * 100),
+        },
+        quantity: 1,
+      }],
+      mode:        'payment',
+      success_url: `${clientUrl}/league/${leagueId}?smartdraft=success`,
+      cancel_url:  `${clientUrl}/league/${leagueId}?smartdraft=cancelled`,
+      metadata:    { type: 'smart_draft', league_id: leagueId, user_id: req.user.id },
+    });
+
+    // Upsert pending record
+    db.prepare(`
+      INSERT INTO smart_draft_upgrades (id, user_id, league_id, stripe_session_id, status)
+      VALUES (?, ?, ?, ?, 'pending')
+      ON CONFLICT(user_id, league_id) DO UPDATE SET stripe_session_id = excluded.stripe_session_id, status = 'pending'
+    `).run(uuidv4(), req.user.id, leagueId, session.id);
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('smart-draft-checkout error:', err);
+    res.status(500).json({ error: 'Stripe error: ' + err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/payments/smart-draft/:leagueId/status
+// Returns Smart Draft purchase status for the requesting user + all league members.
+// ---------------------------------------------------------------------------
+router.get('/smart-draft/:leagueId/status', authMiddleware, (req, res) => {
+  try {
+    const { leagueId } = req.params;
+    const myRecord = db.prepare(
+      "SELECT status FROM smart_draft_upgrades WHERE user_id = ? AND league_id = ?"
+    ).get(req.user.id, leagueId);
+
+    const allActive = db.prepare(
+      "SELECT user_id FROM smart_draft_upgrades WHERE league_id = ? AND status = 'active'"
+    ).all(leagueId).map(r => r.user_id);
+
+    res.json({
+      purchased:      myRecord?.status === 'active',
+      purchasedUsers: allActive,
+    });
+  } catch (err) {
+    console.error('smart-draft status error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/payments/webhook
 // Stripe webhook — raw body required (configured in index.js).
 // ---------------------------------------------------------------------------
@@ -90,46 +168,59 @@ router.post('/webhook', async (req, res) => {
   }
 
   if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
+    const session  = event.data.object;
+    const metadata = session.metadata || {};
     try {
-      const payment = db.prepare(
-        'SELECT * FROM member_payments WHERE stripe_session_id = ?'
-      ).get(session.id);
-
-      if (payment) {
+      // ── Smart Draft purchase ──────────────────────────────────────────────
+      if (metadata.type === 'smart_draft') {
         db.prepare(`
-          UPDATE member_payments
-          SET status = 'paid',
-              paid_at = CURRENT_TIMESTAMP,
-              stripe_payment_intent_id = ?
+          UPDATE smart_draft_upgrades
+          SET status = 'active', purchased_at = CURRENT_TIMESTAMP
           WHERE stripe_session_id = ?
-        `).run(session.payment_intent, session.id);
+        `).run(session.id);
+        console.log(`Smart Draft activated: league=${metadata.league_id} user=${metadata.user_id}`);
 
-        console.log(`League access paid: league=${payment.league_id} user=${payment.user_id}`);
+      // ── League entry fee ──────────────────────────────────────────────────
+      } else {
+        const payment = db.prepare(
+          'SELECT * FROM member_payments WHERE stripe_session_id = ?'
+        ).get(session.id);
 
-        // Auto-start: if the league has auto_start_on_full set and this was the last payment
-        try {
-          const { performStartDraft } = require('../draftUtils');
-          const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(payment.league_id);
-          if (league && league.status === 'lobby' && league.auto_start_on_full) {
-            const memberCount = db.prepare(
-              'SELECT COUNT(*) as cnt FROM league_members WHERE league_id = ?'
-            ).get(payment.league_id);
-            const paidCount = db.prepare(
-              "SELECT COUNT(*) as cnt FROM member_payments WHERE league_id = ? AND status = 'paid'"
-            ).get(payment.league_id);
-            if (memberCount.cnt >= 2 && paidCount.cnt >= memberCount.cnt) {
-              const result = performStartDraft(payment.league_id, req.app.get('io'));
-              if (result.success) {
-                console.log(`[auto-start] All paid — draft auto-started for league ${payment.league_id}`);
+        if (payment) {
+          db.prepare(`
+            UPDATE member_payments
+            SET status = 'paid',
+                paid_at = CURRENT_TIMESTAMP,
+                stripe_payment_intent_id = ?
+            WHERE stripe_session_id = ?
+          `).run(session.payment_intent, session.id);
+
+          console.log(`League access paid: league=${payment.league_id} user=${payment.user_id}`);
+
+          // Auto-start: if the league has auto_start_on_full set and this was the last payment
+          try {
+            const { performStartDraft } = require('../draftUtils');
+            const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(payment.league_id);
+            if (league && league.status === 'lobby' && league.auto_start_on_full) {
+              const memberCount = db.prepare(
+                'SELECT COUNT(*) as cnt FROM league_members WHERE league_id = ?'
+              ).get(payment.league_id);
+              const paidCount = db.prepare(
+                "SELECT COUNT(*) as cnt FROM member_payments WHERE league_id = ? AND status = 'paid'"
+              ).get(payment.league_id);
+              if (memberCount.cnt >= 2 && paidCount.cnt >= memberCount.cnt) {
+                const result = performStartDraft(payment.league_id, req.app.get('io'));
+                if (result.success) {
+                  console.log(`[auto-start] All paid — draft auto-started for league ${payment.league_id}`);
+                }
               }
             }
+          } catch (autoErr) {
+            console.error('[auto-start] error in webhook:', autoErr);
           }
-        } catch (autoErr) {
-          console.error('[auto-start] error in webhook:', autoErr);
+        } else {
+          console.warn('Webhook: no member_payment found for session', session.id);
         }
-      } else {
-        console.warn('Webhook: no member_payment found for session', session.id);
       }
     } catch (err) {
       console.error('Webhook DB error:', err);

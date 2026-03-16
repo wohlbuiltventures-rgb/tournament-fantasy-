@@ -43,7 +43,7 @@ export const FAQ_SECTIONS = [
       },
       {
         q: "What happens if I miss the draft?",
-        a: "Auto-draft has your back. If your pick timer runs out, the system automatically grabs the highest-ETP available player. We'd still recommend being there live though — auto-draft doesn't know your personal strategy.",
+        a: "Life happens. If your pick timer runs out, the system auto-drafts for you — either Best Available (highest ETP) or Smart Draft if you've upgraded. Smart Draft is $2.99 and our algorithm drafts like a seasoned pro while you're stuck at dinner: it avoids injuries, balances your roster across regions and teams, and targets the highest-upside players available. Much smarter than just grabbing the top name on the list.",
       },
     ],
   },

@@ -445,6 +445,58 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Smart Draft feature section ── */}
+      <section className="py-16 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="relative overflow-hidden rounded-3xl border border-brand-500/30 bg-gradient-to-br from-brand-900/40 via-gray-900 to-gray-900 p-8 sm:p-12"
+            style={{ boxShadow: '0 0 60px rgba(55,138,221,0.12), 0 0 120px rgba(55,138,221,0.06)' }}>
+            {/* Glow */}
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(55,138,221,0.15)_0%,_transparent_65%)] pointer-events-none" />
+
+            <div className="relative">
+              {/* Badge */}
+              <div className="inline-flex items-center gap-2 bg-brand-500/20 border border-brand-500/30 rounded-full px-3 py-1 text-brand-400 text-xs font-bold uppercase tracking-widest mb-5">
+                ⚡ Premium Feature
+              </div>
+
+              {/* Headline */}
+              <h2 className="text-3xl sm:text-4xl font-black text-white mb-3 leading-tight">
+                Can't make the draft?<br />
+                <span className="text-brand-400">We've got you. ⚡</span>
+              </h2>
+
+              <p className="text-gray-300 text-lg mb-8 max-w-xl">
+                Smart Draft is your AI-powered backup plan. For just <span className="text-white font-bold">$2.99</span> it drafts like a seasoned pro while you're stuck in traffic, at dinner, or just forgot. No bad picks. No excuses.
+              </p>
+
+              {/* Three bullets */}
+              <div className="grid sm:grid-cols-3 gap-4 mb-8">
+                {[
+                  { icon: '🚫', title: 'Avoids injured players', desc: 'Automatically skips anyone flagged with injury news.' },
+                  { icon: '🗺️', title: 'Balances regions & teams', desc: 'No stacking — diversifies your roster like an expert.' },
+                  { icon: '📈', title: 'Targets the highest upside', desc: 'Picks by ETP with context — never leaves value on the board.' },
+                ].map(b => (
+                  <div key={b.title} className="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-4">
+                    <div className="text-2xl mb-2">{b.icon}</div>
+                    <div className="font-bold text-white text-sm mb-1">{b.title}</div>
+                    <div className="text-gray-500 text-xs leading-relaxed">{b.desc}</div>
+                  </div>
+                ))}
+              </div>
+
+              <Link
+                to={user ? '/create-league' : '/register'}
+                className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-400 text-white font-black text-base px-7 py-3.5 rounded-xl transition-all duration-200 hover:scale-105 shadow-lg shadow-brand-500/30"
+              >
+                ⚡ Add Smart Draft for $2.99
+                <span className="text-brand-200 text-sm">›</span>
+              </Link>
+              <p className="text-gray-600 text-xs mt-3">Available per manager, per league — upgrade any time before or during the draft.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Urgency CTA ── */}
       <section className="relative px-4 py-20 overflow-hidden">
         {/* Deep blue fill */}

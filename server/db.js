@@ -218,4 +218,21 @@ try {
   )`);
 } catch (e) {}
 
+// Smart Draft upgrade purchases (per user per league)
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS smart_draft_upgrades (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    league_id TEXT NOT NULL,
+    stripe_session_id TEXT UNIQUE,
+    status TEXT DEFAULT 'pending',
+    purchased_at DATETIME,
+    UNIQUE(user_id, league_id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (league_id) REFERENCES leagues(id)
+  )`);
+} catch (e) {}
+// League autodraft mode: 'best_available' (default) or 'smart_draft'
+try { db.exec("ALTER TABLE leagues ADD COLUMN autodraft_mode TEXT DEFAULT 'best_available'"); } catch (e) {}
+
 module.exports = db;

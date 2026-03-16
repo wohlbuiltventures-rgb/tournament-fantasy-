@@ -207,7 +207,7 @@ router.patch('/:id/settings', authMiddleware, (req, res) => {
       return res.status(403).json({ error: 'Settings cannot be changed after the draft has started' });
     }
 
-    const { draft_start_time, pick_time_limit, max_teams, total_rounds } = req.body;
+    const { draft_start_time, pick_time_limit, max_teams, total_rounds, autodraft_mode } = req.body;
 
     const validTimers = [30, 60, 90, 120];
     const timer = parseInt(pick_time_limit);
@@ -231,18 +231,24 @@ router.patch('/:id/settings', authMiddleware, (req, res) => {
       }
     }
 
+    if (autodraft_mode !== undefined && !['best_available', 'smart_draft'].includes(autodraft_mode)) {
+      return res.status(400).json({ error: 'autodraft_mode must be best_available or smart_draft' });
+    }
+
     db.prepare(`
       UPDATE leagues SET
         draft_start_time = COALESCE(?, draft_start_time),
         pick_time_limit  = COALESCE(?, pick_time_limit),
         max_teams        = COALESCE(?, max_teams),
-        total_rounds     = COALESCE(?, total_rounds)
+        total_rounds     = COALESCE(?, total_rounds),
+        autodraft_mode   = COALESCE(?, autodraft_mode)
       WHERE id = ?
     `).run(
       draft_start_time !== undefined ? (draft_start_time || null) : undefined,
-      pick_time_limit  !== undefined ? timer  : undefined,
-      max_teams        !== undefined ? maxT   : undefined,
-      total_rounds     !== undefined ? rounds : undefined,
+      pick_time_limit  !== undefined ? timer         : undefined,
+      max_teams        !== undefined ? maxT          : undefined,
+      total_rounds     !== undefined ? rounds        : undefined,
+      autodraft_mode   !== undefined ? autodraft_mode : undefined,
       req.params.id,
     );
 

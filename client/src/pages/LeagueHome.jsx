@@ -40,6 +40,80 @@ function PaymentBadge({ status }) {
   );
 }
 
+// ── Smart Draft upsell banner ─────────────────────────────────────────────────
+function SmartDraftBanner({ leagueId }) {
+  const [purchased, setPurchased]     = useState(null); // null = loading
+  const [expanded, setExpanded]       = useState(false);
+  const [loading, setLoading]         = useState(false);
+  const [dismissed, setDismissed]     = useState(false);
+
+  useEffect(() => {
+    api.get(`/payments/smart-draft/${leagueId}/status`)
+      .then(res => setPurchased(res.data.purchased))
+      .catch(() => setPurchased(false));
+  }, [leagueId]);
+
+  const handleCheckout = async () => {
+    setLoading(true);
+    try {
+      const res = await api.post('/payments/smart-draft-checkout', { leagueId });
+      window.location.href = res.data.url;
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not start checkout');
+      setLoading(false);
+    }
+  };
+
+  // Don't show if still loading, already purchased, or dismissed
+  if (purchased === null || purchased || dismissed) return null;
+
+  return (
+    <div className="relative rounded-xl border border-brand-500/30 bg-gradient-to-r from-brand-900/30 via-gray-900 to-gray-900 p-4 mb-6">
+      <button
+        onClick={() => setDismissed(true)}
+        className="absolute top-3 right-3 text-gray-600 hover:text-gray-400 text-lg leading-none"
+        title="Dismiss"
+      >×</button>
+
+      <div className="flex items-start gap-3">
+        <span className="text-2xl shrink-0">⚡</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-white font-bold text-base mb-0.5">Can't make the draft? Forgot about date night?</div>
+          <div className="text-gray-300 text-sm mb-3">
+            Let Smart Draft handle it — <span className="text-brand-400 font-semibold">$2.99</span>.
+            Our AI drafts like a seasoned pro while you're stuck in traffic.{' '}
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="text-brand-400 hover:text-brand-300 underline underline-offset-2 text-sm"
+            >
+              {expanded ? 'Show less' : 'How Smart Draft works'}
+            </button>
+          </div>
+
+          {expanded && (
+            <div className="bg-gray-800/60 rounded-lg p-3 mb-3 text-xs text-gray-300 space-y-1">
+              <p className="font-semibold text-white mb-1.5">Smart Draft is an AI-powered algorithm that drafts for you when you can't make it. It automatically:</p>
+              <p>✓ Avoids injured players</p>
+              <p>✓ Balances your roster across regions and teams</p>
+              <p>✓ Targets high ETP players with the best tournament upside</p>
+              <p>✓ Fills position needs intelligently</p>
+              <p className="text-gray-500 mt-1.5">Much smarter than just grabbing the highest rated player available.</p>
+            </div>
+          )}
+
+          <button
+            onClick={handleCheckout}
+            disabled={loading}
+            className="bg-brand-500 hover:bg-brand-400 text-white font-bold px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-60"
+          >
+            {loading ? 'Loading…' : 'Add Smart Draft — $2.99'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function LeagueHome() {
   const { id } = useParams();
@@ -182,9 +256,10 @@ export default function LeagueHome() {
       draft_start_time: league.draft_start_time
         ? new Date(league.draft_start_time).toISOString().slice(0, 16)
         : '',
-      pick_time_limit: league.pick_time_limit || 60,
-      max_teams:       league.max_teams        || 10,
-      total_rounds:    league.total_rounds     || 10,
+      pick_time_limit: league.pick_time_limit  || 60,
+      max_teams:       league.max_teams         || 10,
+      total_rounds:    league.total_rounds      || 10,
+      autodraft_mode:  league.autodraft_mode    || 'best_available',
     });
     setEditSuccess(false);
     setEditError('');
@@ -197,6 +272,7 @@ export default function LeagueHome() {
     try {
       const payload = {
         pick_time_limit:  editForm.pick_time_limit,
+        autodraft_mode:   editForm.autodraft_mode,
         max_teams:        editForm.max_teams,
         total_rounds:     editForm.total_rounds,
         draft_start_time: editForm.draft_start_time || null,
@@ -355,6 +431,11 @@ export default function LeagueHome() {
             {entryPayLoading ? 'Loading...' : 'Pay $5.00'}
           </button>
         </div>
+      )}
+
+      {/* ── Smart Draft lobby upsell ── */}
+      {(league.status === 'lobby' || league.status === 'drafting') && (
+        <SmartDraftBanner leagueId={id} />
       )}
 
       {/* ── Pill tabs ── */}
@@ -1036,6 +1117,37 @@ export default function LeagueHome() {
                       onChange={e => setEditForm(f => ({ ...f, total_rounds: parseInt(e.target.value) || f.total_rounds }))}
                     />
                     <p className="text-gray-600 text-[10px] mt-1">players per team</p>
+                  </div>
+                </div>
+
+                {/* Autodraft mode */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-300 mb-1">
+                    League Auto-Draft Default
+                  </label>
+                  <p className="text-gray-500 text-[11px] mb-2">
+                    Sets the fallback algorithm for all teams when their pick timer expires.
+                    Individual teams can always upgrade to Smart Draft regardless.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { v: 'best_available', l: 'Best Available', sub: 'Highest ETP, skip injured' },
+                      { v: 'smart_draft',    l: '⚡ Smart Draft',  sub: 'AI-balanced (free for league)' },
+                    ].map(({ v, l, sub }) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setEditForm(f => ({ ...f, autodraft_mode: v }))}
+                        className={`py-2 px-3 rounded-xl text-left text-sm border transition-all ${
+                          editForm.autodraft_mode === v
+                            ? 'bg-brand-500/20 border-brand-500/60 text-brand-400'
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-white'
+                        }`}
+                      >
+                        <div className="font-semibold text-sm">{l}</div>
+                        <div className="text-[10px] opacity-70 mt-0.5">{sub}</div>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
