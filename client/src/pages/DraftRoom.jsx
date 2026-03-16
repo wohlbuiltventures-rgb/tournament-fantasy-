@@ -247,11 +247,14 @@ function DraftBoardGrid({ league, members, picks, currentPick, currentPicker, nu
                   return (
                     <td key={m.id} className="px-0.5 py-0.5">
                       {pick ? (
-                        <div className={`rounded border px-1 py-0.5 text-center ${style.cell}`} style={{ height: 36 }}>
+                        <div className={`rounded border px-1 py-0.5 text-center ${style.cell}`} style={{ height: 46 }}>
                           <div className="font-semibold truncate leading-tight" style={{ fontSize: 9 }}>
                             {pick.player_name}
                           </div>
-                          <div className="opacity-60 truncate" style={{ fontSize: 8 }}>
+                          <div className="truncate leading-tight text-gray-400" style={{ fontSize: 8 }}>
+                            {pick.team}
+                          </div>
+                          <div className="opacity-60 truncate" style={{ fontSize: 7 }}>
                             {etpByPlayerId[pick.player_id]
                               ? <>{etpByPlayerId[pick.player_id]} etp</>
                               : <>{pick.position} {pick.seed ? `#${pick.seed}` : ''}</>
