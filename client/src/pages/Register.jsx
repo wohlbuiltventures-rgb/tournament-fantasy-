@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useDocTitle } from '../hooks/useDocTitle';
 import AuthLayout, { IconInput } from '../components/AuthLayout';
+import api from '../api';
 
 export default function Register() {
   useDocTitle('Create Account | TourneyRun');
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sdSession = searchParams.get('smartdraft_session');
+
   const [form, setForm]     = useState({ email: '', username: '', password: '', confirmPassword: '' });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,7 +28,13 @@ export default function Register() {
     setLoading(true);
     try {
       await register(form.email, form.username, form.password);
-      navigate('/dashboard');
+      // Claim the standalone Smart Draft credit if we came from Stripe checkout
+      if (sdSession) {
+        try { await api.post('/payments/claim-credit', { session_id: sdSession }); } catch {}
+        navigate('/create-league?smartdraft=1');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');
     } finally {
@@ -40,6 +50,17 @@ export default function Register() {
 
   return (
     <AuthLayout>
+      {/* Smart Draft credit banner */}
+      {sdSession && (
+        <div className="flex items-center gap-2.5 bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 rounded-xl px-4 py-3 text-sm mb-5">
+          <span className="text-xl shrink-0">⚡</span>
+          <div>
+            <div className="font-bold">Smart Draft credit ready!</div>
+            <div className="text-yellow-400/80 text-xs mt-0.5">Create your account to activate it.</div>
+          </div>
+        </div>
+      )}
+
       {/* Headline */}
       <div className="text-center mb-7">
         <h1 className="text-2xl font-black text-white mb-1">Create Your Account</h1>

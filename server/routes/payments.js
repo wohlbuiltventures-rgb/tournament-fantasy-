@@ -82,13 +82,16 @@ router.post('/entry-checkout', authMiddleware, async (req, res) => {
     });
     console.log(`[checkout] session created — redirect base: ${clientUrl}, smart_draft=${!!includeSmartDraft}`);
 
+    const { v4: uuidv4 } = require('uuid');
+
+    // Update payment record with session ID and correct total amount
+    const totalAmount = ENTRY_FEE + (includeSmartDraft ? SMART_DRAFT_FEE : 0);
     db.prepare(
-      'UPDATE member_payments SET stripe_session_id = ? WHERE league_id = ? AND user_id = ?'
-    ).run(session.id, leagueId, req.user.id);
+      'UPDATE member_payments SET stripe_session_id = ?, amount = ? WHERE league_id = ? AND user_id = ?'
+    ).run(session.id, totalAmount, leagueId, req.user.id);
 
     // Pre-create a pending smart_draft_upgrades row so webhook can activate it
     if (includeSmartDraft) {
-      const { v4: uuidv4 } = require('uuid');
       db.prepare(`
         INSERT INTO smart_draft_upgrades (id, user_id, league_id, stripe_session_id, status)
         VALUES (?, ?, ?, ?, 'pending')
@@ -181,6 +184,106 @@ router.get('/smart-draft/:leagueId/status', authMiddleware, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/payments/smart-draft-standalone
+// Public — no login required. Creates a $2.99 Stripe Checkout for a
+// standalone Smart Draft credit (not yet tied to a specific league).
+// On success Stripe redirects to /register?smartdraft_session={SESSION_ID}
+// so the user can register/log-in and claim the credit.
+// ---------------------------------------------------------------------------
+router.post('/smart-draft-standalone', async (req, res) => {
+  try {
+    const { v4: uuidv4 } = require('uuid');
+    const clientUrl = getClientUrl(req);
+    const stripe    = getStripe();
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency:     'usd',
+          product_data: { name: 'TourneyRun Smart Draft Upgrade ⚡' },
+          unit_amount:  Math.round(SMART_DRAFT_FEE * 100),
+        },
+        quantity: 1,
+      }],
+      mode:        'payment',
+      // {CHECKOUT_SESSION_ID} is a Stripe template variable — replaced automatically
+      success_url: `${clientUrl}/register?smartdraft_session={CHECKOUT_SESSION_ID}`,
+      cancel_url:  `${clientUrl}/?smartdraft=cancelled`,
+      metadata:    { type: 'smart_draft_credit' },
+    });
+
+    // Pre-create pending credit row (user_id filled in after claim)
+    db.prepare(`
+      INSERT OR IGNORE INTO smart_draft_credits (id, stripe_session_id, status)
+      VALUES (?, ?, 'pending')
+    `).run(uuidv4(), session.id);
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('smart-draft-standalone error:', err);
+    res.status(500).json({ error: 'Stripe error: ' + err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/payments/claim-credit
+// Auth required. Called after register/login when ?smartdraft_session=X is
+// present. Verifies the Stripe session is paid and associates the credit
+// with the logged-in user.
+// ---------------------------------------------------------------------------
+router.post('/claim-credit', authMiddleware, async (req, res) => {
+  try {
+    const { session_id } = req.body;
+    if (!session_id) return res.status(400).json({ error: 'session_id is required' });
+
+    // Verify payment directly with Stripe (don't rely on webhook timing)
+    const stripe  = getStripe();
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+
+    if (session.payment_status !== 'paid') {
+      return res.status(402).json({ error: 'Payment not completed' });
+    }
+    if (session.metadata?.type !== 'smart_draft_credit') {
+      return res.status(400).json({ error: 'Not a Smart Draft credit session' });
+    }
+
+    // Upsert the credit — either the webhook already created it or we do it now
+    const { v4: uuidv4 } = require('uuid');
+    db.prepare(`
+      INSERT INTO smart_draft_credits (id, stripe_session_id, user_id, status, purchased_at)
+      VALUES (?, ?, ?, 'paid', CURRENT_TIMESTAMP)
+      ON CONFLICT(stripe_session_id) DO UPDATE
+        SET user_id      = COALESCE(user_id, excluded.user_id),
+            status       = 'paid',
+            purchased_at = COALESCE(purchased_at, CURRENT_TIMESTAMP)
+    `).run(uuidv4(), session_id, req.user.id);
+
+    console.log(`[smart-draft-credit] claimed by user=${req.user.id} session=${session_id}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('claim-credit error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/payments/smart-draft-credits
+// Auth required. Returns how many unclaimed standalone credits the user has.
+// ---------------------------------------------------------------------------
+router.get('/smart-draft-credits', authMiddleware, (req, res) => {
+  try {
+    const credits = db.prepare(`
+      SELECT COUNT(*) as count FROM smart_draft_credits
+      WHERE user_id = ? AND status = 'paid'
+    `).get(req.user.id);
+    res.json({ credits: credits.count });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/payments/webhook
 // Stripe webhook — raw body required (configured in index.js).
 // ---------------------------------------------------------------------------
@@ -199,8 +302,19 @@ router.post('/webhook', async (req, res) => {
     const session  = event.data.object;
     const metadata = session.metadata || {};
     try {
+      // ── Standalone Smart Draft credit (pre-registration purchase) ────────
+      if (metadata.type === 'smart_draft_credit') {
+        const { v4: uuidv4 } = require('uuid');
+        db.prepare(`
+          INSERT INTO smart_draft_credits (id, stripe_session_id, status, purchased_at)
+          VALUES (?, ?, 'paid', CURRENT_TIMESTAMP)
+          ON CONFLICT(stripe_session_id) DO UPDATE
+            SET status = 'paid', purchased_at = COALESCE(purchased_at, CURRENT_TIMESTAMP)
+        `).run(uuidv4(), session.id);
+        console.log(`[webhook] Smart Draft credit paid: session=${session.id}`);
+
       // ── Smart Draft purchase ──────────────────────────────────────────────
-      if (metadata.type === 'smart_draft') {
+      } else if (metadata.type === 'smart_draft') {
         db.prepare(`
           UPDATE smart_draft_upgrades
           SET status = 'active', purchased_at = CURRENT_TIMESTAMP

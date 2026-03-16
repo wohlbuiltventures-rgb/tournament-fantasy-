@@ -1,7 +1,8 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useState, useEffect, useRef } from 'react';
 import { useDocTitle } from '../hooks/useDocTitle';
+import api from '../api';
 
 // ─── Keyframe injection ───────────────────────────────────────────────────────
 const STYLES = `
@@ -213,8 +214,28 @@ function CountdownBlock() {
 export default function Landing() {
   useDocTitle('TourneyRun — Player Pool Fantasy');
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [copyConfirm, setCopyConfirm] = useState(false);
+  const [sdLoading, setSdLoading] = useState(false);
+
+  const handleSmartDraftCta = async () => {
+    if (user) {
+      // Already logged in — go straight to create league with Smart Draft pre-selected
+      navigate('/create-league?smartdraft=1');
+      return;
+    }
+    setSdLoading(true);
+    try {
+      const res = await api.post('/payments/smart-draft-standalone');
+      window.location.href = res.data.url;
+    } catch {
+      // Fallback: send to register with intent flag (no charge)
+      navigate('/register?smartdraft=1');
+    } finally {
+      setSdLoading(false);
+    }
+  };
 
   const tickerText = '🏀 The 2026 Tournament starts Thursday March 19th at 12PM ET  ·  Draft day is coming  ·  Secure your spot before your friends do  ·  $5 entry per team  ·  You keep 100% of the prize pool  ·  ';
 
@@ -534,13 +555,14 @@ export default function Landing() {
                 ))}
               </div>
 
-              <Link
-                to={user ? '/create-league' : '/register'}
-                className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-400 text-white font-black text-base px-7 py-3.5 rounded-xl transition-all duration-200 hover:scale-105 shadow-lg shadow-brand-500/30"
+              <button
+                onClick={handleSmartDraftCta}
+                disabled={sdLoading}
+                className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-400 text-white font-black text-base px-7 py-3.5 rounded-xl transition-all duration-200 hover:scale-105 shadow-lg shadow-brand-500/30 disabled:opacity-70 disabled:scale-100"
               >
-                ⚡ Add Smart Draft for $2.99
-                <span className="text-brand-200 text-sm">›</span>
-              </Link>
+                {sdLoading ? 'Redirecting…' : '⚡ Add Smart Draft for $2.99'}
+                {!sdLoading && <span className="text-brand-200 text-sm">›</span>}
+              </button>
               <p className="text-gray-600 text-xs mt-3">Available per manager, per league — upgrade any time before or during the draft.</p>
             </div>
           </div>

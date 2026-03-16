@@ -235,6 +235,18 @@ try {
 // League autodraft mode: 'best_available' (default) or 'smart_draft'
 try { db.exec("ALTER TABLE leagues ADD COLUMN autodraft_mode TEXT DEFAULT 'best_available'"); } catch (e) {}
 
+// Standalone Smart Draft credit purchases (before the user is tied to a league)
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS smart_draft_credits (
+    id TEXT PRIMARY KEY,
+    stripe_session_id TEXT UNIQUE NOT NULL,
+    user_id TEXT,
+    status TEXT DEFAULT 'pending',
+    purchased_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+} catch (e) {}
+
 // Superadmin role
 try { db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"); } catch (e) {}
 // Grant superadmin to platform owner — idempotent

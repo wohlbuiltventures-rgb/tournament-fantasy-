@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useDocTitle } from '../hooks/useDocTitle';
 import AuthLayout, { IconInput } from '../components/AuthLayout';
+import api from '../api';
 
 export default function Login() {
   useDocTitle('Sign In | TourneyRun');
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sdSession = searchParams.get('smartdraft_session');
+
   const [form, setForm]       = useState({ email: '', password: '' });
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,7 +26,12 @@ export default function Login() {
     setLoading(true);
     try {
       await login(form.email, form.password);
-      navigate('/dashboard');
+      if (sdSession) {
+        try { await api.post('/payments/claim-credit', { session_id: sdSession }); } catch {}
+        navigate('/create-league?smartdraft=1');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
     } finally {

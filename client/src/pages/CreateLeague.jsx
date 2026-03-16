@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import Disclaimer from '../components/Disclaimer';
 import { useDocTitle } from '../hooks/useDocTitle';
@@ -86,6 +86,7 @@ function ProgressSteps({ current }) {
 export default function CreateLeague() {
   useDocTitle('Create League | TourneyRun');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [form, setForm] = useState({
     name: '',
@@ -101,7 +102,8 @@ export default function CreateLeague() {
     payout_second: 20,
     payout_third: 10,
     payout_bonus: '',
-    smartDraft: false,
+    // Pre-select Smart Draft if user came from the landing page CTA or standalone checkout
+    smartDraft: searchParams.get('smartdraft') === '1',
   });
   const [sdOpen, setSdOpen] = useState(false); // "how it works" expanded
   const [loading, setLoading] = useState(false);
@@ -174,6 +176,16 @@ export default function CreateLeague() {
           <ProgressSteps current={currentStep} />
         </div>
       </div>
+
+      {searchParams.get('smartdraft') === '1' && (
+        <div className="flex items-center gap-2.5 bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 rounded-xl px-4 py-3 text-sm mb-5">
+          <span className="text-xl shrink-0">⚡</span>
+          <div>
+            <span className="font-bold">Smart Draft credit applied!</span>
+            <span className="text-yellow-400/80 ml-1.5">Your $2.99 upgrade is included — just finish setting up your league.</span>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg p-3 text-sm mb-6">
