@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
+import BossMode from './components/BossMode';
 
 import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
@@ -29,6 +30,7 @@ export default function App() {
       <BrowserRouter>
         <div className="min-h-screen bg-gray-950">
           <Navbar />
+          <BossMode />
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
