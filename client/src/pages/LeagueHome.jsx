@@ -319,8 +319,12 @@ export default function LeagueHome() {
 
   // ── Derived state ─────────────────────────────────────────────────────────
   const buyIn          = league.buy_in_amount || 0;
+  const bonus          = parseFloat(league.payout_bonus) || 0;
   const prizePool      = buyIn * members.length;
   const maxPrizePool   = buyIn * league.max_teams;
+  // Subtract single-game bonus before applying payout percentages
+  const mainPool       = Math.max(0, prizePool - bonus);
+  const maxMainPool    = Math.max(0, maxPrizePool - bonus);
   const spotsLeft      = league.max_teams - members.length;
 
   const myPayment    = paymentInfo?.payments?.find(p => p.user_id === user?.id);
@@ -360,7 +364,7 @@ export default function LeagueHome() {
       gold: false,
     },
     buyIn > 0
-      ? { icon: '🏆', label: 'Prize Pool', value: fmt(prizePool), sub: `up to ${fmt(maxPrizePool)}`, gold: true }
+      ? { icon: '🏆', label: 'Prize Pool', value: fmt(prizePool), sub: bonus > 0 ? `${fmt(mainPool)} standings + ${fmt(bonus)} bonus` : `up to ${fmt(maxPrizePool)}`, gold: true }
       : { icon: '🏆', label: 'Prize Pool', value: 'No buy-in', sub: 'free league', gold: true },
   ];
 
@@ -520,32 +524,46 @@ export default function LeagueHome() {
 
                 {/* Payout breakdown */}
                 {(league.payout_first > 0 || league.payout_second > 0 || league.payout_third > 0 || league.payout_bonus > 0) && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {[
-                      { icon: '🥇', label: '1st Place',  pct: league.payout_first,  ring: 'border-yellow-500/40 bg-yellow-500/10',   text: 'text-yellow-400' },
-                      { icon: '🥈', label: '2nd Place',  pct: league.payout_second, ring: 'border-gray-400/30 bg-gray-400/10',       text: 'text-gray-300'  },
-                      { icon: '🥉', label: '3rd Place',  pct: league.payout_third,  ring: 'border-amber-700/40 bg-amber-900/20',     text: 'text-amber-600' },
-                    ].filter(p => p.pct > 0).map(p => {
-                      const cur = prizePool * p.pct / 100;
-                      const max = maxPrizePool * p.pct / 100;
-                      return (
-                        <div key={p.label} className={`rounded-xl border p-3 ${p.ring}`}>
-                          <div className="text-xl mb-1">{p.icon}</div>
-                          <div className={`text-xl font-black ${p.text}`}>{fmt(cur)}</div>
-                          {members.length < league.max_teams && (
-                            <div className="text-gray-500 text-xs">up to {fmt(max)}</div>
-                          )}
-                          <div className="text-gray-400 text-xs mt-0.5">{p.label} · {p.pct}%</div>
-                        </div>
-                      );
-                    })}
-                    {league.payout_bonus > 0 && (
-                      <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 p-3">
-                        <div className="text-xl mb-1">🎯</div>
-                        <div className="text-xl font-black text-brand-400">{fmt(league.payout_bonus)}</div>
-                        <div className="text-gray-400 text-xs mt-0.5">Single game bonus</div>
+                  <div className="space-y-3">
+                    {/* Show main pool note when a bonus is set */}
+                    {bonus > 0 && (
+                      <div className="text-xs text-gray-500 bg-gray-800/50 rounded-lg px-3 py-2">
+                        💰 <span className="text-white font-semibold">{fmt(prizePool)}</span> total pool ·{' '}
+                        <span className="text-purple-400 font-semibold">{fmt(bonus)}</span> single game bonus ={' '}
+                        <span className="text-yellow-400 font-semibold">{fmt(mainPool)}</span> standings pool
                       </div>
                     )}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        { icon: '🥇', label: '1st Place',  pct: league.payout_first,  ring: 'border-yellow-500/40 bg-yellow-500/10',   text: 'text-yellow-400' },
+                        { icon: '🥈', label: '2nd Place',  pct: league.payout_second, ring: 'border-gray-400/30 bg-gray-400/10',       text: 'text-gray-300'  },
+                        { icon: '🥉', label: '3rd Place',  pct: league.payout_third,  ring: 'border-amber-700/40 bg-amber-900/20',     text: 'text-amber-600' },
+                      ].filter(p => p.pct > 0).map(p => {
+                        const cur = mainPool * p.pct / 100;
+                        const max = maxMainPool * p.pct / 100;
+                        return (
+                          <div key={p.label} className={`rounded-xl border p-3 ${p.ring}`}>
+                            <div className="text-xl mb-1">{p.icon}</div>
+                            <div className={`text-xl font-black ${p.text}`}>{fmt(cur)}</div>
+                            {members.length < league.max_teams && (
+                              <div className="text-gray-500 text-xs">up to {fmt(max)}</div>
+                            )}
+                            <div className="text-gray-400 text-xs mt-0.5">{p.label} · {p.pct}%</div>
+                            {bonus > 0 && (
+                              <div className="text-gray-600 text-xs">of {fmt(mainPool)}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {bonus > 0 && (
+                        <div className="rounded-xl border border-purple-500/30 bg-purple-900/15 p-3">
+                          <div className="text-xl mb-1">🎯</div>
+                          <div className="text-xl font-black text-purple-400">{fmt(bonus)}</div>
+                          <div className="text-gray-400 text-xs mt-0.5">Single game bonus</div>
+                          <div className="text-gray-600 text-xs">highest single-game scorer</div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

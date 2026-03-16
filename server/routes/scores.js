@@ -13,7 +13,7 @@ router.get('/league/:leagueId/standings', authMiddleware, (req, res) => {
     if (!settings) return res.status(404).json({ error: 'League not found' });
 
     const members = db.prepare(`
-      SELECT lm.*, u.username, lm.avatar_url
+      SELECT lm.*, u.username, u.venmo_handle, lm.avatar_url
       FROM league_members lm
       JOIN users u ON lm.user_id = u.id
       WHERE lm.league_id = ?
@@ -61,7 +61,39 @@ router.get('/league/:leagueId/standings', authMiddleware, (req, res) => {
 
     standings.sort((a, b) => b.total_points - a.total_points);
 
-    res.json({ standings, settings });
+    // ── Single-game bonus leader ──────────────────────────────────────────────
+    // Find the player with the highest points in a single completed game across
+    // ALL players in the tournament (not only drafted ones).  Then check if
+    // that player was drafted in THIS league so we can show owner info.
+    const sgLeader = db.prepare(`
+      SELECT
+        ps.player_id,
+        p.name  AS player_name,
+        p.team  AS player_team,
+        ps.points,
+        g.team1, g.team2, g.round_name,
+        dp.user_id        AS owner_user_id,
+        lm2.team_name     AS owner_team_name,
+        u2.username       AS owner_username,
+        u2.venmo_handle   AS owner_venmo
+      FROM player_stats ps
+      JOIN players p  ON ps.player_id = p.id
+      JOIN games g    ON ps.game_id = g.id
+      LEFT JOIN draft_picks dp   ON dp.player_id = ps.player_id AND dp.league_id = ?
+      LEFT JOIN league_members lm2 ON lm2.user_id = dp.user_id AND lm2.league_id = ?
+      LEFT JOIN users u2 ON u2.id = dp.user_id
+      WHERE g.is_completed = 1 AND ps.points > 0
+      ORDER BY ps.points DESC
+      LIMIT 1
+    `).get(leagueId, leagueId) || null;
+
+    // Add a human-readable opponent string (e.g. "vs BYU")
+    if (sgLeader) {
+      const opp = sgLeader.team1 === sgLeader.player_team ? sgLeader.team2 : sgLeader.team1;
+      sgLeader.opponent = opp;
+    }
+
+    res.json({ standings, settings, sgLeader });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
