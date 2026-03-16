@@ -51,8 +51,10 @@ function teamsMatch(ourTeam, espnName) {
   return a.includes(b) || b.includes(a);
 }
 
-function findMatchingGame(espnTeam1, espnTeam2) {
-  const games = db.prepare('SELECT * FROM games WHERE is_completed = 0').all();
+function findMatchingGame(espnTeam1, espnTeam2, includeCompleted = false) {
+  const games = includeCompleted
+    ? db.prepare('SELECT * FROM games').all()
+    : db.prepare('SELECT * FROM games WHERE is_completed = 0').all();
   for (const game of games) {
     const fwd = teamsMatch(game.team1, espnTeam1) && teamsMatch(game.team2, espnTeam2);
     const rev = teamsMatch(game.team1, espnTeam2) && teamsMatch(game.team2, espnTeam1);
@@ -111,6 +113,74 @@ function recordResult(game, winnerTeam, score1, score2) {
   recordResult._lastLoser = loser;
 }
 
+// ── Game metadata from ESPN ──────────────────────────────────────────────────
+function parsePeriod(statusType, period) {
+  const name = statusType?.name || '';
+  if (name === 'STATUS_HALFTIME') return 'Halftime';
+  if (name === 'STATUS_FINAL' || statusType?.completed) return 'Final';
+  if (name === 'STATUS_IN_PROGRESS') {
+    if (period === 1) return '1st Half';
+    if (period === 2) return '2nd Half';
+    if (period > 2) return `OT${period - 2 > 1 ? period - 2 : ''}`;
+  }
+  return '';
+}
+
+function updateGameMetadata(gameId, event, comp) {
+  try {
+    const statusType = comp.status?.type;
+    const period = comp.status?.period || 0;
+    const currentPeriod = parsePeriod(statusType, period);
+    const gameClock = (statusType?.name === 'STATUS_IN_PROGRESS')
+      ? (comp.status?.displayClock || '')
+      : '';
+
+    // Broadcast info
+    const broadcasts = comp.broadcasts || [];
+    const tvNetwork = broadcasts.flatMap(b => b.names || []).join(', ') || '';
+
+    // Venue
+    const venue = comp.venue || {};
+    const city = venue.address?.city || '';
+    const state = venue.address?.state || '';
+    const locationStr = [venue.fullName, city && state ? `${city}, ${state}` : (city || state)]
+      .filter(Boolean).join(' — ');
+
+    // Tip-off time (store raw UTC ISO)
+    const tipOffTime = event.date || comp.startDate || '';
+
+    db.prepare(`
+      UPDATE games SET
+        tip_off_time = CASE WHEN tip_off_time = '' OR tip_off_time IS NULL THEN ? ELSE tip_off_time END,
+        tv_network   = CASE WHEN tv_network   = '' OR tv_network   IS NULL THEN ? ELSE tv_network   END,
+        location     = CASE WHEN location     = '' OR location     IS NULL THEN ? ELSE location     END,
+        current_period = ?,
+        game_clock     = ?
+      WHERE id = ?
+    `).run(tipOffTime, tvNetwork, locationStr, currentPeriod, gameClock, gameId);
+  } catch (err) {
+    console.error('[ESPN] updateGameMetadata error:', err.message);
+  }
+}
+
+// ── Socket.io push (games feed) ──────────────────────────────────────────────
+function pushGamesUpdate(io) {
+  if (!io) return;
+  try {
+    const games = db.prepare(`
+      SELECT g.*,
+             t1.seed AS team1_seed, t2.seed AS team2_seed
+      FROM games g
+      LEFT JOIN (SELECT team, MIN(seed) AS seed FROM players GROUP BY team) t1 ON t1.team = g.team1
+      LEFT JOIN (SELECT team, MIN(seed) AS seed FROM players GROUP BY team) t2 ON t2.team = g.team2
+      ORDER BY g.game_date ASC, g.tip_off_time ASC
+    `).all();
+    io.to('games_feed').emit('games_update', { games, updatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('[ESPN] pushGamesUpdate error:', err.message);
+  }
+}
+
 // ── Socket.io push ───────────────────────────────────────────────────────────
 function pushStandingsToLeagues(io) {
   if (!io) return;
@@ -150,13 +220,21 @@ async function pollESPN(io) {
       const isCompleted = statusType?.completed === true;
       const statusName = statusType?.name || '';
       const isInProgress = statusName === 'STATUS_IN_PROGRESS' || statusName === 'STATUS_HALFTIME';
-
-      if (!isInProgress && !isCompleted) continue;
+      const isScheduled = statusName === 'STATUS_SCHEDULED';
 
       const espnTeam1 = comp.competitors?.[0]?.team?.displayName;
       const espnTeam2 = comp.competitors?.[1]?.team?.displayName;
       const score1 = parseInt(comp.competitors?.[0]?.score) || 0;
       const score2 = parseInt(comp.competitors?.[1]?.score) || 0;
+
+      // Match against all games (including completed) for metadata updates
+      const metaMatch = findMatchingGame(espnTeam1, espnTeam2, true);
+      if (metaMatch) {
+        updateGameMetadata(metaMatch.game.id, event, comp);
+      }
+
+      // Skip score processing for games not in-progress or completed
+      if (!isInProgress && !isCompleted) continue;
 
       const match = findMatchingGame(espnTeam1, espnTeam2);
       if (!match) continue;
@@ -165,7 +243,6 @@ async function pollESPN(io) {
 
       if (isInProgress) {
         nowLiveGameIds.add(game.id);
-        // Mark game as live
         db.prepare('UPDATE games SET is_live = 1 WHERE id = ?').run(game.id);
       }
 
@@ -196,17 +273,19 @@ async function pollESPN(io) {
     const allLiveGames = db.prepare('SELECT id FROM games WHERE is_live = 1').all();
     for (const { id } of allLiveGames) {
       if (!nowLiveGameIds.has(id)) {
-        db.prepare('UPDATE games SET is_live = 0 WHERE id = ?').run(id);
+        db.prepare('UPDATE games SET is_live = 0, current_period = \'Final\', game_clock = \'\' WHERE id = ?').run(id);
       }
     }
 
     if (processed > 0) {
-      // Push updated standings to all leaderboard clients
       pushStandingsToLeagues(io);
       console.log(`[ESPN] Updated stats for ${processed} game(s), standings pushed.`);
     } else {
       console.log('[ESPN] No matching in-progress/completed games found.');
     }
+
+    // Always push games update so the Games page reflects metadata + live status
+    pushGamesUpdate(io);
   } catch (err) {
     console.error('[ESPN poller] Fatal error:', err.message);
   }

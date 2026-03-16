@@ -21,6 +21,7 @@ import Profile from './pages/Profile';
 import StrategyHub from './pages/StrategyHub';
 import FAQ from './pages/FAQ';
 import SuperAdmin from './pages/SuperAdmin';
+import Games from './pages/Games';
 
 export default function App() {
   return (
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/strategy" element={<ProtectedRoute><StrategyHub /></ProtectedRoute>} />
             <Route path="/faq" element={<FAQ />} />
+            <Route path="/games" element={<ProtectedRoute><Games /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
           </Routes>
         </div>

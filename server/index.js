@@ -72,6 +72,7 @@ app.use('/api/profile', require('./routes/profile'));
 app.use('/api/news', require('./routes/news'));
 app.use('/api/superadmin', require('./routes/superadmin'));
 app.use('/api/wall', require('./routes/wall').router);
+app.use('/api/games', require('./routes/games'));
 
 // Serve uploaded avatars
 const path = require('path');
@@ -357,6 +358,11 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('league_chat_send error:', err);
     }
+  });
+
+  // Join global games feed for live score updates
+  socket.on('join_games_feed', () => {
+    socket.join('games_feed');
   });
 
   // Join leaderboard room for live standings updates

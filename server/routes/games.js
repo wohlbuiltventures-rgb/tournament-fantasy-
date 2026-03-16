@@ -1,0 +1,75 @@
+const express = require('express');
+const db = require('../db');
+const authMiddleware = require('../middleware/auth');
+
+const router = express.Router();
+
+// GET /api/games/schedule
+// Returns all games with scores + user's drafted players per game
+router.get('/schedule', authMiddleware, (req, res) => {
+  try {
+    const games = db.prepare(`
+      SELECT g.*,
+             t1.seed AS team1_seed,
+             t2.seed AS team2_seed
+      FROM games g
+      LEFT JOIN (SELECT team, MIN(seed) AS seed FROM players GROUP BY team) t1 ON t1.team = g.team1
+      LEFT JOIN (SELECT team, MIN(seed) AS seed FROM players GROUP BY team) t2 ON t2.team = g.team2
+      ORDER BY g.game_date ASC, g.tip_off_time ASC, g.id ASC
+    `).all();
+
+    if (!games.length) return res.json({ games: [], myDraftedPlayerIds: [] });
+
+    // All player stats across all games
+    const placeholders = games.map(() => '?').join(',');
+    const allStats = db.prepare(`
+      SELECT ps.game_id, ps.player_id, ps.points, p.name AS player_name, p.team AS player_team
+      FROM player_stats ps
+      JOIN players p ON ps.player_id = p.id
+      WHERE ps.game_id IN (${placeholders})
+    `).all(...games.map(g => g.id));
+
+    const statsByGame = {};
+    for (const s of allStats) {
+      if (!statsByGame[s.game_id]) statsByGame[s.game_id] = [];
+      statsByGame[s.game_id].push(s);
+    }
+
+    // User's drafted players across ALL their leagues (deduplicated)
+    const myDrafted = db.prepare(`
+      SELECT DISTINCT dp.player_id, p.name AS player_name, p.team AS player_team
+      FROM draft_picks dp
+      JOIN players p ON dp.player_id = p.id
+      WHERE dp.user_id = ?
+    `).all(req.user.id);
+
+    const myPlayerIdSet = new Set(myDrafted.map(p => p.player_id));
+    const myPlayerMap = {};
+    for (const p of myDrafted) myPlayerMap[p.player_id] = p;
+
+    const result = games.map(g => {
+      const gameStats = statsByGame[g.id] || [];
+
+      // My players on either team in this game (whether or not they have stats yet)
+      const myPlayersInGame = myDrafted
+        .filter(p => p.player_team === g.team1 || p.player_team === g.team2)
+        .map(p => {
+          const stat = gameStats.find(s => s.player_id === p.player_id);
+          return { ...p, points: stat?.points ?? null };
+        });
+
+      return {
+        ...g,
+        player_stats: gameStats,
+        my_players: myPlayersInGame,
+      };
+    });
+
+    res.json({ games: result, myDraftedPlayerIds: [...myPlayerIdSet] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+module.exports = router;

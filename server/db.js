@@ -249,6 +249,13 @@ try {
 
 // Live game tracking for socket push
 try { db.exec('ALTER TABLE games ADD COLUMN is_live INTEGER DEFAULT 0'); } catch (e) {}
+// Game schedule metadata (populated from ESPN API)
+try { db.exec("ALTER TABLE games ADD COLUMN tip_off_time TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE games ADD COLUMN tv_network TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE games ADD COLUMN location TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE games ADD COLUMN current_period TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE games ADD COLUMN game_clock TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE games ADD COLUMN region TEXT DEFAULT ''"); } catch (e) {}
 
 // ── Trash talk wall ─────────────────────────────────────────────────────────
 try {

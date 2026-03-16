@@ -37,6 +37,9 @@ export default function Navbar() {
                 <Link to="/dashboard" className="text-gray-300 hover:text-brand-400 transition-colors font-medium">
                   Dashboard
                 </Link>
+                <Link to="/games" className="text-gray-300 hover:text-brand-400 transition-colors font-medium">
+                  🏀 Games
+                </Link>
                 <Link to="/strategy" className="text-gray-300 hover:text-brand-400 transition-colors font-medium">
                   Strategy
                 </Link>
@@ -111,6 +114,13 @@ export default function Navbar() {
                   onClick={() => setMenuOpen(false)}
                 >
                   Dashboard
+                </Link>
+                <Link
+                  to="/games"
+                  className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  🏀 Games
                 </Link>
                 <Link
                   to="/strategy"
