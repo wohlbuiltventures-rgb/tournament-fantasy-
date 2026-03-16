@@ -218,7 +218,7 @@ export default function Landing() {
 
   const tickerText = '🏀 The 2026 Tournament starts Thursday March 19th at 12PM ET  ·  Draft day is coming  ·  Secure your spot before your friends do  ·  $5 entry per team  ·  You keep 100% of the prize pool  ·  ';
 
-  const SHARE_TEXT = "Skip the bracket this year 🏀 We're doing TourneyRun — draft real players, score real points, win real money. Join my league: tourneyrun.app";
+  const SHARE_TEXT = "Skip the bracket this year 🏀 We're doing TourneyRun — draft real players, score real points, win real money.\n\nJoin here → https://www.tourneyrun.app";
 
   const handleShare = async () => {
     if (navigator.share) {
