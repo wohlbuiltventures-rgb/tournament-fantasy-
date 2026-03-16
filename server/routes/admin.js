@@ -165,6 +165,39 @@ router.put('/teams/eliminate', authMiddleware, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/admin/leagues/:leagueId/force-start
+// Commissioner-only — marks all pending payments paid then starts the draft.
+// Useful for test leagues where you don't want to go through Stripe.
+// ---------------------------------------------------------------------------
+router.post('/leagues/:leagueId/force-start', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(req.params.leagueId);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the commissioner can force-start the draft' });
+    }
+    if (league.status !== 'lobby') {
+      return res.status(400).json({ error: `League is not in lobby (status: ${league.status})` });
+    }
+
+    // Mark all pending payments as paid so performStartDraft passes the gate
+    db.prepare(`
+      UPDATE member_payments SET status = 'paid', paid_at = CURRENT_TIMESTAMP
+      WHERE league_id = ? AND status != 'paid'
+    `).run(req.params.leagueId);
+
+    const io = req.app.get('io');
+    const result = performStartDraft(req.params.leagueId, io);
+    if (!result.success) return res.status(400).json({ error: result.error });
+
+    res.json({ success: true, leagueId: req.params.leagueId });
+  } catch (err) {
+    console.error('force-start error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/admin/leagues/:leagueId/populate-test
 // Dev/test only — creates up to 12 test user accounts and joins them to the
 // league, with payments auto-marked as paid. Also clears any pending

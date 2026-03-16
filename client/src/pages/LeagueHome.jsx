@@ -153,6 +153,16 @@ export default function LeagueHome() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleForceStart = async () => {
+    if (!window.confirm('This will mark all pending payments as paid and start the draft immediately. Continue?')) return;
+    try {
+      await api.post(`/admin/leagues/${id}/force-start`);
+      navigate(`/league/${id}/draft`);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to force-start draft');
+    }
+  };
+
   const handlePopulateTestLeague = async () => {
     setPopulateLoading(true);
     setPopulateResult(null);
@@ -820,6 +830,12 @@ export default function LeagueHome() {
                 <button onClick={startDraft} disabled={starting || members.length < 2}
                   className="btn-primary py-3 text-center disabled:opacity-50 flex items-center justify-center gap-2">
                   🚀 {starting ? 'Starting...' : 'Start Draft'}
+                </button>
+              )}
+              {league.status === 'lobby' && members.length >= 2 && (
+                <button onClick={handleForceStart}
+                  className="py-3 text-center flex items-center justify-center gap-2 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 border border-yellow-600/40 rounded-lg font-semibold text-sm transition-colors">
+                  ⚡ Force Start (Skip Payments)
                 </button>
               )}
               {league.status === 'drafting' && (
