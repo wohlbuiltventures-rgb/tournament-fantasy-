@@ -52,7 +52,8 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    // Accept email or username in the email field
+    const user = db.prepare('SELECT * FROM users WHERE email = ? OR username = ?').get(email, email);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }

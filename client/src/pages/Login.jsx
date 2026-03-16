@@ -1,13 +1,19 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useDocTitle } from '../hooks/useDocTitle';
+import AuthLayout, { IconInput } from '../components/AuthLayout';
 
 export default function Login() {
+  useDocTitle('Sign In | TourneyRun');
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const [form, setForm]       = useState({ email: '', password: '' });
+  const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPw, setShowPw]   = useState(false);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,63 +30,69 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="text-5xl mb-3">🏀</div>
-          <h1 className="text-2xl font-bold text-white">Welcome back</h1>
-          <p className="text-gray-400 mt-1">Sign in to your account</p>
-        </div>
-
-        <div className="card p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg p-3 text-sm">
-                {error}
-              </div>
-            )}
-
-            <div>
-              <label className="label">Email</label>
-              <input
-                type="email"
-                className="input"
-                placeholder="you@example.com"
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="label">Password</label>
-              <input
-                type="password"
-                className="input"
-                placeholder="••••••••"
-                value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-2.5"
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
-
-          <p className="text-center text-gray-400 text-sm mt-4">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-brand-400 hover:text-brand-300 font-medium">
-              Register
-            </Link>
-          </p>
-        </div>
+    <AuthLayout>
+      {/* Headline */}
+      <div className="text-center mb-7">
+        <h1 className="text-2xl font-black text-white mb-1">Welcome Back</h1>
+        <p className="text-gray-400 text-sm">Sign in to your TourneyRun account</p>
       </div>
-    </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-3.5 py-2.5 text-sm">
+            <span className="shrink-0 mt-0.5">⚠️</span>
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <IconInput
+            icon="📧"
+            type="text"
+            placeholder="Email or username"
+            value={form.email}
+            onChange={e => set('email', e.target.value)}
+            required
+            autoComplete="username"
+          />
+          <IconInput
+            icon="🔒"
+            type={showPw ? 'text' : 'password'}
+            placeholder="Password"
+            value={form.password}
+            onChange={e => set('password', e.target.value)}
+            required
+            autoComplete="current-password"
+            rightSlot={
+              <button type="button" onClick={() => setShowPw(s => !s)} className="text-gray-500 hover:text-gray-300 transition-colors text-sm select-none">
+                {showPw ? '🙈' : '👁'}
+              </button>
+            }
+          />
+        </div>
+
+        <div className="flex justify-end -mt-1">
+          <span className="text-xs text-gray-600 hover:text-gray-400 transition-colors cursor-default">
+            Forgot password? Contact your commissioner 😄
+          </span>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-3 rounded-xl font-black text-base text-white transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-brand-500/25 disabled:opacity-50 disabled:scale-100"
+          style={{ background: 'linear-gradient(135deg, #378ADD 0%, #2563EB 100%)' }}
+        >
+          {loading ? 'Signing in…' : 'Sign In →'}
+        </button>
+      </form>
+
+      <div className="mt-5 pt-5 border-t border-gray-800 text-center text-sm text-gray-500">
+        Don't have an account?{' '}
+        <Link to="/register" className="text-brand-400 hover:text-brand-300 font-semibold transition-colors">
+          Create one
+        </Link>
+      </div>
+    </AuthLayout>
   );
 }
