@@ -63,11 +63,11 @@ export default function EntryPaymentSuccess() {
 
           {unpaidCount > 0 ? (
             <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3 text-sm text-yellow-300 text-center">
-              {unpaidCount} manager{unpaidCount !== 1 ? 's' : ''} still need to pay before the draft can begin.
+              {unpaidCount} team{unpaidCount !== 1 ? 's' : ''} still need to pay before the draft can begin.
             </div>
           ) : (
             <div className="bg-green-900/20 border border-green-700/40 rounded-lg p-3 text-sm text-green-300 text-center">
-              All managers have paid — the draft can begin!
+              All teams have paid — the draft can begin!
             </div>
           )}
         </div>

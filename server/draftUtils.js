@@ -22,7 +22,7 @@ function performStartDraft(leagueId, io) {
       WHERE lm.league_id = ? AND (mp.status IS NULL OR mp.status != 'paid')
     `).get(leagueId);
     if (unpaid.cnt > 0) {
-      return { success: false, error: `${unpaid.cnt} manager${unpaid.cnt !== 1 ? 's' : ''} haven't paid yet` };
+      return { success: false, error: `${unpaid.cnt} team${unpaid.cnt !== 1 ? 's' : ''} haven't paid yet` };
     }
 
     // Randomise draft order

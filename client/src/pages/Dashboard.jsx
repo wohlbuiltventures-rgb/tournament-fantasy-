@@ -266,7 +266,7 @@ export default function Dashboard() {
                       <div className="text-white text-sm font-semibold truncate">{league.team_name}</div>
                     </div>
                     <div className="bg-gray-800/60 rounded-xl px-3 py-2.5">
-                      <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-0.5">Managers</div>
+                      <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-0.5">Teams</div>
                       <div className="text-white text-sm font-semibold">{league.member_count}/{league.max_teams}</div>
                     </div>
                     {buyIn > 0 && (
@@ -292,7 +292,7 @@ export default function Dashboard() {
                   {/* Managers fill bar */}
                   <div className="mb-4">
                     <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-gray-500">{league.member_count} managers joined</span>
+                      <span className="text-gray-500">{league.member_count} teams joined</span>
                       {spotsLeft > 0 && league.status === 'lobby'
                         ? <span className="text-red-400 font-semibold">{spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left</span>
                         : <span className="text-gray-600">{league.max_teams} max</span>

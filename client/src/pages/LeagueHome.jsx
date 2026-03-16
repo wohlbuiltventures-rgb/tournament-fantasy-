@@ -356,7 +356,7 @@ export default function LeagueHome() {
                         <span className="text-amber-400/50 text-xl font-bold mb-2">/ {fmt(maxPrizePool)} max</span>
                       )}
                     </div>
-                    <div className="text-gray-400 text-sm mt-1">{fmt(buyIn)} × {members.length} managers</div>
+                    <div className="text-gray-400 text-sm mt-1">{fmt(buyIn)} × {members.length} teams</div>
                   </div>
                   <span className="text-6xl select-none" aria-hidden>🏆</span>
                 </div>
@@ -365,7 +365,7 @@ export default function LeagueHome() {
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-gray-300 text-sm font-medium">
-                      {members.length} of {league.max_teams} managers joined
+                      {members.length} of {league.max_teams} teams joined
                     </span>
                     {spotsLeft > 0
                       ? <span className="text-red-400 text-sm font-bold">{spotsLeft} {spotsLeft === 1 ? 'spot' : 'spots'} left!</span>
@@ -428,7 +428,7 @@ export default function LeagueHome() {
                         {instrCopied ? '✓ Copied' : 'Copy'}
                       </button>
                     </div>
-                    <p className="text-gray-600 text-xs mt-2">Paid outside the app · {fmt(buyIn)} per manager</p>
+                    <p className="text-gray-600 text-xs mt-2">Paid outside the app · {fmt(buyIn)} per team</p>
                   </div>
                 )}
               </div>
@@ -445,7 +445,7 @@ export default function LeagueHome() {
                 </div>
                 <p className="text-gray-400 text-sm mt-0.5">
                   {league.auto_start_on_full
-                    ? `Draft will begin automatically once all ${league.max_teams} managers have joined and paid.`
+                    ? `Draft will begin automatically once all ${league.max_teams} teams have joined and paid.`
                     : `Draft starts at ${new Date(league.draft_start_time).toLocaleString()}`}
                 </p>
               </div>
@@ -576,7 +576,7 @@ export default function LeagueHome() {
                   </div>
                   <div>
                     <div className="text-gray-600 text-sm font-medium">Open Slot</div>
-                    <div className="text-gray-700 text-xs">Waiting for manager</div>
+                    <div className="text-gray-700 text-xs">Waiting for team</div>
                   </div>
                 </div>
               ))}
@@ -599,7 +599,7 @@ export default function LeagueHome() {
               )}
               {!allPaid && totalCount > 0 && members.length >= 2 && (
                 <p className="text-yellow-400/70 text-xs text-center">
-                  {totalCount - paidCount} manager{totalCount - paidCount !== 1 ? 's' : ''} {totalCount - paidCount !== 1 ? 'haven\'t' : 'hasn\'t'} paid yet — you can still start manually.
+                  {totalCount - paidCount} team{totalCount - paidCount !== 1 ? 's' : ''} {totalCount - paidCount !== 1 ? 'haven\'t' : 'hasn\'t'} paid yet — you can still start manually.
                 </p>
               )}
             </div>
@@ -709,8 +709,8 @@ export default function LeagueHome() {
                     : 'bg-yellow-900/20 border border-yellow-700/40 text-yellow-300'
                 }`}>
                   {allPaid
-                    ? `All ${totalCount} managers have paid — the draft is ready to start.`
-                    : `${paidCount} of ${totalCount} managers have paid. Draft cannot begin until everyone pays.`}
+                    ? `All ${totalCount} teams have paid — the draft is ready to start.`
+                    : `${paidCount} of ${totalCount} teams have paid. Draft cannot begin until everyone pays.`}
                 </div>
               )}
 
@@ -800,12 +800,12 @@ export default function LeagueHome() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-400">TourneyRun Access Fee</span>
-                <span className="text-white">$5.00 per manager</span>
+                <span className="text-white">$5.00 per team</span>
               </div>
               {buyIn > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-400">Group Buy-in</span>
-                  <span className="text-amber-400 font-semibold">{fmt(buyIn)} per manager</span>
+                  <span className="text-amber-400 font-semibold">{fmt(buyIn)} per team</span>
                 </div>
               )}
               <div className="flex justify-between items-center">

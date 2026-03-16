@@ -88,7 +88,7 @@ export default function Leaderboard() {
               <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Prize Pool</div>
               <div className="text-3xl font-black text-yellow-400">{fmt(prizePool)}</div>
               <div className="text-gray-500 text-xs mt-0.5">
-                {fmt(buyIn)} buy-in × {managerCount} manager{managerCount !== 1 ? 's' : ''}
+                {fmt(buyIn)} buy-in × {managerCount} team{managerCount !== 1 ? 's' : ''}
               </div>
             </div>
 

@@ -209,7 +209,7 @@ export default function JoinLeague() {
               {/* Managers joined */}
               <div>
                 <div className="flex justify-between text-xs text-gray-400 mb-1">
-                  <span>{preview.member_count} of {preview.max_teams} managers joined</span>
+                  <span>{preview.member_count} of {preview.max_teams} teams joined</span>
                   <span>{preview.max_teams - preview.member_count} spots left</span>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-1.5">
@@ -224,7 +224,7 @@ export default function JoinLeague() {
               {buyIn > 0 ? (
                 <div className="space-y-1.5 border-t border-brand-500/20 pt-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Buy-in per manager</span>
+                    <span className="text-gray-400">Buy-in per team</span>
                     <span className="text-brand-400 font-bold">{fmt(buyIn)}</span>
                   </div>
                   <div className="flex justify-between text-sm">

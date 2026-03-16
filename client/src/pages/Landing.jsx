@@ -176,7 +176,7 @@ function DraftMockup() {
         <div className="px-4 py-2 bg-gray-800/50 flex items-center justify-between">
           <span className="text-gray-600 text-[10px]">Pick 2 of 120</span>
           <span className="text-green-400 text-[10px] flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> 8 managers live
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> 8 teams live
           </span>
         </div>
       </div>
@@ -217,7 +217,7 @@ export default function Landing() {
   const [c1, r1] = useCountUp(68);
   const [c2, r2] = useCountUp(300);
 
-  const tickerText = '🏀 The 2026 Tournament starts March 20th  ·  Draft day is coming  ·  Secure your spot before your friends do  ·  $5 entry per manager  ·  You keep 100% of the prize pool  ·  ';
+  const tickerText = '🏀 The 2026 Tournament starts March 20th  ·  Draft day is coming  ·  Secure your spot before your friends do  ·  $5 entry per team  ·  You keep 100% of the prize pool  ·  ';
 
   return (
     <div className="overflow-x-hidden bg-gray-950">
@@ -339,7 +339,7 @@ export default function Landing() {
               You set the stakes.<br className="hidden sm:block" /> You keep the winnings.
             </h2>
             <p className="text-gray-400 text-lg max-w-2xl mx-auto leading-relaxed">
-              TourneyRun takes nothing from your prize pool. Commissioners set the entry fee, managers pay to join, and winners get paid however your league decides —{' '}
+              TourneyRun takes nothing from your prize pool. Commissioners set the entry fee, teams pay to join, and winners get paid however your league decides —{' '}
               <span className="text-white">Venmo, Zelle, cash, whatever works.</span>
             </p>
           </div>
@@ -427,7 +427,7 @@ export default function Landing() {
 
             {[
               { icon: '🏀', num: '01', title: 'Commissioner creates a league', desc: 'Free to create. Name it, set the draft rules, and invite your crew.' },
-              { icon: '📨', num: '02', title: '$5 per team to join — everyone\'s in, no free riders', desc: 'Secure entry for every manager. No free riders, no ghosting.' },
+              { icon: '📨', num: '02', title: '$5 per team to join — everyone\'s in, no free riders', desc: 'Secure entry for every team. No free riders, no ghosting.' },
               { icon: '⏱',  num: '03', title: 'Snake draft your player pool', desc: 'Live real-time draft with countdown timer and auto-pick fallback.' },
               { icon: '🏆', num: '04', title: 'Watch your players ball out', desc: '3 weeks of live scoring. Every bucket, every upset, every hero.' },
             ].map(step => (

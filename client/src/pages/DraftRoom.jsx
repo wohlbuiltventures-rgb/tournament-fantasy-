@@ -441,7 +441,7 @@ function DraftChat({ leagueId, user, token, members }) {
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
           Chat
         </h3>
-        <span className="text-gray-600 text-[10px]">{members.length} managers</span>
+        <span className="text-gray-600 text-[10px]">{members.length} teams</span>
       </div>
 
       {/* Messages */}

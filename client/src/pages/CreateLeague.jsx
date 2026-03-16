@@ -153,7 +153,7 @@ export default function CreateLeague() {
   };
 
   // Shared submit button label
-  const submitLabel = loading ? 'Creating league...' : 'Create League & Pay $5 →';
+  const submitLabel = loading ? 'Creating league...' : 'Create League & Pay $5 Entry Fee →';
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -260,7 +260,7 @@ export default function CreateLeague() {
 
               {/* Buy-in amount */}
               <div>
-                <label className="label">Buy-in Amount per Manager</label>
+                <label className="label">Buy-in Amount per Team</label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-lg">$</span>
                   <input
@@ -382,7 +382,7 @@ export default function CreateLeague() {
                     </span>
                   </div>
                   <p className="text-gray-500 text-xs leading-relaxed">
-                    Draft begins automatically as soon as all managers have joined.
+                    Draft begins automatically as soon as all teams have joined.
                   </p>
                   {form.auto_start_on_full && (
                     <span className="text-[10px] bg-brand-500/20 text-brand-400 border border-brand-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">

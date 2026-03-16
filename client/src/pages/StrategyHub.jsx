@@ -30,7 +30,7 @@ const TIPS = [
   {
     icon: '🏹',
     title: 'Late rounds are where leagues are won',
-    body: "Your picks 7-10 are pure upside. Target players on potential deep-run teams who are undervalued by other managers. One Cinderella run on your roster can vault you from last to first.",
+    body: "Your picks 7-10 are pure upside. Target players on potential deep-run teams who are undervalued by other teams. One Cinderella run on your roster can vault you from last to first.",
   },
   {
     icon: '🔀',

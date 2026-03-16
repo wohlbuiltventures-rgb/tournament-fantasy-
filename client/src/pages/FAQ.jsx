@@ -39,7 +39,7 @@ export const FAQ_SECTIONS = [
       },
       {
         q: "How many people can be in a league?",
-        a: "Up to 10 managers per league. The sweet spot is 6-10 — enough to make the draft feel competitive without stretching the player pool too thin.",
+        a: "Up to 10 teams per league. The sweet spot is 6-10 — enough to make the draft feel competitive without stretching the player pool too thin.",
       },
       {
         q: "What happens if I miss the draft?",
@@ -53,7 +53,7 @@ export const FAQ_SECTIONS = [
     questions: [
       {
         q: "How does the draft work?",
-        a: "It's a snake draft. If you pick first in round 1, you pick last in round 2, first again in round 3, and so on. Draft order is randomized when the commissioner starts the draft. Each manager gets 60 seconds per pick by default (the commissioner can adjust this).",
+        a: "It's a snake draft. If you pick first in round 1, you pick last in round 2, first again in round 3, and so on. Draft order is randomized when the commissioner starts the draft. Each team gets 60 seconds per pick by default (the commissioner can adjust this).",
       },
       {
         q: "How many rounds are there?",
@@ -101,7 +101,7 @@ export const FAQ_SECTIONS = [
     questions: [
       {
         q: "How does the buy-in work?",
-        a: "The commissioner sets a buy-in amount when creating the league. Everyone in the league pays the same amount. The prize pool is just buy-in × number of managers — what you see is what you get, no house cut on the pool itself.",
+        a: "The commissioner sets a buy-in amount when creating the league. Everyone in the league pays the same amount. The prize pool is just buy-in × number of teams — what you see is what you get, no house cut on the pool itself.",
       },
       {
         q: "How do payouts work?",
@@ -109,7 +109,7 @@ export const FAQ_SECTIONS = [
       },
       {
         q: "What if fewer people join than expected?",
-        a: "The prize pool is calculated from the actual number of managers who joined, not the max. So if you set up a 10-person league but only 7 join, the pool is based on 7 buy-ins. No one pays for empty spots.",
+        a: "The prize pool is calculated from the actual number of teams who joined, not the max. So if you set up a 10-person league but only 7 join, the pool is based on 7 buy-ins. No one pays for empty spots.",
       },
       {
         q: "Is there a platform fee?",
