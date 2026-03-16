@@ -4,13 +4,20 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('./db');
 
 const FEEDS = [
-  { url: 'https://news.google.com/rss/search?q=NCAA+tournament+fantasy+basketball+strategy&hl=en-US&gl=US&ceid=US:en',   tag: 'strategy'    },
-  { url: 'https://news.google.com/rss/search?q=NCAA+tournament+sleeper+picks+basketball&hl=en-US&gl=US&ceid=US:en',       tag: 'sleepers'    },
-  { url: 'https://news.google.com/rss/search?q=March+Madness+basketball+player+rankings&hl=en-US&gl=US&ceid=US:en',       tag: 'rankings'    },
-  { url: 'https://news.google.com/rss/search?q=college+basketball+tournament+predictions+2026&hl=en-US&gl=US&ceid=US:en', tag: 'predictions' },
+  // ── Injuries ──────────────────────────────────────────────────────────────
   { url: 'https://news.google.com/rss/search?q=NCAA+tournament+player+injury+2026&hl=en-US&gl=US&ceid=US:en',             tag: 'injuries'    },
   { url: 'https://news.google.com/rss/search?q=college+basketball+tournament+injury+report&hl=en-US&gl=US&ceid=US:en',    tag: 'injuries'    },
   { url: 'https://news.google.com/rss/search?q=march+madness+player+out+injury+2026&hl=en-US&gl=US&ceid=US:en',           tag: 'injuries'    },
+  // ── Sleepers ──────────────────────────────────────────────────────────────
+  { url: 'https://news.google.com/rss/search?q=NCAA+tournament+sleeper+underdog+2026&hl=en-US&gl=US&ceid=US:en',          tag: 'sleepers'    },
+  { url: 'https://news.google.com/rss/search?q=mid+major+tournament+upset+2026&hl=en-US&gl=US&ceid=US:en',                tag: 'sleepers'    },
+  { url: 'https://news.google.com/rss/search?q=Cinderella+college+basketball+tournament+2026&hl=en-US&gl=US&ceid=US:en',  tag: 'sleepers'    },
+  { url: 'https://news.google.com/rss/search?q=tournament+underdog+pick+upset+basketball+2026&hl=en-US&gl=US&ceid=US:en', tag: 'sleepers'    },
+  { url: 'https://news.google.com/rss/search?q=mid+major+conference+NCAA+tournament+2026&hl=en-US&gl=US&ceid=US:en',      tag: 'sleepers'    },
+  // ── Rankings ──────────────────────────────────────────────────────────────
+  { url: 'https://news.google.com/rss/search?q=March+Madness+basketball+player+rankings&hl=en-US&gl=US&ceid=US:en',       tag: 'rankings'    },
+  // ── Predictions ───────────────────────────────────────────────────────────
+  { url: 'https://news.google.com/rss/search?q=college+basketball+tournament+predictions+2026&hl=en-US&gl=US&ceid=US:en', tag: 'predictions' },
 ];
 
 // Keep at most this many articles in the DB total

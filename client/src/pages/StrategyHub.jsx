@@ -75,12 +75,10 @@ function timeAgo(pubDateStr) {
 }
 
 const TAG_LABELS = {
-  all:         'All',
-  injuries:    'Injuries',
-  strategy:    'Strategy',
-  sleepers:    'Sleepers',
-  rankings:    'Rankings',
+  injuries:    'Injuries 🚨',
   predictions: 'Predictions',
+  rankings:    'Rankings',
+  sleepers:    'Sleepers',
   resources:   'Resources',
 };
 
@@ -158,10 +156,15 @@ export default function StrategyHub() {
 
   const [articles, setArticles]       = useState([]);
   const [loading, setLoading]         = useState(true);
-  const [activeTag, setActiveTag]     = useState('all');
+  const [activeTag, setActiveTag]     = useState('injuries');
   const [tipsOpen, setTipsOpen]       = useState(true);
   const [players, setPlayers]         = useState([]);
   const [injuryBadge, setInjuryBadge] = useState(false);
+
+  // Mark injuries as seen on first load (default tab)
+  useEffect(() => {
+    localStorage.setItem(LS_INJURY_KEY, new Date().toISOString());
+  }, []);
 
   // Fetch players once for cross-referencing
   useEffect(() => {
@@ -268,7 +271,7 @@ export default function StrategyHub() {
                         : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white hover:border-gray-600'
                   }`}
                 >
-                  {isInjuries && '🚨 '}{isResources && '🔗 '}{label}
+                  {isResources && '🔗 '}{label}
                   {isInjuries && injuryBadge && (
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-gray-950 animate-pulse" />
                   )}

@@ -28,7 +28,7 @@ function getClientUrl(req) {
 // ---------------------------------------------------------------------------
 router.post('/entry-checkout', authMiddleware, async (req, res) => {
   try {
-    const { leagueId } = req.body;
+    const { leagueId, includeSmartDraft } = req.body;
     if (!leagueId) return res.status(400).json({ error: 'leagueId is required' });
 
     const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(leagueId);
@@ -47,26 +47,54 @@ router.post('/entry-checkout', authMiddleware, async (req, res) => {
 
     const clientUrl = getClientUrl(req);
     const stripe = getStripe();
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [{
+
+    const lineItems = [{
+      price_data: {
+        currency: 'usd',
+        product_data: { name: `TourneyRun League Access – ${league.name}` },
+        unit_amount: Math.round(ENTRY_FEE * 100),
+      },
+      quantity: 1,
+    }];
+
+    if (includeSmartDraft) {
+      lineItems.push({
         price_data: {
           currency: 'usd',
-          product_data: { name: `TourneyRun League Access – ${league.name}` },
-          unit_amount: Math.round(ENTRY_FEE * 100),
+          product_data: { name: `Smart Draft Upgrade ⚡ – ${league.name}` },
+          unit_amount: Math.round(SMART_DRAFT_FEE * 100),
         },
         quantity: 1,
-      }],
+      });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
       mode: 'payment',
       success_url: `${clientUrl}/league/${leagueId}?payment=success`,
       cancel_url: `${clientUrl}/league/${leagueId}?payment=cancelled`,
-      metadata: { league_id: leagueId, user_id: req.user.id },
+      metadata: {
+        league_id: leagueId,
+        user_id: req.user.id,
+        includes_smart_draft: includeSmartDraft ? '1' : '0',
+      },
     });
-    console.log(`[checkout] session created — redirect base: ${clientUrl}`);
+    console.log(`[checkout] session created — redirect base: ${clientUrl}, smart_draft=${!!includeSmartDraft}`);
 
     db.prepare(
       'UPDATE member_payments SET stripe_session_id = ? WHERE league_id = ? AND user_id = ?'
     ).run(session.id, leagueId, req.user.id);
+
+    // Pre-create a pending smart_draft_upgrades row so webhook can activate it
+    if (includeSmartDraft) {
+      const { v4: uuidv4 } = require('uuid');
+      db.prepare(`
+        INSERT INTO smart_draft_upgrades (id, user_id, league_id, stripe_session_id, status)
+        VALUES (?, ?, ?, ?, 'pending')
+        ON CONFLICT(user_id, league_id) DO UPDATE SET stripe_session_id = excluded.stripe_session_id, status = 'pending'
+      `).run(uuidv4(), req.user.id, leagueId, session.id);
+    }
 
     res.json({ url: session.url });
   } catch (err) {
@@ -196,6 +224,16 @@ router.post('/webhook', async (req, res) => {
           `).run(session.payment_intent, session.id);
 
           console.log(`League access paid: league=${payment.league_id} user=${payment.user_id}`);
+
+          // Activate Smart Draft if it was bundled in this checkout
+          if (metadata.includes_smart_draft === '1') {
+            db.prepare(`
+              UPDATE smart_draft_upgrades
+              SET status = 'active', purchased_at = CURRENT_TIMESTAMP
+              WHERE stripe_session_id = ?
+            `).run(session.id);
+            console.log(`Smart Draft activated (bundled): league=${payment.league_id} user=${payment.user_id}`);
+          }
 
           // Auto-start: if the league has auto_start_on_full set and this was the last payment
           try {

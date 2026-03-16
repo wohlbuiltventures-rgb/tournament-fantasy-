@@ -101,7 +101,9 @@ export default function CreateLeague() {
     payout_second: 20,
     payout_third: 10,
     payout_bonus: '',
+    smartDraft: false,
   });
+  const [sdOpen, setSdOpen] = useState(false); // "how it works" expanded
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
 
@@ -144,7 +146,7 @@ export default function CreateLeague() {
       };
       const res = await api.post('/leagues', payload);
       const leagueId = res.data.league.id;
-      const checkoutRes = await api.post('/payments/entry-checkout', { leagueId });
+      const checkoutRes = await api.post('/payments/entry-checkout', { leagueId, includeSmartDraft: form.smartDraft });
       window.location.href = checkoutRes.data.url;
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create league');
@@ -153,7 +155,8 @@ export default function CreateLeague() {
   };
 
   // Shared submit button label
-  const submitLabel = loading ? 'Creating league...' : 'Create League & Pay $5 Entry Fee →';
+  const totalDue = form.smartDraft ? '$7.99' : '$5';
+  const submitLabel = loading ? 'Creating league...' : `Create League & Pay ${totalDue} Entry Fee →`;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -437,6 +440,54 @@ export default function CreateLeague() {
               )}
             </SectionCard>
 
+            {/* Smart Draft Upgrade */}
+            <div className="card p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className="text-yellow-400 text-base">⚡</span>
+                    <h3 className="text-white font-bold text-sm">Smart Draft</h3>
+                    <span className="text-[10px] bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">$2.99</span>
+                    {form.smartDraft && (
+                      <span className="text-[10px] bg-brand-500/20 text-brand-400 border border-brand-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">Active</span>
+                    )}
+                  </div>
+                  <p className="text-gray-400 text-xs leading-relaxed">
+                    If you miss your pick timer, our algorithm drafts for you — skips injuries, balances your roster, targets high-upside players.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSdOpen(o => !o)}
+                    className="text-brand-400 text-xs mt-1.5 hover:text-brand-300 transition-colors"
+                  >
+                    {sdOpen ? 'Show less ▲' : 'How it works ▼'}
+                  </button>
+                  {sdOpen && (
+                    <div className="mt-2.5 space-y-1.5">
+                      {[
+                        ['🚫', 'Automatically skips injured players'],
+                        ['⚖️', 'Balances your roster by team and region'],
+                        ['🎯', 'Targets highest-upside available players'],
+                        ['🏀', 'Boosts guards if your roster is lacking'],
+                      ].map(([icon, text]) => (
+                        <div key={text} className="flex items-center gap-2 text-xs text-gray-400">
+                          <span>{icon}</span><span>{text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => set('smartDraft', !form.smartDraft)}
+                  className={`relative w-11 h-6 rounded-full transition-colors shrink-0 mt-0.5 ${form.smartDraft ? 'bg-brand-500' : 'bg-gray-700 hover:bg-gray-600'}`}
+                  aria-label="Toggle Smart Draft"
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${form.smartDraft ? 'translate-x-5' : ''}`} />
+                </button>
+              </div>
+            </div>
+
             {/* Mobile-only submit */}
             <div className="lg:hidden pb-2">
               <button
@@ -528,10 +579,22 @@ export default function CreateLeague() {
                     )}
                   </div>
 
-                  <div className="border-t border-gray-800 pt-2.5">
+                  <div className="border-t border-gray-800 pt-2.5 space-y-2">
                     <Row label="TourneyRun fee">
                       <span className="text-white font-semibold">$5.00</span>
                     </Row>
+                    {form.smartDraft && (
+                      <Row label="⚡ Smart Draft">
+                        <span className="text-yellow-400 font-semibold">$2.99</span>
+                      </Row>
+                    )}
+                    {form.smartDraft && (
+                      <div className="border-t border-gray-700 pt-2">
+                        <Row label="Total due today">
+                          <span className="text-white font-black text-base">$7.99</span>
+                        </Row>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
