@@ -965,6 +965,32 @@ export default function DraftRoom() {
     }
   };
 
+  // ── Memos that must be above early returns (Rules of Hooks) ─────────────
+
+  // Map { region -> { seed -> teamName } } built from all seen players
+  const regionSeedMap = useMemo(() => {
+    const map = {};
+    for (const p of Object.values(playerCacheRef.current)) {
+      if (p.region && p.seed) {
+        if (!map[p.region]) map[p.region] = {};
+        map[p.region][p.seed] = p.team;
+      }
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availablePlayers]);
+
+  // ETP lookup map for draft board cells (keyed by player_id)
+  const etpByPlayerId = useMemo(() => {
+    const map = {};
+    for (const p of Object.values(playerCacheRef.current)) {
+      const etp = calcETP(p.season_ppg, p.seed, !!p.is_first_four);
+      if (etp !== null) map[p.id] = etp;
+    }
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availablePlayers]);
+
   // ── Loading / error states ────────────────────────────────────────────────
   console.log('[DraftRoom] render — loading:', loading, 'state:', state ? `league=${state.league?.status} picks=${state.picks?.length}` : 'null', 'error:', error);
 
@@ -1005,30 +1031,6 @@ export default function DraftRoom() {
   const POSITIONS = ['All', 'G', 'F', 'C', 'PG', 'SG', 'SF', 'PF'];
   const uniquePositions = ['All', ...new Set(availablePlayers.map(p => p.position))];
   const REGIONS = ['All', 'South', 'East', 'West', 'Midwest'];
-
-  // Map { region -> { seed -> teamName } } built from all seen players
-  const regionSeedMap = useMemo(() => {
-    const map = {};
-    for (const p of Object.values(playerCacheRef.current)) {
-      if (p.region && p.seed) {
-        if (!map[p.region]) map[p.region] = {};
-        map[p.region][p.seed] = p.team;
-      }
-    }
-    return map;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availablePlayers]);
-
-  // ETP lookup map for draft board cells (keyed by player_id)
-  const etpByPlayerId = useMemo(() => {
-    const map = {};
-    for (const p of Object.values(playerCacheRef.current)) {
-      const etp = calcETP(p.season_ppg, p.seed, !!p.is_first_four);
-      if (etp !== null) map[p.id] = etp;
-    }
-    return map;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availablePlayers]);
 
   const filteredSorted = availablePlayers
     .filter(p => {
