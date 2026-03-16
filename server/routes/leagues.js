@@ -188,7 +188,7 @@ router.get('/:id', authMiddleware, (req, res) => {
 
     const settings = db.prepare('SELECT * FROM scoring_settings WHERE league_id = ?').get(req.params.id);
 
-    res.json({ league, members, settings });
+    res.json({ league, members, settings, isCommissioner: league.commissioner_id === req.user.id });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

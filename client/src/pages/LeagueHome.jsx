@@ -48,7 +48,8 @@ export default function LeagueHome() {
   const [searchParams, setSearchParams] = useSearchParams();
   const paymentResult = searchParams.get('payment');
 
-  const [league, setLeague]       = useState(null);
+  const [league, setLeague]           = useState(null);
+  const [isCommissioner, setIsCommissioner] = useState(false);
   useDocTitle(league ? `${league.name} | TourneyRun` : 'TourneyRun');
   const [members, setMembers]     = useState([]);
   const [settings, setSettings]   = useState(null);
@@ -105,6 +106,7 @@ export default function LeagueHome() {
       setLeague(leagueRes.data.league);
       setMembers(leagueRes.data.members);
       setSettings(leagueRes.data.settings);
+      setIsCommissioner(leagueRes.data.isCommissioner === true);
       if (payRes) setPaymentInfo(payRes.data);
 
       if (['active', 'drafting', 'completed'].includes(leagueRes.data.league.status)) {
@@ -230,7 +232,6 @@ export default function LeagueHome() {
   if (!league) return <div className="text-center py-12 text-gray-400">League not found</div>;
 
   // ── Derived state ─────────────────────────────────────────────────────────
-  const isCommissioner = league.commissioner_id === user?.id;
   const buyIn          = league.buy_in_amount || 0;
   const prizePool      = buyIn * members.length;
   const maxPrizePool   = buyIn * league.max_teams;
