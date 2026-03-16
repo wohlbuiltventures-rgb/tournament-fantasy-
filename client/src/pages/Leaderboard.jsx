@@ -382,6 +382,7 @@ export default function Leaderboard() {
               : i === 1 ? '#d1d5db'
               : i === 2 ? '#f97316'
               : '#ffffff';
+            const totalPlayers = team.players ? team.players.length : 0;
             const aliveCount = team.players ? team.players.filter(p => !p.is_eliminated).length : 0;
             const isExpanded = expanded === team.user_id;
 
@@ -431,9 +432,12 @@ export default function Leaderboard() {
 
                     {/* Right: alive pill + points + chevron */}
                     <div className="flex items-center gap-2.5 flex-shrink-0">
-                      {aliveCount > 0 && (
+                      {totalPlayers > 0 && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
-                          style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }}>
+                          style={aliveCount === 0
+                            ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }
+                            : { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }
+                          }>
                           {aliveCount} alive
                         </span>
                       )}
