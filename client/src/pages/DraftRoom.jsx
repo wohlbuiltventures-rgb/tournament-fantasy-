@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
@@ -432,7 +432,7 @@ function DraftChat({ leagueId, user, token, members, isMobileFull = false }) {
   const [gifResults, setGifResults] = useState([]);
   const [gifLoading, setGifLoading] = useState(false);
 
-  const bottomRef = useRef(null);
+  const chatScrollRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const typingClearRefs = useRef({});
 
@@ -467,9 +467,11 @@ function DraftChat({ leagueId, user, token, members, isMobileFull = false }) {
     };
   }, [leagueId, token]);
 
-  // Auto-scroll to latest message
+  // Auto-scroll to bottom within chat container only (never scrolls the page)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
   }, [messages]);
 
   const sendTyping = () => {
@@ -530,7 +532,7 @@ function DraftChat({ leagueId, user, token, members, isMobileFull = false }) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 space-y-3" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div ref={chatScrollRef} className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 space-y-3" style={{ WebkitOverflowScrolling: 'touch' }}>
         {messages.length === 0 && (
           <p className="text-center text-gray-600 text-xs py-4">No messages yet. Say something!</p>
         )}
@@ -600,7 +602,6 @@ function DraftChat({ leagueId, user, token, members, isMobileFull = false }) {
             </span>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
       {/* GIF picker */}
@@ -749,8 +750,6 @@ export default function DraftRoom() {
   const pickingRef = useRef(false);
   const availablePlayersRef = useRef([]);
   const watchlistRef = useRef(watchlist);
-  const playerListScrollRef = useRef(null); // DOM ref for the player list scroll container
-  const savedScrollRef = useRef(0);         // preserves scroll position across player list refreshes
   // Cache all player data so we can look up seed/ppg even after a player is drafted
   const playerCacheRef = useRef({});
 
@@ -797,10 +796,6 @@ export default function DraftRoom() {
   }, []);
 
   const fetchAvailablePlayers = useCallback(async () => {
-    // Preserve the player list scroll position across refreshes
-    if (playerListScrollRef.current) {
-      savedScrollRef.current = playerListScrollRef.current.scrollTop;
-    }
     try {
       const res = await api.get(`/players/available/${leagueId}`);
       const players = res.data.players;
@@ -810,12 +805,6 @@ export default function DraftRoom() {
     } catch (err) { console.error('Failed to fetch players', err); }
   }, [leagueId]);
 
-  // Restore scroll after player list re-renders (prevents jump-to-top on each pick)
-  useLayoutEffect(() => {
-    if (playerListScrollRef.current && savedScrollRef.current > 0) {
-      playerListScrollRef.current.scrollTop = savedScrollRef.current;
-    }
-  }, [availablePlayers]);
 
   // ── Sound: chime on your turn ────────────────────────────────────────────
   useEffect(() => {
@@ -1476,7 +1465,7 @@ export default function DraftRoom() {
             )}
 
             {/* Player list */}
-            <div ref={playerListScrollRef} className="overflow-y-auto flex-1 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div className="overflow-y-auto flex-1 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               {effectivePlayerTab === 'queue' ? (
                 queuedPlayers.length === 0 ? (
                   <div className="text-center py-10 text-gray-600 text-sm">
