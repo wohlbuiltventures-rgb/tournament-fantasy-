@@ -217,7 +217,7 @@ export default function Landing() {
   const [c1, r1] = useCountUp(68);
   const [c2, r2] = useCountUp(300);
 
-  const tickerText = '🏀 2026 college basketball tournament starts March 20th  ·  Draft day is coming  ·  Secure your spot before your friends do  ·  $5 entry per manager  ·  You keep 100% of the prize pool  ·  ';
+  const tickerText = '🏀 The 2026 Tournament starts March 20th  ·  Draft day is coming  ·  Secure your spot before your friends do  ·  $5 entry per manager  ·  You keep 100% of the prize pool  ·  ';
 
   return (
     <div className="overflow-x-hidden bg-gray-950">
