@@ -1665,11 +1665,19 @@ export default function DraftRoom() {
             <div className="flex gap-1 mb-2">
               <button
                 onClick={() => setTeamsPanelTab('my')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1.5 ${
                   teamsPanelTab === 'my' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
                 }`}
               >
                 My Team
+                {mySmartDraft && smartDraftEnabled && (
+                  <span
+                    title="Smart Draft is ON — auto-picking using injury filters, ETP scoring, region balance, and upside targeting"
+                    className="inline-flex items-center gap-0.5 bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 rounded px-1 py-px text-[9px] font-bold leading-none"
+                  >
+                    ⚡ ON
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setTeamsPanelTab('all')}
@@ -1711,7 +1719,17 @@ export default function DraftRoom() {
         {/* ── Mobile: My Team full-screen panel (sibling to L/C/R columns) ── */}
         <div className={`lg:hidden flex flex-col min-h-0 ${mobilePanel !== 'myteam' ? 'hidden' : 'min-h-[65vh]'}`}>
           <div className="px-3 pt-3 pb-2 border-b border-gray-800 shrink-0 flex items-center justify-between">
-            <span className="text-white font-bold text-sm">My Team</span>
+            <div className="flex items-center gap-2">
+              <span className="text-white font-bold text-sm">My Team</span>
+              {mySmartDraft && smartDraftEnabled && (
+                <span
+                  title="Smart Draft is ON — auto-picking using injury filters, ETP scoring, region balance, and upside targeting"
+                  className="inline-flex items-center gap-0.5 bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 rounded-full px-2 py-0.5 text-[10px] font-bold leading-none"
+                >
+                  ⚡ Smart Draft ON
+                </span>
+              )}
+            </div>
             {(() => {
               const myPicks = enrichedPicks.filter(p => p.user_id === user?.id);
               const totalETP = myPicks.reduce((sum, p) => {
@@ -1762,6 +1780,10 @@ export default function DraftRoom() {
                   <span className="absolute top-1.5 right-[18%] min-w-[14px] h-3.5 bg-yellow-500 text-black text-[8px] font-black rounded-full flex items-center justify-center px-0.5">
                     {queuedPlayers.length}
                   </span>
+                )}
+                {/* Smart Draft ON indicator on My Team tab */}
+                {t.id === 'myteam' && mySmartDraft && smartDraftEnabled && (
+                  <span className="absolute top-1 right-[14%] text-[8px] leading-none">⚡</span>
                 )}
                 {/* Active indicator dot */}
                 {isActive && (
