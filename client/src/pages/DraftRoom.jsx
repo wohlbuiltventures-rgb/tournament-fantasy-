@@ -955,6 +955,35 @@ export default function DraftRoom() {
     }
   };
 
+  // ── Loading / error states ────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-3 animate-bounce">🏀</div>
+          <p className="text-gray-400 text-lg">Loading draft room...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!state) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-400">Draft room not available</p>
+        <Link to={`/league/${leagueId}`} className="text-brand-400 mt-2 inline-block">Back to league</Link>
+      </div>
+    );
+  }
+
+  const { league, members, picks, currentPick, currentPicker, totalPicks, draftComplete } = state;
+  const isMyTurn = !draftComplete && currentPicker?.user_id === user?.id;
+  const isCommissioner = league?.commissioner_id === user?.id;
+  const numTeams = members.length;
+  const timerPercent = Math.round((timeLeft / (league?.pick_time_limit || 60)) * 100);
+  const timerColor = timeLeft <= 3 ? '#ef4444' : timeLeft <= 10 ? '#f59e0b' : '#378ADD';
+
   // ── Derived values ────────────────────────────────────────────────────────
 
   const availableIds = new Set(availablePlayers.map(p => p.id));
@@ -1016,35 +1045,6 @@ export default function DraftRoom() {
 
   // On mobile, the "Queue" bottom tab forces the queue sub-view in the player panel
   const effectivePlayerTab = mobilePanel === 'queue' ? 'queue' : playerTab;
-
-  // ── Loading / error states ────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-5xl mb-3 animate-bounce">🏀</div>
-          <p className="text-gray-400 text-lg">Loading draft room...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!state) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">Draft room not available</p>
-        <Link to={`/league/${leagueId}`} className="text-brand-400 mt-2 inline-block">Back to league</Link>
-      </div>
-    );
-  }
-
-  const { league, members, picks, currentPick, currentPicker, totalPicks, draftComplete } = state;
-  const isMyTurn = !draftComplete && currentPicker?.user_id === user?.id;
-  const isCommissioner = league?.commissioner_id === user?.id;
-  const numTeams = members.length;
-  const timerPercent = Math.round((timeLeft / (league?.pick_time_limit || 60)) * 100);
-  const timerColor = timeLeft <= 3 ? '#ef4444' : timeLeft <= 10 ? '#f59e0b' : '#378ADD';
 
   // ── Render ────────────────────────────────────────────────────────────────
 
