@@ -123,6 +123,50 @@ function VenmoIcon() {
   );
 }
 
+// ── Team avatar (inline colors — safe from Tailwind purging in prod) ───────────
+
+const AVATAR_COLORS = [
+  '#3b82f6', '#8b5cf6', '#14b8a6', '#f59e0b',
+  '#ef4444', '#10b981', '#ec4899', '#6366f1', '#f97316', '#06b6d4',
+];
+
+function avatarColor(name) {
+  if (!name) return AVATAR_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function nameInitials(name) {
+  if (!name) return '?';
+  return name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+}
+
+function TeamBadge({ avatarUrl, teamName, size = 32 }) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={teamName}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+        onError={e => { e.target.style.display = 'none'; }}
+      />
+    );
+  }
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: '50%', flexShrink: 0,
+        backgroundColor: avatarColor(teamName),
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 700, color: '#fff', fontSize: size * 0.34,
+      }}
+    >
+      {nameInitials(teamName)}
+    </div>
+  );
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export default function Leaderboard() {
@@ -332,170 +376,182 @@ export default function Leaderboard() {
         <div className="space-y-3">
           {standings.map((team, i) => {
             const isMe = team.user_id === user?.id;
-            const ptsColor = isMe ? 'text-brand-400'
-              : i === 0 ? 'text-yellow-400'
-              : i === 1 ? 'text-gray-300'
-              : i === 2 ? 'text-amber-500'
-              : 'text-white';
+            const isLast = i === standings.length - 1 && standings.length > 1;
+            const ptsColor = isMe ? '#378ADD'
+              : i === 0 ? '#facc15'
+              : i === 1 ? '#d1d5db'
+              : i === 2 ? '#f97316'
+              : '#ffffff';
             const aliveCount = team.players ? team.players.filter(p => !p.is_eliminated).length : 0;
-            return (
-            <div
-              key={team.user_id}
-              className={`card overflow-hidden transition-all duration-200 ${
-                isMe ? 'border-brand-500/60' : ''
-              }`}
-            >
-              {/* Team row */}
-              <button
-                className="w-full text-left px-5 py-4 hover:bg-gray-800/50 transition-colors"
-                onClick={() => setExpanded(expanded === team.user_id ? null : team.user_id)}
-              >
-                <div className="flex items-center gap-4">
-                  {/* Rank / medal */}
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${
-                    i < 3 ? 'bg-gray-900 text-xl' : 'bg-gray-800 text-sm text-gray-500'
-                  }`}>
-                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
-                  </div>
+            const isExpanded = expanded === team.user_id;
 
-                  {/* Team info */}
-                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                    <TeamAvatar avatarUrl={team.avatar_url} teamName={team.team_name} size="sm" />
+            return (
+              <div
+                key={team.user_id}
+                className="card overflow-hidden transition-all duration-200"
+                style={isMe ? { borderColor: 'rgba(55,138,221,0.6)' } : undefined}
+              >
+                {/* ── Clickable header row ── */}
+                <button
+                  type="button"
+                  className="w-full text-left px-4 py-3.5 hover:bg-gray-800/50 transition-colors"
+                  onClick={() => setExpanded(isExpanded ? null : team.user_id)}
+                >
+                  <div className="flex items-center gap-3">
+
+                    {/* Rank / medal */}
+                    <div className="w-9 h-9 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0"
+                      style={{ fontSize: i < 3 ? 22 : 13, color: i >= 3 ? '#6b7280' : undefined }}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                    </div>
+
+                    {/* Avatar */}
+                    <TeamBadge avatarUrl={team.avatar_url} teamName={team.team_name} size={36} />
+
+                    {/* Team name + username */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`font-bold text-base ${isMe ? 'text-brand-400' : 'text-white'}`}>
+                      <div className="flex items-center gap-2 flex-wrap leading-tight">
+                        <span className="font-bold text-base" style={{ color: isMe ? '#378ADD' : '#fff' }}>
                           {team.team_name}
-                          {i === standings.length - 1 && standings.length > 1 && <span className="ml-1">💀</span>}
+                          {isLast && <span className="ml-1">💀</span>}
                         </span>
                         {isMe && (
-                          <span className="text-xs bg-brand-500/20 text-brand-400 border border-brand-500/30 px-1.5 py-0.5 rounded-full">You</span>
+                          <span className="text-[10px] font-bold bg-brand-500/20 text-brand-400 border border-brand-500/30 px-1.5 py-0.5 rounded-full">You</span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                        <span className="text-gray-500 text-sm">{team.username}</span>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-gray-500 text-xs">{team.username}</span>
                         {team.venmo_handle && (
-                          <span className="inline-flex items-center gap-1 text-xs bg-blue-900/30 border border-blue-700/30 text-blue-400 px-1.5 py-0.5 rounded-full">
-                            <VenmoIcon />
-                            {team.venmo_handle}
+                          <span className="inline-flex items-center gap-1 text-[10px] bg-blue-900/30 border border-blue-700/30 text-blue-400 px-1.5 py-0.5 rounded-full">
+                            <VenmoIcon />{team.venmo_handle}
                           </span>
                         )}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Points + alive badge + expand */}
-                  <div className="flex items-center gap-3">
-                    {aliveCount > 0 && (
-                      <span className="hidden sm:inline-flex items-center gap-1 bg-green-900/30 border border-green-500/30 text-green-400 text-xs font-bold px-2 py-0.5 rounded-full">
-                        {aliveCount} alive
-                      </span>
-                    )}
-                    <div className="text-right">
-                      <div className={`font-bold ${ptsColor}`} style={{ fontSize: 22 }}>{team.total_points}</div>
-                      <div className="text-gray-500 text-xs">pts</div>
-                    </div>
-                    <svg
-                      className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${expanded === team.user_id ? 'rotate-180' : ''}`}
-                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-
-                {/* Player preview chips */}
-                {team.players && team.players.length > 0 && expanded !== team.user_id && (
-                  <div className="mt-2 flex flex-wrap gap-1 ml-14">
-                    {team.players.slice(0, 4).map(p => (
-                      <span
-                        key={p.player_id}
-                        className={`text-xs px-2 py-0.5 rounded-full border ${
-                          p.is_eliminated
-                            ? 'bg-gray-800/50 text-gray-600 border-gray-700 line-through'
-                            : liveSet.has(p.player_id)
-                            ? 'bg-green-900/30 text-green-400 border-green-700/40'
-                            : 'bg-gray-800 text-gray-400 border-gray-700'
-                        }`}
+                    {/* Right: alive pill + points + chevron */}
+                    <div className="flex items-center gap-2.5 flex-shrink-0">
+                      {aliveCount > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
+                          style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }}>
+                          {aliveCount} alive
+                        </span>
+                      )}
+                      <div className="text-right min-w-[40px]">
+                        <div className="font-black leading-tight" style={{ fontSize: 22, color: ptsColor }}>{team.total_points}</div>
+                        <div className="text-gray-500 text-[10px]">pts</div>
+                      </div>
+                      <svg
+                        className="w-4 h-4 text-gray-500 transition-transform duration-200 flex-shrink-0"
+                        style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
                       >
-                        {p.name}
-                        {liveSet.has(p.player_id) && <span className="ml-1">●</span>}
-                      </span>
-                    ))}
-                    {team.players.length > 4 && (
-                      <span className="text-xs text-gray-500">+{team.players.length - 4} more</span>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Player chip preview (collapsed only) */}
+                  {!isExpanded && team.players && team.players.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1 pl-[108px]">
+                      {team.players.slice(0, 5).map(p => (
+                        <span
+                          key={p.player_id}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                            p.is_eliminated
+                              ? 'bg-gray-800/50 text-gray-600 border-gray-700/50 line-through'
+                              : liveSet.has(p.player_id)
+                              ? 'bg-green-900/30 text-green-400 border-green-700/40'
+                              : 'bg-gray-800/60 text-gray-400 border-gray-700/50'
+                          }`}
+                        >
+                          {p.name}{liveSet.has(p.player_id) ? ' ●' : ''}
+                        </span>
+                      ))}
+                      {team.players.length > 5 && (
+                        <span className="text-[10px] text-gray-600">+{team.players.length - 5} more</span>
+                      )}
+                    </div>
+                  )}
+                </button>
+
+                {/* ── Expanded roster ── */}
+                {isExpanded && (
+                  <div className="border-t border-gray-800">
+                    {team.players && team.players.length > 0 ? (
+                      <>
+                        <div className="divide-y divide-gray-800/60">
+                          {[...team.players]
+                            .sort((a, b) => b.fantasy_points - a.fantasy_points)
+                            .map(player => {
+                              const playerIsLive = liveSet.has(player.player_id);
+                              const todayPts = player.today_stats?.points;
+                              const todayFinished = player.today_stats?.is_completed && !playerIsLive;
+                              return (
+                                <div
+                                  key={player.player_id}
+                                  className="flex items-center gap-3 px-4 py-2.5"
+                                  style={{ opacity: player.is_eliminated ? 0.4 : 1 }}
+                                >
+                                  {/* Status dot */}
+                                  <div className="w-2 h-2 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: player.is_eliminated ? '#6b7280' : playerIsLive ? '#34d399' : '#378ADD' }} />
+
+                                  {/* Player info */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className={`font-medium text-sm ${player.is_eliminated ? 'line-through text-gray-500' : 'text-white'}`}>
+                                        {player.name}
+                                      </span>
+                                      {player.is_eliminated && (
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                                          style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
+                                          ELIM
+                                        </span>
+                                      )}
+                                      {playerIsLive && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse"
+                                          style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }}>
+                                          ● LIVE{todayPts != null ? ` ${todayPts}` : ''}
+                                        </span>
+                                      )}
+                                      {todayFinished && todayPts != null && (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+                                          style={{ background: '#1f2937', border: '1px solid #374151', color: '#9ca3af' }}>
+                                          Final: {todayPts}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-gray-500 text-[10px] mt-0.5">
+                                      {player.team}{player.position ? ` · ${player.position}` : ''}
+                                    </div>
+                                  </div>
+
+                                  {/* Points */}
+                                  <div className="text-right flex-shrink-0">
+                                    <div className="font-bold text-sm" style={{ color: player.fantasy_points > 0 ? '#378ADD' : '#6b7280' }}>
+                                      {player.fantasy_points}
+                                    </div>
+                                    <div className="text-gray-600 text-[9px]">pts</div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                        <div className="flex items-center justify-between px-4 py-2 border-t border-gray-800">
+                          <span className="text-gray-500 text-xs">Total</span>
+                          <span className="font-bold text-brand-400">{team.total_points} pts</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="px-4 py-5 text-center text-gray-600 text-sm">
+                        No player data yet — check back once the tournament begins.
+                      </div>
                     )}
                   </div>
                 )}
-              </button>
-
-              {/* Expanded roster */}
-              {expanded === team.user_id && team.players && team.players.length > 0 && (
-                <div className="border-t border-gray-800 bg-gray-900/30">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-800">
-                        <th className="text-left px-5 py-2 text-gray-400 font-medium">Player</th>
-                        <th className="text-left px-3 py-2 text-gray-400 font-medium hidden sm:table-cell">Team</th>
-                        <th className="text-right px-5 py-2 text-gray-400 font-medium">PTS</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-800/50">
-                      {team.players
-                        .sort((a, b) => b.fantasy_points - a.fantasy_points)
-                        .map(player => {
-                          const playerIsLive = liveSet.has(player.player_id);
-                          const todayPts = player.today_stats?.points;
-                          const todayFinished = player.today_stats?.is_completed && !playerIsLive;
-
-                          return (
-                            <tr
-                              key={player.player_id}
-                              className={player.is_eliminated ? 'opacity-40' : ''}
-                            >
-                              <td className="px-5 py-2.5">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className={`font-medium ${player.is_eliminated ? 'line-through text-gray-500' : 'text-white'}`}>
-                                    {player.name}
-                                  </span>
-                                  {player.is_eliminated && (
-                                    <span className="text-xs bg-red-900/40 text-red-400 px-1.5 py-0.5 rounded border border-red-500/30 font-bold">
-                                      ELIM
-                                    </span>
-                                  )}
-                                  {playerIsLive && (
-                                    <span className="inline-flex items-center gap-1 text-xs bg-green-900/30 border border-green-500/40 text-green-400 px-1.5 py-0.5 rounded-full font-bold animate-pulse">
-                                      ● LIVE {todayPts != null ? `${todayPts} pts` : ''}
-                                    </span>
-                                  )}
-                                  {todayFinished && todayPts != null && (
-                                    <span className="text-xs bg-gray-800 border border-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full">
-                                      Final: {todayPts} pts
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-gray-500 text-xs">{player.position}</div>
-                              </td>
-                              <td className="px-3 py-2.5 text-gray-400 text-xs hidden sm:table-cell">{player.team}</td>
-                              <td className="px-5 py-2.5 text-right">
-                                <span className={`font-bold ${player.fantasy_points > 0 ? 'text-brand-400' : 'text-gray-500'}`}>
-                                  {player.fantasy_points}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t border-gray-700">
-                        <td colSpan={2} className="px-5 py-2 text-right text-gray-400 font-medium text-sm">Total</td>
-                        <td className="px-5 py-2 text-right text-brand-400 font-bold">{team.total_points}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </div>
-          );
+              </div>
+            );
           })}
         </div>
       )}
