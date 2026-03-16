@@ -17,6 +17,47 @@ function buildStandings(leagueId) {
     WHERE lm.league_id = ?
   `).all(leagueId);
 
+  // ── Diagnostic: raw pick count before any JOIN ─────────────────────────────
+  const rawCount = db.prepare(
+    'SELECT COUNT(*) as cnt FROM draft_picks WHERE league_id = ?'
+  ).get(leagueId);
+  console.log(`[standings] league=${leagueId} raw picks=${rawCount.cnt} members=${members.length}`);
+
+  // ── Fetch ALL picks + player info for this league in one batch query ────────
+  // Using LEFT JOIN so picks with orphaned player_id still surface (shows up as
+  // null player fields rather than silently disappearing from the results).
+  const allPicks = db.prepare(`
+    SELECT
+      dp.user_id,
+      dp.player_id,
+      dp.pick_number,
+      dp.round,
+      COALESCE(p.name, '[unknown]')         AS name,
+      COALESCE(p.team, '')                  AS team,
+      COALESCE(p.position, '')              AS position,
+      COALESCE(p.seed, 0)                   AS seed,
+      COALESCE(p.is_eliminated, 0)          AS is_eliminated,
+      COALESCE(p.season_ppg, 0)             AS season_ppg,
+      COALESCE(p.region, '')                AS region,
+      COALESCE(p.is_first_four, 0)          AS is_first_four
+    FROM draft_picks dp
+    LEFT JOIN players p ON dp.player_id = p.id
+    WHERE dp.league_id = ?
+    ORDER BY dp.pick_number
+  `).all(leagueId);
+
+  console.log(`[standings] batch picks returned=${allPicks.length}`);
+  if (allPicks.length > 0) {
+    console.log('[standings] sample pick:', JSON.stringify(allPicks[0]));
+  }
+
+  // Group picks by user_id for O(1) lookup per member
+  const picksByUser = {};
+  for (const pick of allPicks) {
+    if (!picksByUser[pick.user_id]) picksByUser[pick.user_id] = [];
+    picksByUser[pick.user_id].push(pick);
+  }
+
   // Which player IDs are currently in a live game?
   const liveGameIds = db.prepare('SELECT id FROM games WHERE is_live = 1').all().map(r => r.id);
   const livePlayerIds = new Set();
@@ -29,12 +70,7 @@ function buildStandings(leagueId) {
   }
 
   const standings = members.map(member => {
-    const draftedPlayers = db.prepare(`
-      SELECT dp.player_id, p.name, p.team, p.position, p.is_eliminated
-      FROM draft_picks dp
-      JOIN players p ON dp.player_id = p.id
-      WHERE dp.league_id = ? AND dp.user_id = ?
-    `).all(leagueId, member.user_id);
+    const draftedPlayers = picksByUser[member.user_id] || [];
 
     let totalPoints = 0;
     const playerStats = draftedPlayers.map(player => {
@@ -45,10 +81,10 @@ function buildStandings(leagueId) {
         WHERE ps.player_id = ?
       `).get(player.player_id);
 
-      const fantasyPoints = stats.total_points * settings.pts_per_point;
+      const fantasyPoints = (stats?.total_points ?? 0) * settings.pts_per_point;
       totalPoints += fantasyPoints;
 
-      // Find today's game stats for this player (for live/final display)
+      // Today's game stats for live/final display
       const today = new Date().toISOString().slice(0, 10);
       const todayStats = db.prepare(`
         SELECT ps.points, g.is_live, g.is_completed, g.team1, g.team2, g.winner_team
@@ -60,11 +96,19 @@ function buildStandings(leagueId) {
       `).get(player.player_id, today);
 
       return {
-        ...player,
+        player_id:     player.player_id,
+        name:          player.name,
+        team:          player.team,
+        position:      player.position,
+        seed:          player.seed,
+        is_eliminated: player.is_eliminated,
+        season_ppg:    player.season_ppg,
+        region:        player.region,
+        is_first_four: player.is_first_four,
         stats,
-        fantasy_points: Math.round(fantasyPoints * 10) / 10,
-        is_live: livePlayerIds.has(player.player_id),
-        today_stats: todayStats || null,
+        fantasy_points:  Math.round(fantasyPoints * 10) / 10,
+        is_live:         livePlayerIds.has(player.player_id),
+        today_stats:     todayStats || null,
       };
     });
 
@@ -72,12 +116,12 @@ function buildStandings(leagueId) {
       .run(Math.round(totalPoints * 10) / 10, leagueId, member.user_id);
 
     const totalPlayers = draftedPlayers.length;
-    const aliveCount = draftedPlayers.filter(p => !p.is_eliminated).length;
+    const aliveCount   = draftedPlayers.filter(p => !p.is_eliminated).length;
 
     return {
       ...member,
       total_points: Math.round(totalPoints * 10) / 10,
-      players: playerStats,
+      players:      playerStats,
       totalPlayers,
       aliveCount,
     };
