@@ -389,15 +389,18 @@ function MyRoster({ picks, userId, etpByPlayerId, isMobile = false }) {
           const etp = etpByPlayerId[p.player_id] ?? calcETP(p.season_ppg, p.seed, !!p.is_first_four);
           const style = ps(p.position);
           const injuryFlagged = p.injury_flagged;
+          const isElim = !!p.is_eliminated;
           return (
-            <div key={p.id} className={`rounded-lg border px-2.5 py-2 ${style.cell}`}>
+            <div key={p.id} className={`rounded-lg border px-2.5 py-2 ${style.cell}`}
+              style={{ opacity: isElim ? 0.45 : 1 }}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <PosBadge pos={p.position} small />
                   <div className="min-w-0">
-                    <div className="font-semibold text-white text-xs truncate flex items-center gap-1">
+                    <div className="font-semibold text-xs truncate flex items-center gap-1"
+                      style={{ color: isElim ? '#6b7280' : '#fff', textDecoration: isElim ? 'line-through' : 'none' }}>
                       {p.player_name}
-                      {injuryFlagged ? <span className="text-red-400 text-[9px]">🤕</span> : null}
+                      {injuryFlagged && !isElim ? <span className="text-red-400 text-[9px]">🤕</span> : null}
                     </div>
                     <div className="text-gray-500 text-[10px] truncate">
                       {p.team}{p.seed ? ` · #${p.seed}` : ''}{p.region ? ` · ${p.region}` : ''}
@@ -405,7 +408,7 @@ function MyRoster({ picks, userId, etpByPlayerId, isMobile = false }) {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-brand-400 font-bold text-xs">{etp != null ? etp : '—'}</div>
+                  <div className="font-bold text-xs" style={{ color: isElim ? '#6b7280' : '#60a5fa' }}>{etp != null ? etp : '—'}</div>
                   <div className="text-gray-600 text-[9px]">ETP · Rd {p.round}</div>
                 </div>
               </div>

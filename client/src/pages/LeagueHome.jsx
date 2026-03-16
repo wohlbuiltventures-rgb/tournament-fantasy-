@@ -914,18 +914,25 @@ export default function LeagueHome() {
             </div>
           ) : (
             <div className="space-y-2">
-              {myPicks.map(pick => (
-                <div key={pick.id} className="card px-4 py-3 flex items-center gap-4">
-                  <span className="text-gray-500 text-sm w-8">R{pick.round}</span>
-                  <div className="flex-1">
-                    <div className="text-white font-semibold">{pick.player_name}</div>
-                    <div className="text-gray-400 text-sm">{pick.team} · {pick.position}</div>
+              {myPicks.map(pick => {
+                const isElim = !!pick.is_eliminated;
+                return (
+                  <div key={pick.id} className="card px-4 py-3 flex items-center gap-4"
+                    style={{ opacity: isElim ? 0.45 : 1 }}>
+                    <span className="text-gray-500 text-sm w-8">R{pick.round}</span>
+                    <div className="flex-1">
+                      <div className="font-semibold"
+                        style={{ color: isElim ? '#6b7280' : '#fff', textDecoration: isElim ? 'line-through' : 'none' }}>
+                        {pick.player_name}
+                      </div>
+                      <div className="text-gray-400 text-sm">{pick.team} · {pick.position}</div>
+                    </div>
+                    <div className="text-right text-sm text-gray-400">
+                      {parseFloat(pick.season_ppg || 0).toFixed(1)} PPG
+                    </div>
                   </div>
-                  <div className="text-right text-sm text-gray-400">
-                    {parseFloat(pick.season_ppg || 0).toFixed(1)} PPG
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

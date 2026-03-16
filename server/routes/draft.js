@@ -25,7 +25,7 @@ function getDraftState(leagueId) {
   `).all(leagueId);
 
   const picks = db.prepare(`
-    SELECT dp.*, p.name as player_name, p.team, p.position, p.season_ppg, p.seed, u.username
+    SELECT dp.*, p.name as player_name, p.team, p.position, p.season_ppg, p.seed, p.is_eliminated, p.region, p.is_first_four, u.username
     FROM draft_picks dp
     JOIN players p ON dp.player_id = p.id
     JOIN users u ON dp.user_id = u.id
