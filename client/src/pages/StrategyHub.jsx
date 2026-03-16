@@ -81,7 +81,41 @@ const TAG_LABELS = {
   sleepers:    'Sleepers',
   rankings:    'Rankings',
   predictions: 'Predictions',
+  resources:   'Resources',
 };
+
+const EXTERNAL_RESOURCES = [
+  {
+    icon: (
+      <svg className="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    ),
+    name:        'KenPom Analytics',
+    description: 'The gold standard for college basketball efficiency ratings. Team tempo, offensive/defensive efficiency, and tournament predictions.',
+    badge:       'Advanced Analytics',
+    badgeStyle:  'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+    url:         'https://kenpom.com',
+    cta:         'Visit KenPom →',
+    accent:      'hover:border-emerald-500/40 hover:shadow-emerald-500/5',
+  },
+  {
+    icon: (
+      <svg className="w-7 h-7 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+          d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+    name:        'EvanMiya Player Ratings',
+    description: 'Advanced player impact metrics and efficiency ratings. The best resource for identifying undervalued players before your draft.',
+    badge:       'Player Analytics',
+    badgeStyle:  'bg-purple-500/15 text-purple-400 border-purple-500/30',
+    url:         'https://evanmiya.com',
+    cta:         'Visit EvanMiya →',
+    accent:      'hover:border-purple-500/40 hover:shadow-purple-500/5',
+  },
+];
 
 // Build a player name index from an array of player objects
 // Returns Map: lowercased-name/last-name -> player
@@ -136,8 +170,9 @@ export default function StrategyHub() {
 
   const playerIndex = useMemo(() => buildPlayerIndex(players), [players]);
 
-  // Fetch news articles
+  // Fetch news articles (skip for the resources tab — it shows static cards)
   useEffect(() => {
+    if (activeTag === 'resources') { setLoading(false); return; }
     setLoading(true);
     const params = activeTag !== 'all' ? `?tag=${activeTag}` : '';
     api.get(`/news${params}`)
@@ -211,8 +246,9 @@ export default function StrategyHub() {
           <h2 className="text-lg font-bold text-white">Latest Tournament News</h2>
           <div className="flex items-center gap-1.5 flex-wrap">
             {Object.entries(TAG_LABELS).map(([tag, label]) => {
-              const isInjuries = tag === 'injuries';
-              const isActive = activeTag === tag;
+              const isInjuries  = tag === 'injuries';
+              const isResources = tag === 'resources';
+              const isActive    = activeTag === tag;
               return (
                 <button
                   key={tag}
@@ -222,13 +258,17 @@ export default function StrategyHub() {
                     isActive
                       ? isInjuries
                         ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                        : isResources
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
                         : 'bg-brand-500/20 text-brand-400 border-brand-500/40'
                       : isInjuries
                         ? 'bg-gray-800 text-red-400/70 border-red-500/20 hover:border-red-500/40 hover:text-red-400'
+                        : isResources
+                        ? 'bg-gray-800 text-emerald-400/70 border-emerald-500/20 hover:border-emerald-500/40 hover:text-emerald-400'
                         : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white hover:border-gray-600'
                   }`}
                 >
-                  {isInjuries && '🚨 '}{label}
+                  {isInjuries && '🚨 '}{isResources && '🔗 '}{label}
                   {isInjuries && injuryBadge && (
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-gray-950 animate-pulse" />
                   )}
@@ -238,7 +278,58 @@ export default function StrategyHub() {
           </div>
         </div>
 
-        {loading ? (
+        {activeTag === 'resources' ? (
+          /* ── External Resources panel ── */
+          <div>
+            {/* Disclaimer */}
+            <div className="flex items-start gap-3 bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 mb-6 text-xs text-gray-400 leading-relaxed">
+              <span className="text-gray-500 shrink-0 mt-0.5">ℹ️</span>
+              <span>
+                These are trusted third-party resources used by serious tournament fantasy players.
+                TourneyRun is not affiliated with or endorsed by any of these sites.
+                All links open in a new tab.
+              </span>
+            </div>
+
+            {/* Resource cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {EXTERNAL_RESOURCES.map(r => (
+                <div
+                  key={r.name}
+                  className={`card p-6 flex flex-col gap-4 transition-all hover:-translate-y-0.5 hover:shadow-lg ${r.accent}`}
+                >
+                  {/* Icon + badge row */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gray-800 border border-gray-700/60 flex items-center justify-center shrink-0">
+                      {r.icon}
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${r.badgeStyle}`}>
+                      {r.badge}
+                    </span>
+                  </div>
+
+                  {/* Name + description */}
+                  <div>
+                    <h3 className="text-white font-bold text-base mb-1.5">{r.name}</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed">{r.description}</p>
+                  </div>
+
+                  {/* CTA */}
+                  <div className="mt-auto pt-1">
+                    <a
+                      href={r.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+                    >
+                      {r.cta}
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 9 }).map((_, i) => (
               <div key={i} className="card p-4 animate-pulse">
@@ -324,9 +415,11 @@ export default function StrategyHub() {
           </div>
         )}
 
-        <p className="text-gray-700 text-xs text-center mt-6">
-          News sourced from Google News RSS feeds · Updated every 2 hours · Articles open in a new tab
-        </p>
+        {activeTag !== 'resources' && (
+          <p className="text-gray-700 text-xs text-center mt-6">
+            News sourced from Google News RSS feeds · Updated every 2 hours · Articles open in a new tab
+          </p>
+        )}
       </div>
     </div>
   );
