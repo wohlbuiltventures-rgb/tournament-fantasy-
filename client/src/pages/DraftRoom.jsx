@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
@@ -359,6 +359,64 @@ function ManagerRosterCard({ member, picks, currentPicker, userId, hasSmartDraft
   );
 }
 
+// ─── My Roster panel ─────────────────────────────────────────────────────────
+
+function MyRoster({ picks, userId, etpByPlayerId, isMobile = false }) {
+  const myPicks = picks.filter(p => p.user_id === userId);
+
+  const totalETP = myPicks.reduce((sum, p) => {
+    const v = etpByPlayerId[p.player_id] ?? calcETP(p.season_ppg, p.seed, !!p.is_first_four) ?? 0;
+    return sum + (v || 0);
+  }, 0);
+
+  if (myPicks.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-600">
+        <div className="text-2xl mb-2">🏀</div>
+        <p className="text-sm">No picks yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={isMobile ? 'p-3' : ''}>
+      <div className="flex items-center justify-between mb-2 px-0.5">
+        <span className="text-gray-500 text-[10px] uppercase tracking-wider">{myPicks.length} players</span>
+        <span className="text-brand-400 font-bold text-sm">{totalETP.toFixed(1)} proj. ETP</span>
+      </div>
+      <div className="space-y-1.5">
+        {myPicks.map(p => {
+          const etp = etpByPlayerId[p.player_id] ?? calcETP(p.season_ppg, p.seed, !!p.is_first_four);
+          const style = ps(p.position);
+          const injuryFlagged = p.injury_flagged;
+          return (
+            <div key={p.id} className={`rounded-lg border px-2.5 py-2 ${style.cell}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <PosBadge pos={p.position} small />
+                  <div className="min-w-0">
+                    <div className="font-semibold text-white text-xs truncate flex items-center gap-1">
+                      {p.player_name}
+                      {injuryFlagged ? <span className="text-red-400 text-[9px]">🤕</span> : null}
+                    </div>
+                    <div className="text-gray-500 text-[10px] truncate">
+                      {p.team}{p.seed ? ` · #${p.seed}` : ''}{p.region ? ` · ${p.region}` : ''}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-brand-400 font-bold text-xs">{etp != null ? etp : '—'}</div>
+                  <div className="text-gray-600 text-[9px]">ETP · Rd {p.round}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Draft Chat ───────────────────────────────────────────────────────────────
 
 function DraftChat({ leagueId, user, token, members, isMobileFull = false }) {
@@ -656,7 +714,8 @@ export default function DraftRoom() {
   const [regionFilter, setRegionFilter] = useState('All');
   const [sortBy, setSortBy] = useState('etp');
   const [playerTab, setPlayerTab] = useState('available'); // 'available' | 'queue'
-  const [mobilePanel, setMobilePanel] = useState('players'); // 'board' | 'players' | 'teams'
+  const [mobilePanel, setMobilePanel] = useState('players'); // 'board' | 'players' | 'queue' | 'myteam' | 'chat'
+  const [teamsPanelTab, setTeamsPanelTab] = useState('my'); // 'my' | 'all'
   const [timeLeft, setTimeLeft] = useState(60);
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState(false);
@@ -686,6 +745,8 @@ export default function DraftRoom() {
   const pickingRef = useRef(false);
   const availablePlayersRef = useRef([]);
   const watchlistRef = useRef(watchlist);
+  const playerListScrollRef = useRef(null); // DOM ref for the player list scroll container
+  const savedScrollRef = useRef(0);         // preserves scroll position across player list refreshes
   // Cache all player data so we can look up seed/ppg even after a player is drafted
   const playerCacheRef = useRef({});
 
@@ -732,6 +793,10 @@ export default function DraftRoom() {
   }, []);
 
   const fetchAvailablePlayers = useCallback(async () => {
+    // Preserve the player list scroll position across refreshes
+    if (playerListScrollRef.current) {
+      savedScrollRef.current = playerListScrollRef.current.scrollTop;
+    }
     try {
       const res = await api.get(`/players/available/${leagueId}`);
       const players = res.data.players;
@@ -740,6 +805,13 @@ export default function DraftRoom() {
       setAvailablePlayers(players);
     } catch (err) { console.error('Failed to fetch players', err); }
   }, [leagueId]);
+
+  // Restore scroll after player list re-renders (prevents jump-to-top on each pick)
+  useLayoutEffect(() => {
+    if (playerListScrollRef.current && savedScrollRef.current > 0) {
+      playerListScrollRef.current.scrollTop = savedScrollRef.current;
+    }
+  }, [availablePlayers]);
 
   // ── Sound: chime on your turn ────────────────────────────────────────────
   useEffect(() => {
@@ -1409,7 +1481,7 @@ export default function DraftRoom() {
             )}
 
             {/* Player list */}
-            <div className="overflow-y-auto flex-1 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div ref={playerListScrollRef} className="overflow-y-auto flex-1 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               {effectivePlayerTab === 'queue' ? (
                 queuedPlayers.length === 0 ? (
                   <div className="text-center py-10 text-gray-600 text-sm">
@@ -1611,19 +1683,43 @@ export default function DraftRoom() {
             <PickTicker picks={enrichedPicks} userId={user?.id} />
           </div>
 
-          {/* Manager cards — desktop only */}
-          <div className="hidden lg:block card p-3 shrink-0">
-            <h3 className="font-bold text-white text-xs uppercase tracking-wider mb-2">Teams</h3>
-            <div className="space-y-2 max-h-[30vh] overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {members.map(m => (
-                <ManagerRosterCard
-                  key={m.id} member={m} picks={enrichedPicks}
-                  currentPicker={draftComplete ? null : currentPicker}
-                  userId={user?.id}
-                  hasSmartDraft={smartDraftUsers.has(m.user_id)}
-                />
-              ))}
+          {/* My Team / All Teams panel — desktop only */}
+          <div className="hidden lg:flex flex-col card p-3 shrink-0">
+            {/* Tab row */}
+            <div className="flex gap-1 mb-2">
+              <button
+                onClick={() => setTeamsPanelTab('my')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                  teamsPanelTab === 'my' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                My Team
+              </button>
+              <button
+                onClick={() => setTeamsPanelTab('all')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                  teamsPanelTab === 'all' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                All Teams
+              </button>
             </div>
+            {teamsPanelTab === 'my' ? (
+              <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: '30vh', WebkitOverflowScrolling: 'touch' }}>
+                <MyRoster picks={enrichedPicks} userId={user?.id} etpByPlayerId={etpByPlayerId} />
+              </div>
+            ) : (
+              <div className="space-y-2 overflow-y-auto overscroll-contain" style={{ maxHeight: '30vh', WebkitOverflowScrolling: 'touch' }}>
+                {members.map(m => (
+                  <ManagerRosterCard
+                    key={m.id} member={m} picks={enrichedPicks}
+                    currentPicker={draftComplete ? null : currentPicker}
+                    userId={user?.id}
+                    hasSmartDraft={smartDraftUsers.has(m.user_id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Chat panel — full height on mobile, 400px on desktop */}
@@ -1636,6 +1732,26 @@ export default function DraftRoom() {
           />
         </div>
 
+        {/* ── Mobile: My Team full-screen panel (sibling to L/C/R columns) ── */}
+        <div className={`lg:hidden flex flex-col min-h-0 ${mobilePanel !== 'myteam' ? 'hidden' : 'h-full'}`}>
+          <div className="px-3 pt-3 pb-2 border-b border-gray-800 shrink-0 flex items-center justify-between">
+            <span className="text-white font-bold text-sm">My Team</span>
+            {(() => {
+              const myPicks = enrichedPicks.filter(p => p.user_id === user?.id);
+              const totalETP = myPicks.reduce((sum, p) => {
+                const v = etpByPlayerId[p.player_id] ?? calcETP(p.season_ppg, p.seed, !!p.is_first_four) ?? 0;
+                return sum + (v || 0);
+              }, 0);
+              return myPicks.length > 0
+                ? <span className="text-brand-400 font-bold text-sm">{totalETP.toFixed(1)} Proj. ETP</span>
+                : null;
+            })()}
+          </div>
+          <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <MyRoster picks={enrichedPicks} userId={user?.id} etpByPlayerId={etpByPlayerId} isMobile />
+          </div>
+        </div>
+
       </div>{/* end three-panel grid */}
       </div>{/* end content area */}
 
@@ -1646,6 +1762,7 @@ export default function DraftRoom() {
             { id: 'players', icon: '🏀', label: 'Players' },
             { id: 'board',   icon: '🗂',  label: 'Board'   },
             { id: 'queue',   icon: '⭐',  label: 'Queue'   },
+            { id: 'myteam',  icon: '👤',  label: 'My Team' },
             { id: 'chat',    icon: '💬',  label: 'Chat'    },
           ].map(t => {
             const isActive = mobilePanel === t.id;
