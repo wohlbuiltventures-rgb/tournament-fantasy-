@@ -1145,10 +1145,10 @@ export default function DraftRoom() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-[1600px] mx-auto flex flex-col overflow-hidden lg:block lg:h-auto lg:overflow-visible" style={{ height: 'calc(100vh - 64px)' }}>
+    <div className="max-w-[1600px] mx-auto lg:block lg:h-auto">
 
       {/* ── Fixed top section (shrinks to natural height; flex child) ── */}
-      <div className="shrink-0 px-3 pt-2 lg:px-3 lg:pt-3">
+      <div className="px-3 pt-2 lg:px-3 lg:pt-3">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -1187,7 +1187,7 @@ export default function DraftRoom() {
 
       {/* ── On the clock bar ── */}
       {!draftComplete && league.status === 'drafting' && (
-        <div className={`rounded-xl border-2 p-3 mb-3 transition-colors duration-300 ${
+        <div className={`rounded-xl border-2 p-3 mb-3 transition-colors duration-300 overflow-y-auto max-h-36 lg:max-h-none ${
           isMyTurn ? 'border-brand-500 bg-brand-500/5' : 'border-gray-800 bg-gray-900/40'
         }`}>
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1347,13 +1347,13 @@ export default function DraftRoom() {
       </div>{/* end shrink-0 top section */}
 
       {/* ── Content area: flex-1 on mobile, block on desktop ── */}
-      <div className="flex-1 min-h-0 overflow-hidden lg:overflow-visible lg:px-3 lg:mt-3">
+      <div className="px-3 mt-3 pb-20 lg:pb-0 lg:overflow-visible lg:px-3 lg:mt-3">
 
       {/* ── Three-panel layout (desktop) + mobile single-panel view ── */}
-      <div className="h-full lg:h-auto lg:grid lg:grid-cols-12 lg:gap-3">
+      <div className="lg:h-auto lg:grid lg:grid-cols-12 lg:gap-3">
 
         {/* ── LEFT: Draft Board Grid ── */}
-        <div className={`lg:col-span-5 flex flex-col min-h-0 ${mobilePanel !== 'board' ? 'hidden lg:flex' : 'h-full'}`}>
+        <div className={`lg:col-span-5 flex flex-col min-h-0 ${mobilePanel !== 'board' ? 'hidden lg:flex' : 'min-h-[65vh]'}`}>
           <div className="card overflow-hidden flex flex-col flex-1 min-h-0">
             <div className="px-3 py-2.5 border-b border-gray-800 flex items-center justify-between shrink-0">
               <h2 className="font-bold text-white text-sm">Draft Board</h2>
@@ -1371,7 +1371,7 @@ export default function DraftRoom() {
         </div>
 
         {/* ── CENTER: Player Pool ── */}
-        <div className={`lg:col-span-4 flex flex-col min-h-0 ${mobilePanel !== 'players' && mobilePanel !== 'queue' ? 'hidden lg:flex' : 'h-full'}`}>
+        <div className={`lg:col-span-4 flex flex-col min-h-0 ${mobilePanel !== 'players' && mobilePanel !== 'queue' ? 'hidden lg:flex' : 'min-h-[65vh]'}`}>
           <div className="card overflow-hidden flex flex-col h-full lg:max-h-[calc(100vh-240px)]">
             {/* Player pool tabs — desktop only (mobile uses bottom nav) */}
             <div className="px-3 pt-3 pb-2 border-b border-gray-800 shrink-0">
@@ -1660,7 +1660,7 @@ export default function DraftRoom() {
         </div>
 
         {/* ── RIGHT: Ticker + Manager Cards + Chat ── */}
-        <div className={`lg:col-span-3 flex flex-col min-h-0 lg:h-auto lg:space-y-3 ${mobilePanel !== 'chat' ? 'hidden lg:flex' : 'h-full'}`}>
+        <div className={`lg:col-span-3 flex flex-col min-h-0 lg:h-auto lg:space-y-3 ${mobilePanel !== 'chat' ? 'hidden lg:flex' : 'min-h-[65vh]'}`}>
           {/* Live ticker — desktop only */}
           <div className="hidden lg:block card p-3 shrink-0">
             <h3 className="font-bold text-white text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -1720,7 +1720,7 @@ export default function DraftRoom() {
         </div>
 
         {/* ── Mobile: My Team full-screen panel (sibling to L/C/R columns) ── */}
-        <div className={`lg:hidden flex flex-col min-h-0 ${mobilePanel !== 'myteam' ? 'hidden' : 'h-full'}`}>
+        <div className={`lg:hidden flex flex-col min-h-0 ${mobilePanel !== 'myteam' ? 'hidden' : 'min-h-[65vh]'}`}>
           <div className="px-3 pt-3 pb-2 border-b border-gray-800 shrink-0 flex items-center justify-between">
             <span className="text-white font-bold text-sm">My Team</span>
             {(() => {
@@ -1743,8 +1743,8 @@ export default function DraftRoom() {
       </div>{/* end content area */}
 
       {/* ── Mobile bottom tab bar ── */}
-      <div className="shrink-0 lg:hidden bg-gray-900 border-t border-gray-800" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="flex items-stretch">
+      <div className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-gray-900 border-t border-gray-800" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="flex items-stretch overflow-x-auto">
           {[
             { id: 'players', icon: '🏀', label: 'Players' },
             { id: 'board',   icon: '🗂',  label: 'Board'   },
@@ -1758,7 +1758,7 @@ export default function DraftRoom() {
                 key={t.id}
                 type="button"
                 onClick={() => setMobilePanel(t.id)}
-                className={`relative flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors touch-manipulation ${
+                className={`relative flex-none min-w-[72px] flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors touch-manipulation ${
                   isActive ? 'text-brand-400' : 'text-gray-500'
                 }`}
               >
