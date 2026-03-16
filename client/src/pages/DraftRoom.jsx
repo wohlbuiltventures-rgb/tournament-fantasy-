@@ -645,11 +645,9 @@ const SORT_OPTIONS = [
 ];
 
 export default function DraftRoom() {
-  console.log('[DraftRoom] component function called');
   useDocTitle('🏀 Draft Live | TourneyRun');
   const { id: leagueId } = useParams();
   const { user, token } = useAuth();
-  console.log('[DraftRoom] leagueId:', leagueId, 'user:', user?.id, 'token:', !!token);
 
   const [state, setState] = useState(null);
   const [availablePlayers, setAvailablePlayers] = useState([]);
@@ -825,7 +823,6 @@ export default function DraftRoom() {
     socket.emit('join_draft_room', { leagueId, token });
 
     socket.on('draft_state', (data) => {
-      console.log('[DraftRoom] socket draft_state received:', data ? `status=${data.league?.status}` : 'null');
       if (!data || !data.league) { setLoading(false); return; }
       setState(data);
       setLoading(false);
@@ -881,13 +878,12 @@ export default function DraftRoom() {
     Promise.all([api.get(`/draft/${leagueId}/state`), fetchAvailablePlayers()])
       .then(([draftRes]) => {
         const data = draftRes.data;
-        console.log('[DraftRoom] HTTP /draft/state response:', data ? `status=${data.league?.status} members=${data.members?.length} picks=${data.picks?.length}` : 'null/invalid');
         if (!data || !data.league) { setLoading(false); return; }
         setState(data);
         setLoading(false);
         if (data.league?.status === 'drafting' && !data.draftComplete) resetTimer(data.league.pick_time_limit);
       })
-      .catch((err) => { console.error('[DraftRoom] HTTP /draft/state failed:', err?.response?.status, err?.message); setLoading(false); });
+      .catch(() => setLoading(false));
 
     return () => {
       socket.off('draft_state');
@@ -992,7 +988,6 @@ export default function DraftRoom() {
   }, [availablePlayers]);
 
   // ── Loading / error states ────────────────────────────────────────────────
-  console.log('[DraftRoom] render — loading:', loading, 'state:', state ? `league=${state.league?.status} picks=${state.picks?.length}` : 'null', 'error:', error);
 
   if (loading) {
     return (
