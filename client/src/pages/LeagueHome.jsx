@@ -537,17 +537,22 @@ export default function LeagueHome() {
                       {copied ? '✓ Copied!' : '📋 Copy Code'}
                     </button>
                     <button onClick={() => {
-                        const text = `Join my TourneyRun league "${league.name}"!\nInvite code: ${league.invite_code}\n${window.location.origin}/join`;
-                        navigator.clipboard.writeText(text);
-                        setLinkCopied(true);
-                        setTimeout(() => setLinkCopied(false), 2000);
+                        const shareText = `Join my TourneyRun league "${league.name}"! Invite code: ${league.invite_code}`;
+                        const shareUrl  = `${window.location.origin}/join`;
+                        if (navigator.share) {
+                          navigator.share({ title: 'Join my TourneyRun league!', text: shareText, url: shareUrl }).catch(() => {});
+                        } else {
+                          navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+                          setLinkCopied(true);
+                          setTimeout(() => setLinkCopied(false), 2000);
+                        }
                       }}
                       className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm border transition-all duration-200 ${
                         linkCopied
                           ? 'bg-green-500/20 text-green-400 border-green-500/30'
                           : 'bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600 hover:scale-105'
                       }`}>
-                      {linkCopied ? '✓ Copied!' : '🔗 Share Link'}
+                      {linkCopied ? '✓ Link copied!' : '📲 Text Your Friends!'}
                     </button>
                   </div>
                 </div>
