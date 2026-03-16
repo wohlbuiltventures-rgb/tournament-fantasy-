@@ -1,8 +1,32 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Component } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import BossMode from './components/BossMode';
+
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('[ErrorBoundary] Draft room crash:', error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 32, color: '#fff', background: '#111', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          <div style={{ fontSize: 40 }}>💥</div>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Draft room crashed</h2>
+          <pre style={{ background: '#1e1e1e', color: '#f87171', padding: '12px 16px', borderRadius: 8, fontSize: 12, maxWidth: 600, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {this.state.error?.message || String(this.state.error)}
+          </pre>
+          <button onClick={() => window.history.back()} style={{ padding: '8px 20px', borderRadius: 8, background: '#378ADD', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>
+            ← Go Back
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
@@ -41,7 +65,7 @@ export default function App() {
             <Route path="/create-league" element={<ProtectedRoute><CreateLeague /></ProtectedRoute>} />
             <Route path="/join-league" element={<ProtectedRoute><JoinLeague /></ProtectedRoute>} />
             <Route path="/league/:id" element={<ProtectedRoute><LeagueHome /></ProtectedRoute>} />
-            <Route path="/league/:id/draft" element={<ProtectedRoute><DraftRoom /></ProtectedRoute>} />
+            <Route path="/league/:id/draft" element={<ProtectedRoute><ErrorBoundary><DraftRoom /></ErrorBoundary></ProtectedRoute>} />
             <Route path="/league/:id/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
             <Route path="/league/:id/admin" element={<ProtectedRoute><AdminScores /></ProtectedRoute>} />
             {/* Legacy commissioner payment success — kept so old bookmarks don't 404 */}
