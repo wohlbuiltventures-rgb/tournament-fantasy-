@@ -266,6 +266,8 @@ try {
 } catch (e) {}
 // League autodraft mode: 'best_available' (default) or 'smart_draft'
 try { db.exec("ALTER TABLE leagues ADD COLUMN autodraft_mode TEXT DEFAULT 'best_available'"); } catch (e) {}
+// Smart Draft on/off toggle (purchased users can pause without losing their upgrade)
+try { db.exec("ALTER TABLE smart_draft_upgrades ADD COLUMN enabled INTEGER DEFAULT 1"); } catch (e) {}
 
 // Standalone Smart Draft credit purchases (before the user is tied to a league)
 try {

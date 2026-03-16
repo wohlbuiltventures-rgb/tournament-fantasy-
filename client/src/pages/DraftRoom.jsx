@@ -327,7 +327,7 @@ function ManagerRosterCard({ member, picks, currentPicker, userId, hasSmartDraft
           <TeamAvatar avatarUrl={member.avatar_url} teamName={member.team_name} size="xs" />
           <div className="min-w-0 flex-1">
           <div className={`font-bold truncate text-[11px] ${isMe ? 'text-brand-400' : 'text-white'}`}>
-            {member.team_name}{hasSmartDraft ? ' ⚡' : ''}
+            {member.team_name}{hasSmartDraft ? ' 🤖' : ''}
           </div>
           <div className="text-gray-600 truncate" style={{ fontSize: 9 }}>{member.username}</div>
           </div>
@@ -667,8 +667,10 @@ export default function DraftRoom() {
 
   // Smart Draft
   const [mySmartDraft, setMySmartDraft]           = useState(false);
+  const [smartDraftEnabled, setSmartDraftEnabled] = useState(true);
   const [smartDraftUsers, setSmartDraftUsers]     = useState(new Set());
   const [sdCheckoutLoading, setSdCheckoutLoading] = useState(false);
+  const [sdToggleLoading, setSdToggleLoading]     = useState(false);
   const [sdUpsellOpen, setSdUpsellOpen]           = useState(false); // "How it works" expanded
   const mySmartDraftRef = useRef(false);
 
@@ -852,6 +854,11 @@ export default function DraftRoom() {
           league: { ...prev.league, current_pick: data.currentPick },
         };
       });
+      // If Smart Draft picked for the current user from the server, show notification
+      if (data.pick?.user_id === user?.id && data.pick?.smart_drafted) {
+        setAutoDraftToast({ playerName: data.pick.player_name, fromQueue: false, fromSmart: true });
+        setTimeout(() => setAutoDraftToast(null), 5000);
+      }
       // Confetti — bigger burst for your own pick
       launchConfetti(data.pick?.user_id === user?.id ? 1.4 : 0.5);
       fetchAvailablePlayers();
@@ -932,11 +939,33 @@ export default function DraftRoom() {
     api.get(`/payments/smart-draft/${leagueId}/status`)
       .then(res => {
         setMySmartDraft(res.data.purchased);
-        mySmartDraftRef.current = res.data.purchased;
+        setSmartDraftEnabled(res.data.enabled ?? res.data.purchased);
+        mySmartDraftRef.current = res.data.enabled ?? res.data.purchased;
         setSmartDraftUsers(new Set(res.data.purchasedUsers));
       })
       .catch(() => {});
   }, [leagueId]);
+
+  const handleSmartDraftToggle = async () => {
+    setSdToggleLoading(true);
+    try {
+      const res = await api.patch(`/payments/smart-draft/${leagueId}/toggle`);
+      const nowEnabled = res.data.enabled;
+      setSmartDraftEnabled(nowEnabled);
+      mySmartDraftRef.current = nowEnabled;
+      // Update the set of smart draft users
+      setSmartDraftUsers(prev => {
+        const next = new Set(prev);
+        if (nowEnabled) next.add(user?.id);
+        else next.delete(user?.id);
+        return next;
+      });
+    } catch (err) {
+      console.error('Smart Draft toggle failed', err);
+    } finally {
+      setSdToggleLoading(false);
+    }
+  };
 
   // ── Mobile body scroll lock (native app feel) ──────────────────────────────
   useEffect(() => {
@@ -1082,15 +1111,17 @@ export default function DraftRoom() {
 
       {/* ── Auto-draft toast ── */}
       {autoDraftToast && (
-        <div className="bg-yellow-900/40 border border-yellow-700/60 text-yellow-300 rounded-lg p-2.5 text-sm mb-3 flex items-center gap-2">
-          <span>⚡</span>
+        <div className={`border rounded-lg p-2.5 text-sm mb-3 flex items-center gap-2 ${
+          autoDraftToast.fromSmart
+            ? 'bg-green-900/40 border-green-700/60 text-green-300'
+            : 'bg-yellow-900/40 border-yellow-700/60 text-yellow-300'
+        }`}>
+          <span>{autoDraftToast.fromSmart ? '🤖' : '⚡'}</span>
           <span>
-            Auto-drafted <span className="font-semibold">{autoDraftToast.playerName}</span>
-            {autoDraftToast.fromQueue
-              ? ' (from your queue)'
-              : autoDraftToast.fromSmart
-              ? ' — Smart Draft ⚡'
-              : ' (highest available ETP)'}
+            {autoDraftToast.fromSmart
+              ? <>🤖 Smart Draft picked <span className="font-semibold">{autoDraftToast.playerName}</span> for you!</>
+              : <>Auto-drafted <span className="font-semibold">{autoDraftToast.playerName}</span>{autoDraftToast.fromQueue ? ' (from your queue)' : ' (highest available ETP)'}</>
+            }
           </span>
         </div>
       )}
@@ -1144,7 +1175,7 @@ export default function DraftRoom() {
                     : 'bg-gray-800/60 text-gray-500'
                 }`}>
                   <TeamAvatar avatarUrl={m.avatar_url} teamName={m.team_name} size="xs" />
-                  <div className="font-bold">{m.draft_order}. {m.team_name}{smartDraftUsers.has(m.user_id) ? ' ⚡' : ''}</div>
+                  <div className="font-bold">{m.draft_order}. {m.team_name}{smartDraftUsers.has(m.user_id) ? ' 🤖' : ''}</div>
                 </div>
               ))}
             </div>
@@ -1169,15 +1200,57 @@ export default function DraftRoom() {
           <div className="text-4xl mb-2">⏳</div>
           <h2 className="text-xl font-bold text-white mb-1">Draft Not Started</h2>
           <p className="text-gray-400">Waiting for the commissioner to start the draft.</p>
+          {mySmartDraft && smartDraftEnabled && (
+            <div className="mt-4 inline-flex items-center gap-2 bg-green-500/15 border border-green-500/30 text-green-400 px-4 py-2 rounded-full text-sm font-semibold">
+              <span>🤖</span>
+              Smart Draft Active — we'll pick for you if you miss your turn
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── Smart Draft upsell banner ── */}
+      {/* ── Smart Draft status banner (purchased) ── */}
+      {mySmartDraft && !draftComplete && league.status === 'drafting' && (
+        <div className={`rounded-xl border p-3 mb-3 transition-colors ${
+          smartDraftEnabled
+            ? 'border-green-500/30 bg-green-500/5'
+            : 'border-gray-700/40 bg-gray-800/30'
+        }`}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-lg shrink-0">🤖</span>
+              <div className="min-w-0">
+                <div className={`font-semibold text-sm ${smartDraftEnabled ? 'text-green-400' : 'text-gray-400'}`}>
+                  Smart Draft {smartDraftEnabled ? 'ON' : 'OFF'}
+                </div>
+                <div className="text-gray-500 text-xs">
+                  {smartDraftEnabled
+                    ? "We'll pick for you if your timer runs out"
+                    : 'Smart Draft is paused — you must pick manually'}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleSmartDraftToggle}
+              disabled={sdToggleLoading}
+              className={`shrink-0 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-60 ${
+                smartDraftEnabled
+                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  : 'bg-green-600 hover:bg-green-500 text-white'
+              }`}
+            >
+              {sdToggleLoading ? '…' : smartDraftEnabled ? 'Turn OFF' : 'Turn ON'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Smart Draft upsell banner (not purchased) ── */}
       {!mySmartDraft && !draftComplete && league.status === 'drafting' && (
         <div className="rounded-xl border border-brand-500/30 bg-brand-500/5 p-3 mb-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-lg shrink-0">⚡</span>
+              <span className="text-lg shrink-0">🤖</span>
               <div className="min-w-0">
                 <div className="text-white font-semibold text-sm">Running late? Smart Draft has your back 🏀</div>
                 <div className="text-gray-400 text-xs">

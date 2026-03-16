@@ -247,19 +247,40 @@ router.get('/smart-draft/:leagueId/status', authMiddleware, (req, res) => {
   try {
     const { leagueId } = req.params;
     const myRecord = db.prepare(
-      "SELECT status FROM smart_draft_upgrades WHERE user_id = ? AND league_id = ?"
+      "SELECT status, enabled FROM smart_draft_upgrades WHERE user_id = ? AND league_id = ?"
     ).get(req.user.id, leagueId);
 
-    const allActive = db.prepare(
-      "SELECT user_id FROM smart_draft_upgrades WHERE league_id = ? AND status = 'active'"
+    // All users who purchased AND have it enabled (shown with 🤖 icon)
+    const activeUsers = db.prepare(
+      "SELECT user_id FROM smart_draft_upgrades WHERE league_id = ? AND status = 'active' AND enabled != 0"
     ).all(leagueId).map(r => r.user_id);
 
-    res.json({
-      purchased:      myRecord?.status === 'active',
-      purchasedUsers: allActive,
-    });
+    const purchased = myRecord?.status === 'active';
+    const enabled   = purchased && myRecord?.enabled !== 0;
+
+    res.json({ purchased, enabled, purchasedUsers: activeUsers });
   } catch (err) {
     console.error('smart-draft status error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/payments/smart-draft/:leagueId/toggle
+// Toggles Smart Draft on/off for the requesting user (must have purchased).
+// ---------------------------------------------------------------------------
+router.patch('/smart-draft/:leagueId/toggle', authMiddleware, (req, res) => {
+  try {
+    const { leagueId } = req.params;
+    const record = db.prepare(
+      "SELECT id, enabled FROM smart_draft_upgrades WHERE user_id = ? AND league_id = ? AND status = 'active'"
+    ).get(req.user.id, leagueId);
+    if (!record) return res.status(404).json({ error: 'Smart Draft not purchased' });
+    const newEnabled = record.enabled === 0 ? 1 : 0;
+    db.prepare("UPDATE smart_draft_upgrades SET enabled = ? WHERE id = ?").run(newEnabled, record.id);
+    res.json({ enabled: newEnabled === 1 });
+  } catch (err) {
+    console.error('smart-draft toggle error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

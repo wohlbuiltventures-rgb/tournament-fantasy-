@@ -118,7 +118,7 @@ function _doAutoPick(leagueId, expectedPick, io) {
     } else {
       // ── Smart Draft check ──────────────────────────────────────────────────
       const hasSmart = db.prepare(
-        "SELECT id FROM smart_draft_upgrades WHERE user_id = ? AND league_id = ? AND status = 'active'"
+        "SELECT id FROM smart_draft_upgrades WHERE user_id = ? AND league_id = ? AND status = 'active' AND enabled != 0"
       ).get(currentPicker.user_id, leagueId);
 
       const useSmartDraft = !!(hasSmart || league.autodraft_mode === 'smart_draft');

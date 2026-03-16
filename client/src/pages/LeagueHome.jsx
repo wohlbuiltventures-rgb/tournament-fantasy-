@@ -183,6 +183,7 @@ export default function LeagueHome() {
   const [randomizing, setRandomizing]         = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError]         = useState('');
+  const [smartDraftUsers, setSmartDraftUsers] = useState(new Set());
   const [instrCopied, setInstrCopied]         = useState(false);
 
   // Edit settings modal
@@ -217,6 +218,9 @@ export default function LeagueHome() {
       const [leagueRes, payRes] = await Promise.all([
         api.get(`/leagues/${id}`),
         api.get(`/payments/league/${id}/status`).catch(() => null),
+        api.get(`/payments/smart-draft/${id}/status`).then(r => {
+          setSmartDraftUsers(new Set(r.data.purchasedUsers));
+        }).catch(() => {}),
       ]);
 
       setLeague(leagueRes.data.league);
@@ -814,6 +818,11 @@ export default function LeagueHome() {
                     {member.user_id === league.commissioner_id && (
                       <span className="text-[9px] font-bold text-brand-400 bg-brand-500/15 border border-brand-500/25 px-1.5 py-0.5 rounded-full">
                         COMM
+                      </span>
+                    )}
+                    {smartDraftUsers.has(member.user_id) && (
+                      <span className="text-[9px] font-bold text-green-400 bg-green-500/15 border border-green-500/25 px-1.5 py-0.5 rounded-full">
+                        🤖 Smart Draft
                       </span>
                     )}
                     {paymentMap[member.user_id] && (
