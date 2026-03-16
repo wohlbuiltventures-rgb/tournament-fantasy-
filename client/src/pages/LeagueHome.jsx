@@ -13,6 +13,17 @@ function fmt(n) {
   return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
 }
 
+const ETP_GAMES = {
+  1: 3.8, 2: 3.0, 3: 2.5, 4: 2.2, 5: 1.8, 6: 1.7, 7: 1.6,
+  8: 1.3, 9: 1.2, 10: 1.1, 11: 1.0, 12: 1.0, 13: 1.0, 14: 1.0, 15: 1.0, 16: 1.0,
+};
+function calcETP(ppg, seed, isFirstFour = false) {
+  if (!ppg || !seed) return null;
+  const base = ETP_GAMES[parseInt(seed)] ?? 1.0;
+  const games = isFirstFour ? base + 0.5 : base;
+  return Math.round(ppg * games * 10) / 10;
+}
+
 // ── Status badge ──────────────────────────────────────────────────────────────
 const STATUS = {
   pending_payment: { label: 'Awaiting Payment', dot: 'bg-yellow-400', badge: 'bg-yellow-500/15 border-yellow-500/30 text-yellow-400' },
@@ -165,6 +176,7 @@ export default function LeagueHome() {
   const [members, setMembers]     = useState([]);
   const [settings, setSettings]   = useState(null);
   const [myPicks, setMyPicks]     = useState([]);
+  const [myStandingsPlayers, setMyStandingsPlayers] = useState([]);
   const [tab, setTab]             = useState('overview');
   const [loading, setLoading]     = useState(true);
   const [copied, setCopied]       = useState(false);
@@ -232,6 +244,13 @@ export default function LeagueHome() {
       if (['active', 'drafting', 'completed'].includes(leagueRes.data.league.status)) {
         const draftRes = await api.get(`/draft/${id}/state`);
         setMyPicks(draftRes.data.picks.filter(p => p.user_id === user.id));
+      }
+      if (['active', 'completed'].includes(leagueRes.data.league.status)) {
+        const standingsRes = await api.get(`/scores/league/${id}/standings`).catch(() => null);
+        if (standingsRes) {
+          const myTeam = standingsRes.data.standings?.find(t => t.user_id === user.id);
+          setMyStandingsPlayers(myTeam?.players || []);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -900,43 +919,136 @@ export default function LeagueHome() {
       {/* ════════════════════════════════════════════════════════════════════ */}
       {/* MY ROSTER TAB                                                        */}
       {/* ════════════════════════════════════════════════════════════════════ */}
-      {tab === 'roster' && (
-        <div>
-          {myPicks.length === 0 ? (
-            <div className="card p-12 text-center text-gray-400">
-              <div className="text-4xl mb-3">📋</div>
-              <p>No players drafted yet.</p>
-              {league.status === 'drafting' && (
-                <Link to={`/league/${id}/draft`} className="btn-primary mt-4 inline-block px-6">
-                  Go to Draft Room
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {myPicks.map(pick => {
-                const isElim = !!pick.is_eliminated;
-                return (
-                  <div key={pick.id} className="card px-4 py-3 flex items-center gap-4"
-                    style={{ opacity: isElim ? 0.45 : 1 }}>
-                    <span className="text-gray-500 text-sm w-8">R{pick.round}</span>
-                    <div className="flex-1">
-                      <div className="font-semibold"
-                        style={{ color: isElim ? '#6b7280' : '#fff', textDecoration: isElim ? 'line-through' : 'none' }}>
-                        {pick.player_name}
-                      </div>
-                      <div className="text-gray-400 text-sm">{pick.team} · {pick.position}</div>
+      {tab === 'roster' && (() => {
+        const scoreMap = Object.fromEntries(myStandingsPlayers.map(p => [p.player_id, p]));
+        const hasScores = myStandingsPlayers.length > 0;
+        const totalPts = myPicks.reduce((sum, p) => sum + (scoreMap[p.player_id]?.fantasy_points ?? 0), 0);
+        const totalETP = myPicks.reduce((sum, p) => {
+          const v = calcETP(p.season_ppg, p.seed, !!p.is_first_four);
+          return sum + (v ?? 0);
+        }, 0);
+        const aliveCount = myPicks.filter(p => !p.is_eliminated).length;
+
+        return (
+          <div>
+            {myPicks.length === 0 ? (
+              <div className="card p-12 text-center text-gray-400">
+                <div className="text-4xl mb-3">📋</div>
+                <p>No players drafted yet.</p>
+                {league.status === 'drafting' && (
+                  <Link to={`/league/${id}/draft`} className="btn-primary mt-4 inline-block px-6">
+                    Go to Draft Room
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Summary header */}
+                <div className="card px-4 py-3">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-bold text-sm">{myPicks.length} players</span>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
+                        style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }}>
+                        {aliveCount} alive
+                      </span>
                     </div>
-                    <div className="text-right text-sm text-gray-400">
-                      {parseFloat(pick.season_ppg || 0).toFixed(1)} PPG
+                    <div className="flex items-center gap-4">
+                      {hasScores && (
+                        <div className="text-right">
+                          <div className="text-[10px] text-gray-500 uppercase tracking-wider">Points</div>
+                          <div className="font-black text-brand-400" style={{ fontSize: 18 }}>{totalPts.toFixed(1)}</div>
+                        </div>
+                      )}
+                      <div className="text-right">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-wider">Proj. ETP</div>
+                        <div className="font-black text-gray-300" style={{ fontSize: 18 }}>{totalETP.toFixed(1)}</div>
+                      </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                </div>
+
+                {/* Player rows */}
+                {myPicks.map(pick => {
+                  const scored = scoreMap[pick.player_id];
+                  const isElim = !!pick.is_eliminated;
+                  const isLive = !!scored?.is_live;
+                  const fantasyPts = scored?.fantasy_points ?? null;
+                  const etp = calcETP(pick.season_ppg, pick.seed, !!pick.is_first_four);
+
+                  return (
+                    <div key={pick.id} className="card px-4 py-3"
+                      style={{ opacity: isElim ? 0.45 : 1 }}>
+                      <div className="flex items-center gap-3">
+
+                        {/* Round badge */}
+                        <div className="text-gray-600 text-xs font-bold w-6 shrink-0 text-center">
+                          R{pick.round}
+                        </div>
+
+                        {/* Seed badge */}
+                        {pick.seed && (
+                          <div className="w-7 h-7 rounded-lg bg-gray-800 flex items-center justify-center shrink-0">
+                            <span className="text-gray-300 text-xs font-bold">#{pick.seed}</span>
+                          </div>
+                        )}
+
+                        {/* Name + school */}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm truncate"
+                            style={{ color: isElim ? '#6b7280' : '#fff', textDecoration: isElim ? 'line-through' : 'none' }}>
+                            {pick.player_name}
+                          </div>
+                          <div className="text-gray-500 text-xs truncate">
+                            {pick.team}{pick.position ? ` · ${pick.position}` : ''}
+                            {pick.region ? ` · ${pick.region}` : ''}
+                          </div>
+                        </div>
+
+                        {/* PPG */}
+                        <div className="text-right shrink-0 min-w-[36px]">
+                          <div className="text-gray-300 text-xs font-semibold">{parseFloat(pick.season_ppg || 0).toFixed(1)}</div>
+                          <div className="text-gray-600 text-[10px]">PPG</div>
+                        </div>
+
+                        {/* Points scored */}
+                        {hasScores && (
+                          <div className="text-right shrink-0 min-w-[36px]">
+                            <div className="font-bold text-xs" style={{ color: fantasyPts > 0 ? '#60a5fa' : '#6b7280' }}>
+                              {fantasyPts != null ? fantasyPts.toFixed(1) : '—'}
+                            </div>
+                            <div className="text-gray-600 text-[10px]">pts</div>
+                          </div>
+                        )}
+
+                        {/* Status pill */}
+                        <div className="shrink-0">
+                          {isElim ? (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                              style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
+                              ELIM
+                            </span>
+                          ) : isLive ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse"
+                              style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }}>
+                              ● LIVE
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#34d399' }}>
+                              ✓ Alive
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ════════════════════════════════════════════════════════════════════ */}
       {/* STANDINGS TAB                                                        */}
