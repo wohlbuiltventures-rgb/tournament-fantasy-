@@ -1035,17 +1035,6 @@ export default function DraftRoom() {
     }
   };
 
-  // ── Mobile body scroll lock (native app feel) ──────────────────────────────
-  useEffect(() => {
-    if (!window.matchMedia('(max-width: 1023px)').matches) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.body.style.overscrollBehavior = 'none';
-    return () => {
-      document.body.style.overflow = prev;
-      document.body.style.overscrollBehavior = '';
-    };
-  }, []);
 
   const handleSmartDraftCheckout = async () => {
     setSdCheckoutLoading(true);
