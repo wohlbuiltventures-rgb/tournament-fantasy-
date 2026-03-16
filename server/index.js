@@ -292,6 +292,18 @@ io.on('connection', (socket) => {
     } catch (err) {}
   });
 
+  // Join leaderboard room for live standings updates
+  socket.on('join_leaderboard', ({ leagueId }) => {
+    if (!leagueId) return;
+    socket.join(`leaderboard_${leagueId}`);
+    console.log(`Socket ${socket.id} joined leaderboard_${leagueId}`);
+  });
+
+  socket.on('leave_leaderboard', ({ leagueId }) => {
+    if (!leagueId) return;
+    socket.leave(`leaderboard_${leagueId}`);
+  });
+
   socket.on('disconnect', () => {
     console.log('Socket disconnected:', socket.id);
   });
@@ -345,10 +357,9 @@ setInterval(() => {
   }
 }, 30000);
 
-// ESPN live scoring poller — updates player stats every 5 minutes during tournament
-const { pollESPN } = require('./espnPoller');
-setInterval(pollESPN, 5 * 60 * 1000);
-setTimeout(pollESPN, 15 * 1000); // initial poll 15s after startup
+// ESPN live scoring poller — smart polling (2 min live window, 30 min otherwise)
+const { startSmartPoller } = require('./espnPoller');
+startSmartPoller(io);
 
 // Injury news poller — scans NCAA basketball news feeds every 2 hours
 const { pollInjuries } = require('./injuryPoller');

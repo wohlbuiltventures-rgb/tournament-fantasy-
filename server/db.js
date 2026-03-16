@@ -247,6 +247,9 @@ try {
   )`);
 } catch (e) {}
 
+// Live game tracking for socket push
+try { db.exec('ALTER TABLE games ADD COLUMN is_live INTEGER DEFAULT 0'); } catch (e) {}
+
 // Superadmin role
 try { db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"); } catch (e) {}
 // Grant superadmin to platform owner — idempotent

@@ -1,14 +1,26 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import api from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import TeamAvatar from '../components/TeamAvatar';
 import { useDocTitle } from '../hooks/useDocTitle';
 
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+
 function fmt(n) {
   if (!n && n !== 0) return '$0';
   return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     .replace(/\.00$/, '');
+}
+
+function secondsAgo(date) {
+  if (!date) return null;
+  const s = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (s < 5) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  return `${m}m ago`;
 }
 
 // ── Tooltip ────────────────────────────────────────────────────────────────────
@@ -61,7 +73,6 @@ function SgBonusCard({ sgLeader, bonus }) {
         </div>
       ) : (
         <div className="space-y-2">
-          {/* Player line */}
           <div className="flex items-start gap-3">
             <span className="text-2xl mt-0.5">👑</span>
             <div>
@@ -73,8 +84,6 @@ function SgBonusCard({ sgLeader, bonus }) {
                   <span className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded-full">{sgLeader.round_name}</span>
                 )}
               </div>
-
-              {/* Owner line */}
               <div className="mt-1.5">
                 {sgLeader.owner_user_id ? (
                   <div className="flex items-center gap-2 flex-wrap">
@@ -104,7 +113,7 @@ function SgBonusCard({ sgLeader, bonus }) {
   );
 }
 
-// ── Venmo icon SVG (simple $ badge) ───────────────────────────────────────────
+// ── Venmo icon SVG ─────────────────────────────────────────────────────────────
 
 function VenmoIcon() {
   return (
@@ -124,36 +133,77 @@ export default function Leaderboard() {
   const [league, setLeague] = useState(null);
   const [members, setMembers] = useState([]);
   const [sgLeader, setSgLeader] = useState(null);
-  useDocTitle(league ? `${league.name} Standings | TourneyRun` : 'Standings | TourneyRun');
+  const [isLive, setIsLive] = useState(false);
+  const [livePlayerIds, setLivePlayerIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [secondsSince, setSecondsSince] = useState(null);
+  useDocTitle(league ? `${league.name} Standings | TourneyRun` : 'Standings | TourneyRun');
 
-  const fetchData = async () => {
+  // ── "X seconds ago" ticker ────────────────────────────────────────────────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsSince(lastRefresh ? secondsAgo(lastRefresh) : null);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [lastRefresh]);
+
+  // ── REST fetch (initial + fallback polling) ───────────────────────────────
+  const applyUpdate = useCallback((data) => {
+    setStandings(data.standings || []);
+    setSettings(data.settings || null);
+    setSgLeader(data.sgLeader || null);
+    setIsLive(!!data.isLive);
+    setLivePlayerIds(data.livePlayerIds || []);
+    setLastRefresh(new Date());
+    setSecondsSince('just now');
+  }, []);
+
+  const fetchData = useCallback(async () => {
     try {
       const [standingsRes, leagueRes] = await Promise.all([
         api.get(`/scores/league/${leagueId}/standings`),
         api.get(`/leagues/${leagueId}`),
       ]);
-      setStandings(standingsRes.data.standings);
-      setSettings(standingsRes.data.settings);
-      setSgLeader(standingsRes.data.sgLeader || null);
+      applyUpdate(standingsRes.data);
       setLeague(leagueRes.data.league);
       setMembers(leagueRes.data.members || []);
-      setLastRefresh(new Date());
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [leagueId, applyUpdate]);
 
+  // Initial load + fallback 60s polling (in case socket drops)
   useEffect(() => {
     fetchData();
-    // Auto-refresh every 60 seconds during active tournament
     const interval = setInterval(fetchData, 60_000);
     return () => clearInterval(interval);
-  }, [leagueId]);
+  }, [fetchData]);
+
+  // ── Socket.io real-time updates ───────────────────────────────────────────
+  useEffect(() => {
+    const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+
+    socket.on('connect', () => {
+      socket.emit('join_leaderboard', { leagueId });
+    });
+
+    socket.on('standings_update', (data) => {
+      applyUpdate(data);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('[Leaderboard] Socket disconnected');
+    });
+
+    return () => {
+      socket.emit('leave_leaderboard', { leagueId });
+      socket.disconnect();
+    };
+  }, [leagueId, applyUpdate]);
 
   if (loading) {
     return (
@@ -173,26 +223,38 @@ export default function Leaderboard() {
   const pct2         = parseFloat(league?.payout_second) || 0;
   const pct3         = parseFloat(league?.payout_third)  || 0;
   const bonus        = parseFloat(league?.payout_bonus)  || 0;
-  // Subtract single-game bonus from main pool before applying payout %s
   const mainPool     = Math.max(0, totalPool - bonus);
   const pay1         = mainPool * (pct1 / 100);
   const pay2         = mainPool * (pct2 / 100);
   const pay3         = mainPool * (pct3 / 100);
   const hasPrizePool = buyIn > 0 && managerCount > 0;
 
+  const liveSet = new Set(livePlayerIds);
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-white">🏆 Leaderboard</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-white">🏆 Leaderboard</h1>
+            {isLive && (
+              <span className="inline-flex items-center gap-1.5 bg-green-900/30 border border-green-500/40 text-green-400 text-xs font-bold px-2.5 py-1 rounded-full">
+                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                LIVE
+              </span>
+            )}
+          </div>
           {league && <p className="text-gray-400 mt-1">{league.name}</p>}
         </div>
         <div className="flex items-center gap-3">
-          {lastRefresh && (
-            <button onClick={fetchData} className="text-xs text-gray-600 hover:text-gray-400 transition-colors" title="Refresh now">
-              ↻ {lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </button>
+          {secondsSince && (
+            <span className="text-xs text-gray-600">
+              Updated {secondsSince}
+            </span>
           )}
+          <button onClick={fetchData} className="text-xs text-gray-500 hover:text-gray-300 transition-colors" title="Refresh now">
+            ↻ Refresh
+          </button>
           <Link to={`/league/${leagueId}`} className="text-gray-400 hover:text-white text-sm transition-colors">
             ← Back to League
           </Link>
@@ -202,7 +264,6 @@ export default function Leaderboard() {
       {/* Prize pool banner */}
       {hasPrizePool && (
         <div className="card p-5 mb-6 bg-gradient-to-br from-yellow-500/8 to-transparent border-yellow-500/20">
-          {/* Header row */}
           <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
             <div>
               <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Prize Pool</div>
@@ -213,7 +274,6 @@ export default function Leaderboard() {
             </div>
           </div>
 
-          {/* Payout breakdown */}
           <div className="space-y-2 text-sm">
             {bonus > 0 && (
               <div className="text-gray-500 text-xs pb-1 border-b border-gray-800">
@@ -221,7 +281,6 @@ export default function Leaderboard() {
                 <span className="text-gray-600 ml-1">({fmt(totalPool)} − {fmt(bonus)} bonus)</span>
               </div>
             )}
-
             {pct1 > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">🥇 1st Place</span>
@@ -252,7 +311,6 @@ export default function Leaderboard() {
             )}
           </div>
 
-          {/* Payment instructions */}
           {league.payment_instructions && (
             <div className="mt-3 pt-3 border-t border-gray-800 flex items-center gap-2 text-sm">
               <span className="text-gray-500 text-xs">Pay via:</span>
@@ -319,7 +377,7 @@ export default function Leaderboard() {
                     </div>
                   </div>
 
-                  {/* Points + Players Remaining + expand arrow */}
+                  {/* Points + alive count + expand */}
                   <div className="flex items-center gap-3">
                     {team.players && team.players.length > 0 && (
                       <div className="text-right hidden sm:block">
@@ -340,7 +398,7 @@ export default function Leaderboard() {
                   </div>
                 </div>
 
-                {/* Player preview */}
+                {/* Player preview chips */}
                 {team.players && team.players.length > 0 && expanded !== team.user_id && (
                   <div className="mt-2 flex flex-wrap gap-1 ml-14">
                     {team.players.slice(0, 4).map(p => (
@@ -349,10 +407,13 @@ export default function Leaderboard() {
                         className={`text-xs px-2 py-0.5 rounded-full border ${
                           p.is_eliminated
                             ? 'bg-gray-800/50 text-gray-600 border-gray-700 line-through'
+                            : liveSet.has(p.player_id)
+                            ? 'bg-green-900/30 text-green-400 border-green-700/40'
                             : 'bg-gray-800 text-gray-400 border-gray-700'
                         }`}
                       >
                         {p.name}
+                        {liveSet.has(p.player_id) && <span className="ml-1">●</span>}
                       </span>
                     ))}
                     {team.players.length > 4 && (
@@ -376,32 +437,48 @@ export default function Leaderboard() {
                     <tbody className="divide-y divide-gray-800/50">
                       {team.players
                         .sort((a, b) => b.fantasy_points - a.fantasy_points)
-                        .map(player => (
-                          <tr
-                            key={player.player_id}
-                            className={player.is_eliminated ? 'opacity-40' : ''}
-                          >
-                            <td className="px-5 py-2.5">
-                              <div className="flex items-center gap-2">
-                                <span className={`font-medium ${player.is_eliminated ? 'line-through text-gray-500' : 'text-white'}`}>
-                                  {player.name}
-                                </span>
-                                {player.is_eliminated && (
-                                  <span className="text-xs bg-red-900/40 text-red-400 px-1.5 py-0.5 rounded border border-red-500/30 font-bold">
-                                    ELIM
+                        .map(player => {
+                          const playerIsLive = liveSet.has(player.player_id);
+                          const todayPts = player.today_stats?.points;
+                          const todayFinished = player.today_stats?.is_completed && !playerIsLive;
+
+                          return (
+                            <tr
+                              key={player.player_id}
+                              className={player.is_eliminated ? 'opacity-40' : ''}
+                            >
+                              <td className="px-5 py-2.5">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`font-medium ${player.is_eliminated ? 'line-through text-gray-500' : 'text-white'}`}>
+                                    {player.name}
                                   </span>
-                                )}
-                              </div>
-                              <div className="text-gray-500 text-xs">{player.position}</div>
-                            </td>
-                            <td className="px-3 py-2.5 text-gray-400 text-xs hidden sm:table-cell">{player.team}</td>
-                            <td className="px-5 py-2.5 text-right">
-                              <span className={`font-bold ${player.fantasy_points > 0 ? 'text-brand-400' : 'text-gray-500'}`}>
-                                {player.fantasy_points}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
+                                  {player.is_eliminated && (
+                                    <span className="text-xs bg-red-900/40 text-red-400 px-1.5 py-0.5 rounded border border-red-500/30 font-bold">
+                                      ELIM
+                                    </span>
+                                  )}
+                                  {playerIsLive && (
+                                    <span className="inline-flex items-center gap-1 text-xs bg-green-900/30 border border-green-500/40 text-green-400 px-1.5 py-0.5 rounded-full font-bold animate-pulse">
+                                      ● LIVE {todayPts != null ? `${todayPts} pts` : ''}
+                                    </span>
+                                  )}
+                                  {todayFinished && todayPts != null && (
+                                    <span className="text-xs bg-gray-800 border border-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full">
+                                      Final: {todayPts} pts
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-gray-500 text-xs">{player.position}</div>
+                              </td>
+                              <td className="px-3 py-2.5 text-gray-400 text-xs hidden sm:table-cell">{player.team}</td>
+                              <td className="px-5 py-2.5 text-right">
+                                <span className={`font-bold ${player.fantasy_points > 0 ? 'text-brand-400' : 'text-gray-500'}`}>
+                                  {player.fantasy_points}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-gray-700">

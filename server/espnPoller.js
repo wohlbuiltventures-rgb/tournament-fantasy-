@@ -1,10 +1,25 @@
 const https = require('https');
 const { v4: uuidv4 } = require('uuid');
 const db = require('./db');
+const { buildStandings } = require('./standingsBuilder');
 
 const SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard';
 const SUMMARY_BASE = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event=';
 
+// ── Live-window detection ────────────────────────────────────────────────────
+// Active game windows: Thu–Sun, 12:00 PM – 11:00 PM Eastern
+function isLiveWindow() {
+  const now = new Date();
+  // Get current ET time
+  const etString = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const et = new Date(etString);
+  const day = et.getDay(); // 0=Sun,1=Mon,...,4=Thu,5=Fri,6=Sat
+  const hour = et.getHours();
+  const isWeekend = day === 0 || day === 4 || day === 5 || day === 6; // Thu-Sun
+  return isWeekend && hour >= 12 && hour < 23;
+}
+
+// ── HTTP helper ─────────────────────────────────────────────────────────────
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
     https.get(url, { timeout: 10000 }, (res) => {
@@ -18,7 +33,7 @@ function fetchJson(url) {
   });
 }
 
-// Strip common suffixes so "Duke Blue Devils" matches "Duke"
+// ── Team name normalisation ─────────────────────────────────────────────────
 function normalizeTeam(name) {
   if (!name) return '';
   return name.toLowerCase()
@@ -32,7 +47,6 @@ function teamsMatch(ourTeam, espnName) {
   const a = normalizeTeam(ourTeam);
   const b = normalizeTeam(espnName);
   if (!a || !b) return false;
-  // One contains the other (handles "Duke" vs "Duke Blue Devils")
   return a.includes(b) || b.includes(a);
 }
 
@@ -49,41 +63,32 @@ function findMatchingGame(espnTeam1, espnTeam2) {
 function findMatchingPlayer(espnDisplayName) {
   if (!espnDisplayName) return null;
   const norm = espnDisplayName.toLowerCase().trim();
-
-  // Exact match
   let p = db.prepare('SELECT * FROM players WHERE LOWER(name) = ?').get(norm);
   if (p) return p;
-
-  // Last name only
   const parts = norm.split(' ');
   if (parts.length >= 2) {
     const last = parts[parts.length - 1];
     const rows = db.prepare("SELECT * FROM players WHERE LOWER(name) LIKE ?").all(`%${last}`);
     if (rows.length === 1) return rows[0];
   }
-
   return null;
 }
 
 async function processBoxScore(gameId, summary) {
   const playerGroups = summary.boxscore?.players || [];
-
   for (const group of playerGroups) {
     const statsBlock = group.statistics?.[0];
     if (!statsBlock) continue;
     const labels = statsBlock.names || statsBlock.labels || [];
     const ptsIdx = labels.indexOf('PTS');
     if (ptsIdx === -1) continue;
-
     const athletes = statsBlock.athletes || [];
     for (const entry of athletes) {
       const displayName = entry.athlete?.displayName || entry.athlete?.shortName;
       const pts = parseInt(entry.stats?.[ptsIdx]) || 0;
       if (!displayName) continue;
-
       const player = findMatchingPlayer(displayName);
       if (!player) continue;
-
       db.prepare(`
         INSERT INTO player_stats (id, game_id, player_id, points)
         VALUES (?, ?, ?, ?)
@@ -96,42 +101,41 @@ async function processBoxScore(gameId, summary) {
 function recordResult(game, winnerTeam, score1, score2) {
   if (game.is_completed) return;
   const loser = winnerTeam === game.team1 ? game.team2 : game.team1;
-
   db.prepare(`
-    UPDATE games SET is_completed = 1, winner_team = ?, team1_score = ?, team2_score = ? WHERE id = ?
+    UPDATE games SET is_completed = 1, is_live = 0, winner_team = ?, team1_score = ?, team2_score = ? WHERE id = ?
   `).run(winnerTeam, score1, score2, game.id);
-
   db.prepare('UPDATE players SET is_eliminated = 1 WHERE team = ?').run(loser);
-  console.log(`[ESPN] Game result recorded: ${game.team1} vs ${game.team2} → winner: ${winnerTeam}, loser eliminated: ${loser}`);
+  console.log(`[ESPN] Game recorded: ${game.team1} vs ${game.team2} → winner: ${winnerTeam}`);
 }
 
-function recalculateStandings() {
+// ── Socket.io push ───────────────────────────────────────────────────────────
+function pushStandingsToLeagues(io) {
+  if (!io) return;
   const leagues = db.prepare("SELECT id FROM leagues WHERE status IN ('drafting', 'active')").all();
-  for (const league of leagues) {
-    const members = db.prepare('SELECT user_id FROM league_members WHERE league_id = ?').all(league.id);
-    const settings = db.prepare('SELECT pts_per_point FROM scoring_settings WHERE league_id = ?').get(league.id);
-    const multiplier = settings?.pts_per_point || 1.0;
-
-    for (const member of members) {
-      const result = db.prepare(`
-        SELECT COALESCE(SUM(ps.points), 0) as total
-        FROM draft_picks dp
-        JOIN player_stats ps ON dp.player_id = ps.player_id
-        WHERE dp.league_id = ? AND dp.user_id = ?
-      `).get(league.id, member.user_id);
-
-      const total = Math.round(result.total * multiplier * 10) / 10;
-      db.prepare('UPDATE league_members SET total_points = ? WHERE league_id = ? AND user_id = ?')
-        .run(total, league.id, member.user_id);
+  for (const { id } of leagues) {
+    try {
+      const payload = buildStandings(id);
+      if (payload) {
+        io.to(`leaderboard_${id}`).emit('standings_update', {
+          ...payload,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      console.error(`[ESPN] Push failed for league ${id}:`, err.message);
     }
   }
 }
 
-async function pollESPN() {
+// ── Main poll ────────────────────────────────────────────────────────────────
+async function pollESPN(io) {
   try {
     console.log('[ESPN] Polling scoreboard...');
     const data = await fetchJson(SCOREBOARD_URL);
     const events = data.events || [];
+
+    // Track which game IDs are currently in-progress
+    const nowLiveGameIds = new Set();
 
     let processed = 0;
     for (const event of events) {
@@ -155,6 +159,12 @@ async function pollESPN() {
 
       const { game, flipped } = match;
 
+      if (isInProgress) {
+        nowLiveGameIds.add(game.id);
+        // Mark game as live
+        db.prepare('UPDATE games SET is_live = 1 WHERE id = ?').run(game.id);
+      }
+
       try {
         const summary = await fetchJson(SUMMARY_BASE + event.id);
         await processBoxScore(game.id, summary);
@@ -174,9 +184,18 @@ async function pollESPN() {
       }
     }
 
+    // Clear is_live for any games that are no longer in-progress
+    const allLiveGames = db.prepare('SELECT id FROM games WHERE is_live = 1').all();
+    for (const { id } of allLiveGames) {
+      if (!nowLiveGameIds.has(id)) {
+        db.prepare('UPDATE games SET is_live = 0 WHERE id = ?').run(id);
+      }
+    }
+
     if (processed > 0) {
-      recalculateStandings();
-      console.log(`[ESPN] Updated stats for ${processed} game(s), standings recalculated.`);
+      // Push updated standings to all leaderboard clients
+      pushStandingsToLeagues(io);
+      console.log(`[ESPN] Updated stats for ${processed} game(s), standings pushed.`);
     } else {
       console.log('[ESPN] No matching in-progress/completed games found.');
     }
@@ -185,4 +204,20 @@ async function pollESPN() {
   }
 }
 
-module.exports = { pollESPN };
+// ── Smart poller ─────────────────────────────────────────────────────────────
+// 2-min intervals during live window (Thu-Sun 12PM-11PM ET), 30-min otherwise.
+let _pollerTimeout = null;
+
+function startSmartPoller(io) {
+  async function tick() {
+    await pollESPN(io);
+    const delay = isLiveWindow() ? 2 * 60 * 1000 : 30 * 60 * 1000;
+    console.log(`[ESPN] Next poll in ${delay / 60000} min (live window: ${isLiveWindow()})`);
+    _pollerTimeout = setTimeout(tick, delay);
+  }
+
+  // Initial poll after 15s (let bracket pull finish first)
+  _pollerTimeout = setTimeout(tick, 15 * 1000);
+}
+
+module.exports = { pollESPN, startSmartPoller };
