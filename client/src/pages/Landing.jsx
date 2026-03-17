@@ -161,15 +161,35 @@ function FloatingCards({ slowdown }) {
 }
 
 // ─── Draft room mockup ────────────────────────────────────────────────────────
-const MOCK_PLAYERS = [
-  { name: 'Cooper Flagg',    ppg: 22.1, pos: 'F', picked: true,  picker: "Mike's Squad"  },
-  { name: 'Dylan Harper',    ppg: 19.8, pos: 'G', picked: false, picker: null            },
-  { name: 'Ace Bailey',      ppg: 18.3, pos: 'F', picked: false, picker: null            },
-  { name: 'Tre Johnson',     ppg: 17.9, pos: 'G', picked: false, picker: null            },
-  { name: 'VJ Edgecombe',    ppg: 16.5, pos: 'G', picked: false, picker: null            },
+const BOARD_COLS = [
+  { name: "Mike's Squad", handle: '@mikeD',     color: '#ec4899' },
+  { name: 'The Bracket',  handle: '@joshwin',   color: '#8b5cf6' },
+  { name: 'Slam Dunk FC', handle: '@courtking', color: '#06b6d4' },
 ];
 
-const POS_COLOR = { G: 'text-blue-400', F: 'text-orange-400', C: 'text-red-400' };
+const BOARD_CELLS = [
+  [
+    { name: 'Kingston Flemings', init: 'KF', team: 'Houston', pos: 'G', seed: 2, avatarBg: 'rgba(200,16,46,0.2)',   textColor: '#e693a1' },
+    { name: 'Yaxel Lendeborg',   init: 'YL', team: 'Michigan', pos: 'F', seed: 1, avatarBg: 'rgba(255,203,5,0.18)',  textColor: '#e6c900' },
+    { name: 'Thomas Haugh',      init: 'TH', team: 'Florida',  pos: 'F', seed: 1, avatarBg: 'rgba(0,33,165,0.2)',   textColor: '#8c9bd7' },
+  ],
+  [
+    { name: 'Graham Ike',        init: 'GI', team: 'Gonzaga',  pos: 'F', seed: 3, avatarBg: 'rgba(0,41,102,0.2)',   textColor: '#8c9fba' },
+    { name: 'Boogie Fland',      init: 'BF', team: 'Florida',  pos: 'G', seed: 1, avatarBg: 'rgba(0,33,165,0.2)',   textColor: '#8c9bd7' },
+    { name: 'Thijs De Ridder',   init: 'TD', team: 'Virginia', pos: 'F', seed: 3, avatarBg: 'rgba(35,45,75,0.3)',   textColor: '#8caad0' },
+  ],
+  [
+    { name: 'Silas Demary Jr.',  init: 'SD', team: 'UConn',    pos: 'G', seed: 2, avatarBg: 'rgba(0,14,47,0.4)',    textColor: '#8ca8d0' },
+    { name: 'Ivan Kharchenkov', init: 'IK', team: 'Arizona',  pos: 'F', seed: 1, avatarBg: 'rgba(204,0,51,0.2)',   textColor: '#e88ca3' },
+    null, // on the clock
+  ],
+];
+
+const POS_PILL = {
+  G: { bg: 'rgba(59,130,246,0.13)',  color: '#60a5fa' },
+  F: { bg: 'rgba(34,197,94,0.13)',   color: '#4ade80' },
+  C: { bg: 'rgba(249,115,22,0.13)',  color: '#fb923c' },
+};
 
 function DraftMockup() {
   const [timerSecs, setTimerSecs] = useState(34);
@@ -204,26 +224,89 @@ function DraftMockup() {
         {/* On the clock */}
         <div className="px-4 py-2 bg-brand-500/10 border-b border-brand-500/20 flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-ping" />
-          <span className="text-brand-400 text-xs font-bold uppercase tracking-wide">On the clock: Alex's Squad</span>
+          <span className="text-brand-400 text-xs font-bold uppercase tracking-wide">On the clock: Mike's Squad</span>
         </div>
-        {/* Player rows */}
-        {MOCK_PLAYERS.map((p, i) => (
-          <div key={p.name}
-            className={`flex items-center px-4 py-2.5 border-b border-gray-800/60 transition-colors ${
-              i === 1 ? 'bg-brand-500/5' : ''
-            } ${p.picked ? 'opacity-40' : ''}`}
-          >
-            <span className="text-gray-600 text-[10px] font-mono w-4">{i + 1}</span>
-            <span className={`text-[10px] font-bold ml-1 mr-2 ${POS_COLOR[p.pos] || 'text-gray-400'}`}>{p.pos}</span>
-            <span className={`text-sm font-semibold flex-1 ${i === 1 ? 'text-white' : 'text-gray-300'}`}>{p.name}</span>
-            {p.picked ? (
-              <span className="text-[9px] text-gray-500 italic">{p.picker}</span>
-            ) : (
-              <span className={`text-xs font-bold ${i === 1 ? 'text-brand-400' : 'text-gray-500'}`}>{p.ppg}</span>
-            )}
-            {i === 1 && <span className="ml-2 text-[9px] font-bold text-brand-400 bg-brand-500/20 border border-brand-500/30 px-1.5 py-0.5 rounded">Pick →</span>}
-          </div>
-        ))}
+        {/* 3-column draft board grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '0.5px solid #1f2937' }}>
+          {/* Column headers */}
+          {BOARD_COLS.map(col => (
+            <div key={col.name} style={{
+              borderTop: `2px solid ${col.color}`,
+              padding: '6px 7px 5px',
+              borderRight: '0.5px solid #1f2937',
+              background: '#111827',
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: col.color, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {col.name}
+              </div>
+              <div style={{ fontSize: 8, color: '#4b5563', marginTop: 1 }}>{col.handle}</div>
+            </div>
+          ))}
+          {/* Player cells */}
+          {BOARD_CELLS.map((row, ri) =>
+            row.map((cell, ci) => {
+              if (!cell) {
+                // "On the clock" empty cell
+                return (
+                  <div key={`${ri}-${ci}`} style={{
+                    padding: '6px 7px',
+                    borderRight: ci < 2 ? '0.5px solid #1f2937' : 'none',
+                    borderTop: '0.5px solid #1f2937',
+                    background: 'rgba(55,138,221,0.06)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+                    minHeight: 46,
+                  }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#378ADD', display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                    <span style={{ fontSize: 8, color: '#378ADD', fontWeight: 600, textAlign: 'center', lineHeight: 1.3 }}>On the clock...</span>
+                  </div>
+                );
+              }
+              const pill = POS_PILL[cell.pos] || POS_PILL.G;
+              return (
+                <div key={`${ri}-${ci}`} style={{
+                  padding: '6px 7px',
+                  borderRight: ci < 2 ? '0.5px solid #1f2937' : 'none',
+                  borderTop: '0.5px solid #1f2937',
+                  background: '#0d1117',
+                }}>
+                  {/* Avatar + name row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                      background: cell.avatarBg,
+                      border: `1px solid ${cell.textColor}44`,
+                      color: cell.textColor,
+                      fontSize: 7, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {cell.init}
+                    </div>
+                    <span style={{
+                      fontSize: 9, fontWeight: 600, color: '#e2e8f0',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      lineHeight: 1.2,
+                    }}>
+                      {cell.name}
+                    </span>
+                  </div>
+                  {/* Team + position pill row */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 3 }}>
+                    <span style={{ fontSize: 8, color: cell.textColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {cell.team}
+                    </span>
+                    <span style={{
+                      background: pill.bg, color: pill.color,
+                      fontSize: 7, fontWeight: 700, lineHeight: 1,
+                      padding: '2px 4px', borderRadius: 3, flexShrink: 0,
+                    }}>
+                      {cell.pos}·#{cell.seed}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
         {/* Footer */}
         <div className="px-4 py-2 bg-gray-800/50 flex items-center justify-between">
           <span className="text-gray-600 text-[10px]">Pick 2 of 120</span>
