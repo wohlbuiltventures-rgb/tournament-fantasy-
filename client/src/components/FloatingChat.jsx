@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import api from '../api';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
@@ -26,6 +27,7 @@ export default function FloatingChat() {
   const [messages, setMessages] = useState([]);
   const [unread, setUnread] = useState(0);
   const [text, setText] = useState('');
+  const [leagueName, setLeagueName] = useState('');
 
   const socketRef = useRef(null);
   const bottomRef = useRef(null);
@@ -42,8 +44,16 @@ export default function FloatingChat() {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, open]);
 
-  // Reset messages when leagueId changes (navigating between leagues)
-  useEffect(() => { setMessages([]); setUnread(0); }, [leagueId]);
+  // Reset messages and fetch league name when leagueId changes
+  useEffect(() => {
+    setMessages([]);
+    setUnread(0);
+    setLeagueName('');
+    if (!leagueId) return;
+    api.get(`/leagues/${leagueId}`).then(res => {
+      setLeagueName(res.data.league?.name || '');
+    }).catch(() => {});
+  }, [leagueId]);
 
   // Socket connection tied to leagueId
   useEffect(() => {
@@ -111,7 +121,9 @@ export default function FloatingChat() {
               animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite',
             }} />
             <span style={{ color: '#fff', fontWeight: 700, fontSize: 13, flex: 1 }}>
-              Trash Talk
+              {leagueName
+                ? `${leagueName.length > 20 ? leagueName.slice(0, 20) + '…' : leagueName} Trash Talk`
+                : 'Trash Talk'}
             </span>
             <button
               onClick={handleToggle}
