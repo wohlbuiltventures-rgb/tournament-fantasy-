@@ -6,7 +6,7 @@ import socket from '../socket';
 import TeamAvatar from '../components/TeamAvatar';
 import { useDocTitle } from '../hooks/useDocTitle';
 import BallLoader from '../components/BallLoader';
-import { teamEmoji, teamColor, playerAvatarStyle } from '../utils/teamBranding';
+import { teamEmoji, teamColor, playerAvatarStyle, shortTeamName } from '../utils/teamBranding';
 
 // ─── Position styling (complete Tailwind strings — no dynamic construction) ──
 
@@ -253,7 +253,7 @@ function DraftBoardGrid({ league, members, picks, currentPick, currentPicker, nu
 
   return (
     <div className="overflow-x-auto">
-      <table className="border-collapse text-[10px]" style={{ minWidth: `${members.length * 116 + 48}px` }}>
+      <table className="border-collapse text-[10px]" style={{ minWidth: `${members.length * 100 + 48}px` }}>
         <thead>
           <tr>
             <th className="sticky left-0 top-0 bg-gray-950 z-20 w-12 pb-2 text-left">
@@ -262,12 +262,12 @@ function DraftBoardGrid({ league, members, picks, currentPick, currentPicker, nu
             {members.map(m => {
               const accent = ownerAccentColor(m.username);
               return (
-                <th key={m.id} className="sticky top-0 z-10 text-left w-[114px]"
-                  style={{ borderTop: `2px solid ${accent}`, padding: '8px 10px', background: '#030712' }}>
-                  <div className="font-bold truncate text-white" style={{ fontSize: 12 }}>
+                <th key={m.id} className="sticky top-0 z-10 text-left w-[100px]"
+                  style={{ borderTop: '2px solid ' + accent, padding: '5px 6px', background: '#030712' }}>
+                  <div className="font-bold truncate text-white" style={{ fontSize: 10 }}>
                     {m.team_name}
                   </div>
-                  <div className="truncate text-gray-500" style={{ fontSize: 11 }}>{m.username}</div>
+                  <div className="truncate text-gray-500" style={{ fontSize: 9 }}>{m.username}</div>
                 </th>
               );
             })}
@@ -293,30 +293,30 @@ function DraftBoardGrid({ league, members, picks, currentPick, currentPicker, nu
                   return (
                     <td key={m.id} className="px-0.5 py-0.5">
                       {pick ? (
-                        <div className="rounded border border-gray-700/50 bg-gray-900/60 flex items-start gap-1.5"
-                          style={{ padding: '10px' }}>
+                        <div className="rounded border border-gray-700/50 bg-gray-900/60 flex items-start"
+                          style={{ padding: '6px', gap: 4 }}>
                           {/* Avatar */}
-                          <PlayerInitialsAvatar name={pick.player_name} team={pick.team} size={26} />
+                          <PlayerInitialsAvatar name={pick.player_name} team={pick.team} size={20} />
                           {/* Text stack */}
                           <div className="min-w-0 flex-1">
-                            <div className="truncate leading-tight text-white" style={{ fontSize: 12, fontWeight: 500 }}>
+                            <div className="truncate leading-tight text-white" style={{ fontSize: 10, fontWeight: 500 }}>
                               {pick.player_name}
                             </div>
-                            <div className="truncate leading-tight" style={{ fontSize: 11, color: tColor || '#6b7280' }}>
-                              {pick.team} {teamEmoji(pick.team)}
+                            <div className="truncate leading-tight" style={{ fontSize: 9, color: tColor || '#6b7280' }}>
+                              {shortTeamName(pick.team)} {teamEmoji(pick.team)}
                             </div>
-                            <div className="mt-0.5 inline-flex items-center rounded px-1 py-px leading-none"
-                              style={{ fontSize: 9, fontWeight: 700, ...pillStyle }}>
+                            <div className="inline-flex items-center rounded leading-none"
+                              style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', marginTop: 2, ...pillStyle }}>
                               {pick.position}{pick.seed ? ` · #${pick.seed}` : ''}
                             </div>
                           </div>
                         </div>
                       ) : isActivePick ? (
-                        <div className="rounded border-2 border-brand-500 bg-brand-500/10 flex items-center justify-center animate-pulse" style={{ height: 72 }}>
+                        <div className="rounded border-2 border-brand-500 bg-brand-500/10 flex items-center justify-center animate-pulse" style={{ height: 54 }}>
                           <span className="text-brand-400 font-bold" style={{ fontSize: 9 }}>PICK</span>
                         </div>
                       ) : (
-                        <div className="rounded border border-gray-800/40 bg-gray-900/10" style={{ height: 72 }} />
+                        <div className="rounded border border-gray-800/40 bg-gray-900/10" style={{ height: 54 }} />
                       )}
                     </td>
                   );

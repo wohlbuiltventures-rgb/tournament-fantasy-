@@ -1,6 +1,48 @@
 // ── Single source of truth for team branding: colors, emojis, avatar styles ──
 // Import from here in DraftRoom, Leaderboard, LeagueHome, Roster, etc.
 
+// Short display names (city/school only, no mascot) for compact UI
+const TEAM_SHORT = {
+  'Akron Zips': 'Akron', 'Alabama Crimson Tide': 'Alabama',
+  'Arizona Wildcats': 'Arizona', 'Arkansas Razorbacks': 'Arkansas',
+  'BYU Cougars': 'BYU', 'California Baptist Lancers': 'Cal Baptist',
+  'Clemson Tigers': 'Clemson', 'Duke Blue Devils': 'Duke',
+  'Florida Gators': 'Florida', 'Furman Paladins': 'Furman',
+  'Georgia Bulldogs': 'Georgia', 'Gonzaga Bulldogs': 'Gonzaga',
+  "Hawai'i Rainbow Warriors": "Hawai'i", 'High Point Panthers': 'High Point',
+  'Hofstra Pride': 'Hofstra', 'Houston Cougars': 'Houston',
+  'Idaho Vandals': 'Idaho', 'Illinois Fighting Illini': 'Illinois',
+  'Iowa Hawkeyes': 'Iowa', 'Iowa State Cyclones': 'Iowa State',
+  'Kansas Jayhawks': 'Kansas', 'Kennesaw State Owls': 'Kennesaw St.',
+  'Kentucky Wildcats': 'Kentucky', 'Lehigh Mountain Hawks': 'Lehigh',
+  'Long Island University Sharks': 'LIU', 'Louisville Cardinals': 'Louisville',
+  'McNeese Cowboys': 'McNeese', 'Miami (OH) RedHawks': 'Miami OH',
+  'Miami Hurricanes': 'Miami', 'Michigan State Spartans': 'Michigan St.',
+  'Michigan Wolverines': 'Michigan', 'Missouri Tigers': 'Missouri',
+  'NC State': 'NC State', 'Nebraska Cornhuskers': 'Nebraska',
+  'North Carolina Tar Heels': 'UNC', 'North Dakota State Bison': 'NDSU',
+  'Northern Iowa Panthers': 'N. Iowa', 'Ohio State Buckeyes': 'Ohio State',
+  'Pennsylvania Quakers': 'Penn', 'Prairie View A&M Panthers': 'Prairie View',
+  'Purdue Boilermakers': 'Purdue', 'Queens University Royals': 'Queens',
+  'SMU Mustangs': 'SMU', 'Saint Louis Billikens': 'Saint Louis',
+  "Saint Mary's Gaels": "St. Mary's", 'Santa Clara Broncos': 'Santa Clara',
+  'Siena Saints': 'Siena', 'South Florida Bulls': 'S. Florida',
+  "St. John's Red Storm": "St. John's", 'TCU Horned Frogs': 'TCU',
+  'Tennessee State Tigers': 'Tenn. State', 'Tennessee Volunteers': 'Tennessee',
+  'Texas': 'Texas', 'Texas A&M Aggies': 'Texas A&M',
+  'Texas Tech Red Raiders': 'Texas Tech', 'Troy Trojans': 'Troy',
+  'UCF Knights': 'UCF', 'UCLA Bruins': 'UCLA', 'UConn Huskies': 'UConn',
+  'Utah State Aggies': 'Utah State', 'VCU Rams': 'VCU',
+  'Vanderbilt Commodores': 'Vanderbilt', 'Villanova Wildcats': 'Villanova',
+  'Virginia Cavaliers': 'Virginia', 'Wisconsin Badgers': 'Wisconsin',
+  'Wright State Raiders': 'Wright State',
+};
+
+export function shortTeamName(teamName) {
+  if (!teamName) return '';
+  return TEAM_SHORT[teamName] || teamName.split(' ')[0];
+}
+
 const TEAM_EMOJI = {
   'Akron Zips': '🦘',
   'Alabama Crimson Tide': '🐘',

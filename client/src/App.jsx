@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import BossMode from './components/BossMode';
+import FloatingChat from './components/FloatingChat';
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -53,6 +54,7 @@ export default function App() {
         <div className="min-h-screen bg-gray-950">
           <Navbar />
           <BossMode />
+          <FloatingChat />
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
