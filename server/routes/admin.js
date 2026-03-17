@@ -934,21 +934,53 @@ router.post('/import-draft/map-owner', authMiddleware, (req, res) => {
     if (!realUser) return res.status(404).json({ error: `User "${realUsername}" not found` });
 
     const existMember = db.prepare(
-      'SELECT id FROM league_members WHERE league_id = ? AND user_id = ?'
+      'SELECT id, draft_order FROM league_members WHERE league_id = ? AND user_id = ?'
     ).get(leagueId, realUser.id);
-    if (existMember) {
-      return res.status(409).json({ error: `"${realUsername}" is already a member of this league` });
-    }
 
     db.transaction(() => {
-      db.prepare('UPDATE draft_picks SET user_id = ? WHERE league_id = ? AND user_id = ?')
-        .run(realUser.id, leagueId, ghostUserId);
-      db.prepare(
-        'UPDATE league_members SET user_id = ?, pending_owner_name = NULL WHERE league_id = ? AND user_id = ?'
-      ).run(realUser.id, leagueId, ghostUserId);
-      db.prepare('UPDATE member_payments SET user_id = ? WHERE league_id = ? AND user_id = ?')
-        .run(realUser.id, leagueId, ghostUserId);
-      // Remove ghost user only if they have no other memberships
+      if (existMember) {
+        // Real user already joined independently — merge ghost picks into them.
+        // 1. Drop ghost picks where real user already owns that player (avoid UNIQUE conflict).
+        db.prepare(`
+          DELETE FROM draft_picks
+          WHERE league_id = ? AND user_id = ?
+            AND player_id IN (
+              SELECT player_id FROM draft_picks WHERE league_id = ? AND user_id = ?
+            )
+        `).run(leagueId, ghostUserId, leagueId, realUser.id);
+
+        // 2. Transfer remaining ghost picks to real user.
+        db.prepare('UPDATE draft_picks SET user_id = ? WHERE league_id = ? AND user_id = ?')
+          .run(realUser.id, leagueId, ghostUserId);
+
+        // 3. Copy ghost's draft_order onto the real member row (preserves correct position).
+        const ghostMember = db.prepare(
+          'SELECT draft_order FROM league_members WHERE league_id = ? AND user_id = ?'
+        ).get(leagueId, ghostUserId);
+        if (ghostMember?.draft_order) {
+          db.prepare('UPDATE league_members SET draft_order = ?, pending_owner_name = NULL WHERE id = ?')
+            .run(ghostMember.draft_order, existMember.id);
+        }
+
+        // 4. Remove ghost member row.
+        db.prepare('DELETE FROM league_members WHERE league_id = ? AND user_id = ?')
+          .run(leagueId, ghostUserId);
+
+        // 5. Remove ghost payment row.
+        db.prepare('DELETE FROM member_payments WHERE league_id = ? AND user_id = ?')
+          .run(leagueId, ghostUserId);
+      } else {
+        // Normal path — real user not yet a member: rename the ghost row.
+        db.prepare('UPDATE draft_picks SET user_id = ? WHERE league_id = ? AND user_id = ?')
+          .run(realUser.id, leagueId, ghostUserId);
+        db.prepare(
+          'UPDATE league_members SET user_id = ?, pending_owner_name = NULL WHERE league_id = ? AND user_id = ?'
+        ).run(realUser.id, leagueId, ghostUserId);
+        db.prepare('UPDATE member_payments SET user_id = ? WHERE league_id = ? AND user_id = ?')
+          .run(realUser.id, leagueId, ghostUserId);
+      }
+
+      // Delete ghost user account if it has no remaining memberships.
       const others = db.prepare(
         'SELECT COUNT(*) as cnt FROM league_members WHERE user_id = ?'
       ).get(ghostUserId);
@@ -958,7 +990,11 @@ router.post('/import-draft/map-owner', authMiddleware, (req, res) => {
       }
     })();
 
-    res.json({ success: true, mapped: { from: ghostUser.username, to: realUser.username } });
+    res.json({
+      success: true,
+      merged: !!existMember,
+      mapped: { from: ghostUser.username, to: realUser.username },
+    });
   } catch (err) {
     console.error('[map-owner]', err);
     res.status(500).json({ error: err.message });
