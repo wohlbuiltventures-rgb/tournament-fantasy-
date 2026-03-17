@@ -101,11 +101,11 @@ export const FAQ_SECTIONS = [
     questions: [
       {
         q: "How does the buy-in work?",
-        a: "The commissioner sets a buy-in amount when creating the league. Everyone in the league pays the same amount. The prize pool is just buy-in × number of teams — what you see is what you get, no house cut on the pool itself.",
+        a: "The buy-in is set by your league commissioner and collected directly between league members — TourneyRun never handles these funds. Commissioners typically collect via Venmo or Zelle before or after the draft. TourneyRun charges a separate $5 platform fee per team for access to the software.",
       },
       {
         q: "How do payouts work?",
-        a: "The commissioner sets payout percentages when creating the league — typically something like 70% to 1st, 20% to 2nd, 10% to 3rd. The exact dollar amounts show up on the leaderboard so everyone knows what they're playing for. Payouts are handled via Venmo, Zelle, or whatever your group agrees on.",
+        a: "Payouts are handled entirely by your league commissioner outside of TourneyRun. The commissioner collects buy-ins and pays out winners directly via Venmo, Zelle, cash, or however your group decides. TourneyRun shows you the payout structure (1st/2nd/3rd splits) on your dashboard and league page for reference, but we are not involved in the actual transfer of funds.",
       },
       {
         q: "What if fewer people join than expected?",
@@ -113,7 +113,7 @@ export const FAQ_SECTIONS = [
       },
       {
         q: "Is there a platform fee?",
-        a: "For leagues using the Stripe payment integration there's a small processing fee. For cash leagues where you collect money yourselves, TourneyRun is free to use — we just provide the platform.",
+        a: "Yes — TourneyRun charges a $5 platform fee per team. This fee covers access to the draft room, live scoring, leaderboard, and all platform features. This is a software access fee only and is completely separate from your league's prize pool. TourneyRun does not take any percentage of your prize pool — 100% of what your group collects stays with your group.",
       },
     ],
   },
@@ -123,11 +123,11 @@ export const FAQ_SECTIONS = [
     questions: [
       {
         q: "Is this legal?",
-        a: "TourneyRun is designed as a skill-based fantasy game, which is treated differently from gambling in most US states. Fantasy sports involving real player stats and strategic decision-making have legal protection under federal law (UIGEA) and in most states. That said, laws vary by state and you should check your local regulations.",
+        a: "Yes. TourneyRun is a software platform that charges a flat $5 fee per team for access to its technology — player drafting, live scoring, and league management tools. TourneyRun does not collect, hold, or distribute prize money of any kind. Any buy-ins or prizes among league members are handled entirely peer-to-peer by the commissioner and participants outside of TourneyRun (typically via Venmo or Zelle). This model is similar to how ESPN Fantasy or Sleeper charge for premium features. Fantasy sports contests are also recognized as skill-based games under federal law (UIGEA) and in most states. Laws vary by state — check your local regulations if unsure.",
       },
       {
         q: "Which states are not supported?",
-        a: "We don't support paid leagues in Washington, Idaho, Montana, Nevada, and Louisiana due to their specific fantasy sports regulations. Free leagues with no buy-in are available everywhere. We're keeping a close eye on evolving state laws and will update this list.",
+        a: "TourneyRun is not available to residents of Washington (WA), Idaho (ID), Montana (MT), Nevada (NV), or Louisiana (LA) where skill-based fantasy sports contests may be restricted. Free leagues with no buy-in are available everywhere. Note: the $5 TourneyRun platform fee is a software fee and is separate from any prize pool arrangements between league members.",
       },
       {
         q: "Is my personal data safe?",
