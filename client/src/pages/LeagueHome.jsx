@@ -25,14 +25,10 @@ function calcETP(ppg, seed, isFirstFour = false) {
   return Math.round(ppg * games * 10) / 10;
 }
 
-// ── Venmo icon ────────────────────────────────────────────────────────────────
-function VenmoIcon() {
-  return (
-    <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M19.5 2.25H4.5A2.25 2.25 0 002.25 4.5v15a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25v-15A2.25 2.25 0 0019.5 2.25zm-3.47 3.5c.41.67.6 1.38.6 2.3 0 2.88-2.46 6.62-4.46 9.25H8.1L6.5 5.8l3.86-.37 1 7.27c.92-1.53 2.07-3.94 2.07-5.58 0-.9-.15-1.51-.4-2.01l2.98-.36z" />
-    </svg>
-  );
-}
+// ── Venmo badge ───────────────────────────────────────────────────────────────
+const VenmoBadge = () => (
+  <span style={{ background: '#008CFF', color: '#fff', fontWeight: 700, fontSize: 10, borderRadius: 20, padding: '2px 7px', lineHeight: 1.4, whiteSpace: 'nowrap' }}>Venmo</span>
+);
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 const STATUS = {
@@ -831,8 +827,9 @@ export default function LeagueHome() {
                     <div className="text-white font-semibold text-sm truncate">{member.team_name}</div>
                     <div className="text-gray-500 text-xs truncate">@{member.username}</div>
                     {member.venmo_handle && (
-                      <div className="text-green-400/70 text-[10px] truncate mt-0.5" title="Venmo/Zelle">
-                        💸 {member.venmo_handle}
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <VenmoBadge />
+                        <span className="text-gray-400 text-[10px] truncate">{member.venmo_handle}</span>
                       </div>
                     )}
                     {member.user_id === user?.id && avatarError && (
@@ -1159,8 +1156,8 @@ export default function LeagueHome() {
                                 <span className="text-green-400 font-semibold text-xs">{sgLeader.owner_team_name}</span>
                                 <span className="text-gray-600 text-xs">@{sgLeader.owner_username}</span>
                                 {sgLeader.owner_venmo && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] bg-blue-900/30 border border-blue-700/30 text-blue-400 px-1.5 py-0.5 rounded-full">
-                                    <VenmoIcon />{sgLeader.owner_venmo}
+                                  <span className="inline-flex items-center gap-1">
+                                    <VenmoBadge /><span className="text-gray-300 text-[10px]">{sgLeader.owner_venmo}</span>
                                   </span>
                                 )}
                                 <span className="text-gray-700 text-[10px]">← send {fmt(bonus)} here</span>
