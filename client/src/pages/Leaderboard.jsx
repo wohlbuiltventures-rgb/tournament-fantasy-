@@ -204,6 +204,9 @@ function nameInitials(name) {
   return name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 }
 
+const ROUND_ORDER = ['First Four', 'R64', 'R32', 'S16', 'E8', 'F4', 'NCG'];
+const ROUND_SHORT = { 'First Four': 'FF', R64: 'R64', R32: 'R32', S16: 'S16', E8: 'E8', F4: 'F4', NCG: 'NCG' };
+
 function TeamBadge({ avatarUrl, teamName, size = 32 }) {
   if (avatarUrl) {
     return (
@@ -248,6 +251,7 @@ export default function Leaderboard() {
   const [secondsSince, setSecondsSince] = useState(null);
   const [sortBy, setSortBy] = useState('points');
   const [sortDir, setSortDir] = useState('desc');
+  const [expandedPlayerId, setExpandedPlayerId] = useState(null);
   useDocTitle(league ? `${league.name} Standings | TourneyRun` : 'Standings | TourneyRun');
 
   // ── "X seconds ago" ticker ────────────────────────────────────────────────
@@ -609,74 +613,142 @@ export default function Leaderboard() {
                 {isExpanded && (
                   <div className="border-t border-gray-800">
                     {team.players && team.players.length > 0 ? (
-                      <>
-                        <div className="divide-y divide-gray-800/60">
-                          {[...team.players]
-                            .sort((a, b) => b.fantasy_points - a.fantasy_points)
-                            .map(player => {
-                              const playerIsLive = liveSet.has(player.player_id);
-                              const todayPts = player.today_stats?.points;
-                              const todayFinished = !!player.today_stats?.is_completed && !playerIsLive;
-                              return (
-                                <div
-                                  key={player.player_id}
-                                  className="flex items-center gap-3 px-4 py-2.5"
-                                  style={{ opacity: player.is_eliminated ? 0.4 : 1 }}
+                      <div className="divide-y divide-gray-800/40">
+                        {[...team.players]
+                          .sort((a, b) => b.fantasy_points - a.fantasy_points)
+                          .map(player => {
+                            const playerIsLive = liveSet.has(player.player_id);
+                            const expandKey = `${team.user_id}-${player.player_id}`;
+                            const isPlayerExpanded = expandedPlayerId === expandKey;
+                            const gameLog = player.game_log || [];
+                            const playedRoundSet = new Set(gameLog.map(g => g.round_code));
+                            const lastPlayedRound = gameLog.length > 0 ? gameLog[gameLog.length - 1].round_code : null;
+                            const hasFirstFour = playedRoundSet.has('First Four');
+                            const shownRounds = hasFirstFour ? ROUND_ORDER : ROUND_ORDER.slice(1);
+                            const getPillColors = (r) => {
+                              if (!playedRoundSet.has(r)) return { bg: 'transparent', color: '#4b5563', border: '#374151' };
+                              if (player.is_eliminated && r === lastPlayedRound) return { bg: 'rgba(239,68,68,0.15)', color: '#f87171', border: 'rgba(239,68,68,0.3)' };
+                              return { bg: 'rgba(55,138,221,0.2)', color: '#60a5fa', border: 'rgba(55,138,221,0.35)' };
+                            };
+                            const hasPlayed = player.fantasy_points > 0 || playerIsLive || !!player.is_eliminated;
+                            const dotColor = !hasPlayed ? null : player.is_eliminated ? '#ef4444' : '#34d399';
+
+                            return (
+                              <div key={player.player_id}>
+                                {/* Clickable row */}
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedPlayerId(prev => prev === expandKey ? null : expandKey)}
+                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-white/[0.02] transition-colors"
+                                  style={{ opacity: player.is_eliminated ? 0.7 : 1 }}
                                 >
                                   {/* Status dot */}
-                                  {(() => {
-                                    const hasPlayed = player.fantasy_points > 0 || playerIsLive || !!player.is_eliminated;
-                                    if (!hasPlayed) return <div className="w-2 h-2 flex-shrink-0" />;
-                                    const dotColor = player.is_eliminated ? '#ef4444' : '#34d399';
-                                    return <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />;
-                                  })()}
+                                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: dotColor || 'transparent' }} />
 
-                                  {/* Player info */}
+                                  {/* Name + team */}
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className={`font-medium text-sm ${player.is_eliminated ? 'line-through text-gray-500' : 'text-white'}`}>
-                                        {player.name}
-                                      </span>
-                                      {player.is_eliminated && (
-                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                                          style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
-                                          ELIM
-                                        </span>
-                                      )}
-                                      {playerIsLive && (
-                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse"
-                                          style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }}>
-                                          ● LIVE{todayPts != null ? ` ${todayPts}` : ''}
-                                        </span>
-                                      )}
-                                      {todayFinished && todayPts != null && (
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full"
-                                          style={{ background: '#1f2937', border: '1px solid #374151', color: '#9ca3af' }}>
-                                          Final: {todayPts}
-                                        </span>
-                                      )}
+                                    <div className={`font-medium text-sm leading-tight ${player.is_eliminated ? 'line-through text-gray-500' : 'text-white'}`}>
+                                      {player.name}
+                                      {playerIsLive && <span className="ml-1.5 text-[9px] font-bold text-green-400 animate-pulse not-italic">● LIVE</span>}
                                     </div>
                                     <div className="text-gray-500 text-[10px] mt-0.5">
-                                      {player.team} <span style={{ fontSize: 14 }}>{teamEmoji(player.team)}</span>{player.position ? ` · ${player.position}` : ''}
+                                      {player.team} <span style={{ fontSize: 12 }}>{teamEmoji(player.team)}</span>{player.position ? ` · ${player.position}` : ''}
                                     </div>
+                                  </div>
+
+                                  {/* Round pills */}
+                                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                                    {shownRounds.map(r => {
+                                      const c = getPillColors(r);
+                                      return (
+                                        <span key={r} className="text-[9px] font-bold px-1 py-0.5 rounded leading-none"
+                                          style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}` }}>
+                                          {ROUND_SHORT[r]}
+                                        </span>
+                                      );
+                                    })}
                                   </div>
 
                                   {/* Points */}
-                                  <div className="text-right flex-shrink-0">
-                                    <div className="font-bold text-sm" style={{ color: player.fantasy_points > 0 ? '#378ADD' : '#6b7280' }}>
-                                      {player.fantasy_points > 0 ? player.fantasy_points : '—'}
-                                    </div>
-                                    <div className="text-gray-600 text-[9px]">pts</div>
+                                  <div className="font-bold text-sm flex-shrink-0 w-7 text-right"
+                                    style={{ color: player.fantasy_points > 0 ? '#378ADD' : '#4b5563' }}>
+                                    {player.fantasy_points > 0 ? player.fantasy_points : '—'}
+                                  </div>
+
+                                  {/* Chevron */}
+                                  <svg className="w-3 h-3 text-gray-600 flex-shrink-0 transition-transform duration-200"
+                                    style={{ transform: isPlayerExpanded ? 'rotate(180deg)' : 'none' }}
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+
+                                {/* Slide-down game log */}
+                                <div style={{ maxHeight: isPlayerExpanded ? '350px' : '0', overflow: 'hidden', transition: 'max-height 0.25s ease-out' }}>
+                                  <div className="bg-gray-950/60 border-t border-gray-800/50 px-4 py-2">
+                                    {gameLog.length === 0 ? (
+                                      <div className="text-gray-600 text-xs italic py-1">No games played yet</div>
+                                    ) : (
+                                      <div>
+                                        {gameLog.map((game, idx) => {
+                                          const isElimGame = !!player.is_eliminated && idx === gameLog.length - 1;
+                                          return (
+                                            <div key={idx} className="flex items-center gap-3 py-1.5">
+                                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0"
+                                                style={isElimGame
+                                                  ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+                                                  : { background: 'rgba(55,138,221,0.12)', color: '#60a5fa', border: '1px solid rgba(55,138,221,0.25)' }}>
+                                                {game.round_code || '—'}
+                                              </span>
+                                              <span className="text-gray-400 text-xs flex-1 truncate">vs {game.opponent || '—'}</span>
+                                              <span className="text-xs font-semibold shrink-0"
+                                                style={{ color: game.points > 0 ? '#60a5fa' : '#6b7280' }}>
+                                                {game.points > 0 ? `${game.points} pts` : '0 pts'}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+
+                                    {/* Upcoming rounds */}
+                                    {!player.is_eliminated && (() => {
+                                      const upcoming = shownRounds.filter(r => !playedRoundSet.has(r));
+                                      if (!upcoming.length) return null;
+                                      return (
+                                        <div className="border-t border-gray-800/40 mt-1 pt-1">
+                                          {upcoming.map(r => (
+                                            <div key={r} className="flex items-center gap-3 py-1.5 opacity-35">
+                                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0"
+                                                style={{ background: '#1f2937', color: '#6b7280', border: '1px solid #374151' }}>
+                                                {ROUND_SHORT[r]}
+                                              </span>
+                                              <span className="text-gray-600 text-xs flex-1">upcoming</span>
+                                              <span className="text-gray-600 text-xs">—</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      );
+                                    })()}
+
+                                    {player.is_eliminated && (
+                                      <div className="mt-1.5 pt-1.5 border-t border-red-900/30 text-xs" style={{ color: '#f87171' }}>
+                                        Eliminated — tournament over
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
-                              );
-                            })}
-                        </div>
+                              </div>
+                            );
+                          })}
+
+                        {/* Team total footer */}
                         <div className="flex items-center justify-between px-4 py-2 border-t border-gray-800">
                           <span className="text-gray-500 text-xs">Total</span>
-                          <span className="font-bold text-brand-400">{team.total_points} pts</span>
+                          <span className="font-bold text-brand-400">{team.total_points > 0 ? team.total_points : '—'} pts</span>
                         </div>
-                      </>
+                      </div>
                     ) : (
                       <div className="px-4 py-5 text-center text-gray-600 text-sm">
                         No player data yet — check back once the tournament begins.

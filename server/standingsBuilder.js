@@ -95,6 +95,23 @@ function buildStandings(leagueId) {
         LIMIT 1
       `).get(player.player_id, today);
 
+      // Full game log (round, opponent, points per game played)
+      const gameLog = db.prepare(`
+        SELECT
+          COALESCE(NULLIF(ps.round, ''), g.round_name) AS round_code,
+          COALESCE(
+            NULLIF(ps.opponent, ''),
+            CASE WHEN g.team1 = p2.team THEN g.team2 ELSE g.team1 END
+          ) AS opponent,
+          ps.points,
+          g.game_date
+        FROM player_stats ps
+        JOIN games g ON ps.game_id = g.id
+        JOIN players p2 ON p2.id = ps.player_id
+        WHERE ps.player_id = ?
+        ORDER BY g.game_date ASC
+      `).all(player.player_id);
+
       return {
         player_id:     player.player_id,
         name:          player.name,
@@ -109,6 +126,7 @@ function buildStandings(leagueId) {
         fantasy_points:  Math.round(fantasyPoints * 10) / 10,
         is_live:         livePlayerIds.has(player.player_id),
         today_stats:     todayStats || null,
+        game_log:        gameLog,
       };
     });
 
