@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Trophy } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
@@ -361,7 +362,7 @@ export default function Dashboard() {
               actionLabel = '🚀 Enter Draft';
             } else if (league.status === 'active' || league.status === 'completed') {
               actionTo    = `/league/${league.id}/leaderboard`;
-              actionLabel = '📊 Leaderboard';
+              actionLabel = <span className="inline-flex items-center justify-center gap-1.5"><Trophy size={14} strokeWidth={1.8} />Leaderboard</span>;
             }
 
             return (
