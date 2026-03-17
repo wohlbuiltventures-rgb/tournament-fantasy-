@@ -616,7 +616,7 @@ export default function Leaderboard() {
                             .map(player => {
                               const playerIsLive = liveSet.has(player.player_id);
                               const todayPts = player.today_stats?.points;
-                              const todayFinished = player.today_stats?.is_completed && !playerIsLive;
+                              const todayFinished = !!player.today_stats?.is_completed && !playerIsLive;
                               return (
                                 <div
                                   key={player.player_id}
