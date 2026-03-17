@@ -16,9 +16,9 @@ const STYLES = `
   0%, 100% { opacity: 0.18; transform: scale(1);    }
   50%       { opacity: 0.38; transform: scale(1.12); }
 }
-@keyframes shimmerBar {
-  0%   { background-position: -200% center; }
-  100% { background-position:  200% center; }
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
 }
 @keyframes countUp {
   from { opacity: 0; transform: translateY(8px); }
@@ -309,52 +309,62 @@ export default function Landing() {
     <div className="overflow-x-hidden bg-gray-950">
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
 
-      {/* ── Announcement bar ── */}
+      {/* ── Announcement ticker ── */}
       <div style={{
         background: '#080e1a',
         borderBottom: '0.5px solid #1a2744',
         height: 38,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
         overflow: 'hidden',
         position: 'relative',
       }}>
-        {/* Shimmer sweep */}
+        {/* Left fade mask */}
         <div aria-hidden style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: 'linear-gradient(90deg, transparent 0%, #1e3a5f18 50%, transparent 100%)',
-          backgroundSize: '200% 100%',
-          animation: 'shimmerBar 3s ease-in-out infinite',
+          position: 'absolute', top: 0, left: 0, bottom: 0, width: 80, zIndex: 2,
+          background: 'linear-gradient(to right, #080e1a, transparent)',
+          pointerEvents: 'none',
         }} />
-        {/* Content */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative', zIndex: 1 }}>
-          {/* Orange dot */}
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f97316', flexShrink: 0, display: 'inline-block' }} />
-          {/* Segment 1 — always visible */}
-          <span style={{ fontSize: 12, letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>
-            <span style={{ color: '#94a3b8' }}>The 2026 Tournament starts </span>
-            <span style={{ color: '#94a3b8', fontWeight: 600 }}>Thursday March 19th</span>
-            <span style={{ color: '#64748b' }}> at </span>
-            <span style={{ color: '#94a3b8', fontWeight: 600 }}>12PM ET</span>
-          </span>
-          {/* Divider + Segment 2 — hidden on mobile */}
-          <span className="hidden sm:flex" style={{ alignItems: 'center', gap: 10 }}>
-            <span style={{ width: 1, height: 12, background: '#1e293b', flexShrink: 0, display: 'inline-block' }} />
-            <span style={{ fontSize: 12, letterSpacing: '0.3px', color: '#64748b', whiteSpace: 'nowrap' }}>
-              Draft day is coming · <span style={{ color: '#94a3b8' }}>Secure your spot</span> before your friends do
-            </span>
-          </span>
-          {/* Divider + Segment 3 — hidden on mobile */}
-          <span className="hidden sm:flex" style={{ alignItems: 'center', gap: 10 }}>
-            <span style={{ width: 1, height: 12, background: '#1e293b', flexShrink: 0, display: 'inline-block' }} />
-            <span style={{ fontSize: 12, letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>
+        {/* Right fade mask */}
+        <div aria-hidden style={{
+          position: 'absolute', top: 0, right: 0, bottom: 0, width: 80, zIndex: 2,
+          background: 'linear-gradient(to left, #080e1a, transparent)',
+          pointerEvents: 'none',
+        }} />
+        {/* Orange static dot — anchored left, above fade */}
+        <div aria-hidden style={{
+          position: 'absolute', top: '50%', left: 18, transform: 'translateY(-50%)',
+          width: 6, height: 6, borderRadius: '50%', background: '#f97316', zIndex: 3,
+        }} />
+        {/* Scrolling track — duplicated 2× for seamless loop */}
+        <div style={{
+          display: 'flex', alignItems: 'center', height: '100%',
+          width: 'max-content',
+          animation: 'marquee 35s linear infinite',
+        }}>
+          {[0, 1].map(i => (
+            <span key={i} style={{
+              display: 'inline-flex', alignItems: 'center',
+              paddingLeft: 48, paddingRight: 0,
+              fontSize: 12, letterSpacing: '0.3px', whiteSpace: 'nowrap',
+            }}>
+              <span style={{ color: '#64748b' }}>The 2026 Tournament starts </span>
+              <span style={{ color: '#94a3b8', fontWeight: 600 }}>Thursday March 19th</span>
+              <span style={{ color: '#64748b' }}> at </span>
+              <span style={{ color: '#94a3b8', fontWeight: 600 }}>12PM ET</span>
+              <span style={{ color: '#1e3a5f', margin: '0 14px', fontSize: 14 }}>·</span>
+              <span style={{ color: '#64748b' }}>Draft day is coming</span>
+              <span style={{ color: '#1e3a5f', margin: '0 10px', fontSize: 14 }}>·</span>
+              <span style={{ color: '#94a3b8' }}>Secure your spot</span>
+              <span style={{ color: '#64748b' }}> before your friends do</span>
+              <span style={{ color: '#1e3a5f', margin: '0 14px', fontSize: 14 }}>·</span>
               <span style={{ color: '#94a3b8', fontWeight: 600 }}>$5 entry</span>
-              <span style={{ color: '#64748b' }}> per team · You keep </span>
+              <span style={{ color: '#64748b' }}> per team</span>
+              <span style={{ color: '#1e3a5f', margin: '0 10px', fontSize: 14 }}>·</span>
+              <span style={{ color: '#64748b' }}>You keep </span>
               <span style={{ color: '#94a3b8', fontWeight: 600 }}>100%</span>
               <span style={{ color: '#64748b' }}> of the prize pool</span>
+              <span style={{ color: '#1e3a5f', margin: '0 14px', fontSize: 14 }}>·</span>
             </span>
-          </span>
+          ))}
         </div>
       </div>
 
