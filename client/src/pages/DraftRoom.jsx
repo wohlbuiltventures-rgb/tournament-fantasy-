@@ -6,17 +6,18 @@ import socket from '../socket';
 import TeamAvatar from '../components/TeamAvatar';
 import { useDocTitle } from '../hooks/useDocTitle';
 import BallLoader from '../components/BallLoader';
+import { teamEmoji, teamColor, playerAvatarStyle } from '../utils/teamBranding';
 
 // ─── Position styling (complete Tailwind strings — no dynamic construction) ──
 
 const POS_STYLES = {
-  G:  { badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/40',   dot: 'bg-blue-400',    cell: 'bg-blue-500/10 border-blue-500/30 text-blue-300'   },
-  PG: { badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/40',   dot: 'bg-blue-400',    cell: 'bg-blue-500/10 border-blue-500/30 text-blue-300'   },
-  SG: { badge: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40', dot: 'bg-emerald-400', cell: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' },
-  F:  { badge: 'bg-orange-500/20 text-orange-400 border border-orange-500/40', dot: 'bg-orange-400',  cell: 'bg-orange-500/10 border-orange-500/30 text-orange-300' },
-  SF: { badge: 'bg-orange-500/20 text-orange-400 border border-orange-500/40', dot: 'bg-orange-400',  cell: 'bg-orange-500/10 border-orange-500/30 text-orange-300' },
-  PF: { badge: 'bg-purple-500/20 text-purple-400 border border-purple-500/40', dot: 'bg-purple-400',  cell: 'bg-purple-500/10 border-purple-500/30 text-purple-300' },
-  C:  { badge: 'bg-red-500/20 text-red-400 border border-red-500/40',      dot: 'bg-red-400',     cell: 'bg-red-500/10 border-red-500/30 text-red-300'       },
+  G:  { badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/40',    dot: 'bg-blue-400',   cell: 'bg-blue-500/10 border-blue-500/30 text-blue-300'    },
+  PG: { badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/40',    dot: 'bg-blue-400',   cell: 'bg-blue-500/10 border-blue-500/30 text-blue-300'    },
+  SG: { badge: 'bg-blue-500/20 text-blue-400 border border-blue-500/40',    dot: 'bg-blue-400',   cell: 'bg-blue-500/10 border-blue-500/30 text-blue-300'    },
+  F:  { badge: 'bg-green-500/20 text-green-400 border border-green-500/40', dot: 'bg-green-400',  cell: 'bg-green-500/10 border-green-500/30 text-green-300' },
+  SF: { badge: 'bg-green-500/20 text-green-400 border border-green-500/40', dot: 'bg-green-400',  cell: 'bg-green-500/10 border-green-500/30 text-green-300' },
+  PF: { badge: 'bg-green-500/20 text-green-400 border border-green-500/40', dot: 'bg-green-400',  cell: 'bg-green-500/10 border-green-500/30 text-green-300' },
+  C:  { badge: 'bg-orange-500/20 text-orange-400 border border-orange-500/40', dot: 'bg-orange-400', cell: 'bg-orange-500/10 border-orange-500/30 text-orange-300' },
 };
 const FALLBACK_STYLE = { badge: 'bg-gray-700 text-gray-400 border border-gray-600', dot: 'bg-gray-500', cell: 'bg-gray-800 border-gray-700 text-gray-400' };
 
@@ -135,6 +136,33 @@ function playCountdownTick(urgent) {
   playTone(urgent ? 900 : 520, 0.06, 'square', urgent ? 0.18 : 0.08);
 }
 
+// ─── Owner accent color (stable hash → one of 10 colors) ─────────────────────
+
+const OWNER_ACCENT_COLORS = [
+  '#378ADD', '#22c55e', '#f97316', '#a855f7', '#ec4899',
+  '#14b8a6', '#eab308', '#ef4444', '#06b6d4', '#f59e0b',
+];
+function ownerAccentColor(username) {
+  if (!username) return OWNER_ACCENT_COLORS[0];
+  let h = 0;
+  for (let i = 0; i < username.length; i++) h = (h * 31 + username.charCodeAt(i)) >>> 0;
+  return OWNER_ACCENT_COLORS[h % OWNER_ACCENT_COLORS.length];
+}
+
+// ─── Player initials avatar ───────────────────────────────────────────────────
+
+function PlayerInitialsAvatar({ name, team, size = 24 }) {
+  const { initials, bg, textColor } = playerAvatarStyle(name, team);
+  return (
+    <div
+      className="rounded-full flex items-center justify-center font-bold shrink-0"
+      style={{ width: size, height: size, background: bg, color: textColor, fontSize: Math.round(size * 0.38) }}
+    >
+      {initials}
+    </div>
+  );
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function PosBadge({ pos, small }) {
@@ -218,14 +246,17 @@ function DraftBoardGrid({ league, members, picks, currentPick, currentPicker, nu
             <th className="sticky left-0 bg-gray-950 z-10 w-12 pb-2 text-left">
               <span className="text-gray-600 uppercase tracking-wider text-[9px]">Rd</span>
             </th>
-            {members.map(m => (
-              <th key={m.id} className="px-1 pb-2 text-center w-[88px]">
-                <div className={`font-bold truncate ${m.user_id === userId ? 'text-brand-400' : 'text-gray-400'}`}>
-                  {m.team_name}
-                </div>
-                <div className="text-gray-600 text-[9px] truncate">{m.username}</div>
-              </th>
-            ))}
+            {members.map(m => {
+              const accent = ownerAccentColor(m.username);
+              return (
+                <th key={m.id} className="px-1 pb-2 text-center w-[88px]" style={{ borderTop: `2px solid ${accent}` }}>
+                  <div className="font-bold truncate text-white" style={{ fontSize: 10 }}>
+                    {m.team_name}
+                  </div>
+                  <div className="text-gray-500 text-[9px] truncate">{m.username}</div>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -247,14 +278,14 @@ function DraftBoardGrid({ league, members, picks, currentPick, currentPicker, nu
                   return (
                     <td key={m.id} className="px-0.5 py-0.5">
                       {pick ? (
-                        <div className={`rounded border px-1 py-0.5 text-center ${style.cell}`} style={{ height: 46 }}>
-                          <div className="font-semibold truncate leading-tight" style={{ fontSize: 9 }}>
+                        <div className="rounded border border-gray-700/50 bg-gray-900/60 px-1 py-0.5 text-center" style={{ height: 46 }}>
+                          <div className="font-semibold truncate leading-tight" style={{ fontSize: 9, color: teamColor(pick.team) || '#e5e7eb' }}>
                             {pick.player_name}
                           </div>
-                          <div className="truncate leading-tight text-gray-400" style={{ fontSize: 8 }}>
-                            {pick.team}
+                          <div className="truncate leading-tight text-gray-500" style={{ fontSize: 8 }}>
+                            {teamEmoji(pick.team)} {pick.team}
                           </div>
-                          <div className="opacity-60 truncate" style={{ fontSize: 7 }}>
+                          <div className="opacity-60 truncate text-gray-400" style={{ fontSize: 7 }}>
                             {etpByPlayerId[pick.player_id]
                               ? <>{etpByPlayerId[pick.player_id]} etp</>
                               : <>{pick.position} {pick.seed ? `#${pick.seed}` : ''}</>
@@ -300,9 +331,9 @@ function PickTicker({ picks, userId }) {
               <div className={`font-semibold truncate ${pick.user_id === userId ? 'text-brand-400' : 'text-white'}`} style={{ fontSize: 10 }}>
                 {pick.player_name}
               </div>
-              <div className="text-gray-600 truncate" style={{ fontSize: 9 }}>
+              <div className="truncate" style={{ fontSize: 9, color: pick.team ? (teamColor(pick.team) || '#6b7280') : '#6b7280' }}>
                 {pick.team
-                  ? `${pick.team}${pick.region ? ` · ${pick.region}` : ''}`
+                  ? `${teamEmoji(pick.team)} ${pick.team}${pick.region ? ` · ${pick.region}` : ''}`
                   : pick.username}
               </div>
             </div>
@@ -348,9 +379,9 @@ function ManagerRosterCard({ member, picks, currentPicker, userId, hasSmartDraft
             <div key={p.id} className="flex items-start gap-1">
               <div className={`w-1 h-1 rounded-full shrink-0 mt-0.5 ${ps(p.position).dot}`} />
               <div className="min-w-0">
-                <span className="text-gray-300 truncate block" style={{ fontSize: 9 }}>{p.player_name}</span>
-                <span className="text-gray-600 truncate block" style={{ fontSize: 8 }}>
-                  {p.team}{p.region ? ` · ${p.region}` : (p.seed ? ` · #${p.seed}` : '')}
+                <span className="truncate block font-medium" style={{ fontSize: 9, color: teamColor(p.team) || '#d1d5db' }}>{p.player_name}</span>
+                <span className="truncate block" style={{ fontSize: 8, color: teamColor(p.team) || '#6b7280', opacity: 0.75 }}>
+                  {teamEmoji(p.team)} {p.team}{p.region ? ` · ${p.region}` : (p.seed ? ` · #${p.seed}` : '')}
                 </span>
               </div>
             </div>
@@ -391,28 +422,31 @@ function MyRoster({ picks, userId, etpByPlayerId, isMobile = false }) {
       <div className="space-y-1.5">
         {myPicks.map(p => {
           const etp = etpByPlayerId[p.player_id] ?? calcETP(p.season_ppg, p.seed, !!p.is_first_four);
-          const style = ps(p.position);
           const injuryFlagged = p.injury_flagged;
           const isElim = !!p.is_eliminated;
+          const tColor = teamColor(p.team);
           return (
-            <div key={p.id} className={`rounded-lg border px-2.5 py-2 ${style.cell}`}
+            <div key={p.id} className="rounded-lg border border-gray-700/50 bg-gray-900/50 px-2.5 py-2"
               style={{ opacity: isElim ? 0.45 : 1 }}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <PosBadge pos={p.position} small />
+                  <PlayerInitialsAvatar name={p.player_name} team={p.team} size={28} />
                   <div className="min-w-0">
                     <div className="font-semibold text-xs truncate flex items-center gap-1"
-                      style={{ color: isElim ? '#6b7280' : '#fff', textDecoration: isElim ? 'line-through' : 'none' }}>
+                      style={{ color: isElim ? '#6b7280' : (tColor || '#fff'), textDecoration: isElim ? 'line-through' : 'none' }}>
                       {p.player_name}
                       {injuryFlagged && !isElim ? <span className="text-red-400 text-[9px]">🤕</span> : null}
                     </div>
-                    <div className="text-gray-500 text-[10px] truncate">
-                      {p.team}{p.seed ? ` · #${p.seed}` : ''}{p.region ? ` · ${p.region}` : ''}
+                    <div className="text-[10px] truncate flex items-center gap-1">
+                      <PosBadge pos={p.position} small />
+                      <span style={{ color: tColor || '#6b7280', opacity: 0.85 }}>
+                        {teamEmoji(p.team)} {p.team}{p.seed ? ` · #${p.seed}` : ''}{p.region ? ` · ${p.region}` : ''}
+                      </span>
                     </div>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="font-bold text-xs" style={{ color: isElim ? '#6b7280' : '#60a5fa' }}>{etp != null ? etp : '—'}</div>
+                  <div className="font-bold text-xs" style={{ color: isElim ? '#6b7280' : '#f59e0b' }}>{etp != null ? etp : '—'}</div>
                   <div className="text-gray-600 text-[9px]">ETP · Rd {p.round}</div>
                 </div>
               </div>
@@ -1471,6 +1505,7 @@ export default function DraftRoom() {
                     const oppName = oppSeed && player.region ? (regionSeedMap[player.region]?.[oppSeed] || `#${oppSeed}`) : null;
                     const canPick = isMyTurn && !picking;
                     const etp = calcETP(player.season_ppg, player.seed, !!player.is_first_four);
+                    const tColor = teamColor(player.team);
                     return (
                       <div key={player.id}
                         className={`flex items-center gap-2 px-3 py-2.5 border-b border-gray-800/50 transition-all ${
@@ -1478,6 +1513,7 @@ export default function DraftRoom() {
                         }`}
                         onClick={() => canPick && setPickConfirm(player)}>
                         <span className="text-gray-600 font-mono text-[10px] w-4 shrink-0">{i + 1}</span>
+                        <PlayerInitialsAvatar name={player.name} team={player.team} size={28} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {player.espn_athlete_id ? (
@@ -1500,8 +1536,8 @@ export default function DraftRoom() {
                             {player.region ? <RegionBadge region={player.region} /> : null}
                             <InjuryBadge player={player} isCommissioner={isCommissioner} onClear={clearInjuryFlag} />
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-gray-500 text-[10px]">{player.team}</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px]" style={{ color: tColor || '#6b7280' }}>{teamEmoji(player.team)} {player.team}</span>
                             {oppName && <span className="text-gray-600 text-[10px]">vs {oppName}</span>}
                           </div>
                         </div>
@@ -1559,12 +1595,14 @@ export default function DraftRoom() {
                   const inQueue = watchlist.includes(player.id);
                   const canPick = isMyTurn && !picking;
                   const etp = calcETP(player.season_ppg, player.seed, !!player.is_first_four);
+                  const tColor = teamColor(player.team);
                   return (
                     <div key={player.id}
                       className={`flex items-center gap-2 px-3 py-2.5 border-b border-gray-800/40 transition-all group ${
                         canPick ? 'hover:bg-brand-500/8 cursor-pointer hover:border-brand-500/20' : 'cursor-default'
                       }`}
                       onClick={() => canPick && setPickConfirm(player)}>
+                      <PlayerInitialsAvatar name={player.name} team={player.team} size={30} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {player.espn_athlete_id ? (
@@ -1587,8 +1625,8 @@ export default function DraftRoom() {
                           {player.region ? <RegionBadge region={player.region} /> : null}
                           <InjuryBadge player={player} isCommissioner={isCommissioner} onClear={clearInjuryFlag} />
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-gray-500 text-[10px]">{player.team}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px]" style={{ color: tColor || '#6b7280' }}>{teamEmoji(player.team)} {player.team}</span>
                           {oppName && <span className="text-gray-600 text-[10px]">vs {oppName}</span>}
                         </div>
                       </div>
