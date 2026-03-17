@@ -97,11 +97,14 @@ router.post('/forgot-password', async (req, res) => {
       : `https://${req.get('host')}`;
     const resetUrl = `${clientUrl}/reset-password?token=${token}`;
 
-    await sendPasswordReset(user.email, resetUrl);
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Email send timed out after 8s')), 8000)
+    );
+    await Promise.race([sendPasswordReset(user.email, resetUrl), timeout]);
     res.json({ message: 'If that email exists, a reset link has been sent.' });
   } catch (err) {
-    console.error('forgot-password error:', err);
-    res.status(500).json({ error: 'Failed to send reset email' });
+    console.error('[forgot-password] error:', err.message);
+    res.status(500).json({ error: 'Failed to send reset email. Please try again.' });
   }
 });
 

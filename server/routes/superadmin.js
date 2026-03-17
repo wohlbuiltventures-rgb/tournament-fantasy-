@@ -188,12 +188,15 @@ router.put('/users/:id/reset-password', superadmin, async (req, res) => {
     if (!password || password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
-    const hash = await bcrypt.hash(password, 12);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.params.id);
+    // Cost 10 (not 12) — Railway CPU is throttled and cost 12 can take 5+ seconds
+    const hash = await bcrypt.hash(password, 10);
+    const result = db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'User not found' });
+    console.log(`[superadmin] password reset for user ${req.params.id}`);
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('[superadmin] reset-password error:', err.message);
+    res.status(500).json({ error: err.message || 'Server error' });
   }
 });
 
