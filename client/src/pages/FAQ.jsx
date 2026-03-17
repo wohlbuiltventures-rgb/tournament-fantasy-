@@ -135,7 +135,7 @@ export const FAQ_SECTIONS = [
       },
       {
         q: "What if there's a dispute about the results?",
-        a: "Scores are pulled directly from ESPN's official scoring API, so the data is as authoritative as it gets. If you believe there's a scoring error, reach out and we'll dig into it. The commissioner also has tools to review standings and manually flag anything that looks off.",
+        a: "Scores are pulled directly from ESPN's official scoring API, so the data is as authoritative as it gets. If you believe there's a scoring error, reach out to us at support@tourneyrun.app and we'll dig into it. Since TourneyRun doesn't handle prize money, any payout disputes are between league members — the commissioner is responsible for resolving those directly.",
       },
     ],
   },
