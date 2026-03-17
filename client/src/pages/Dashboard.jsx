@@ -300,6 +300,33 @@ export default function Dashboard() {
                     </div>
                   </div>
 
+                  {/* ── Standings / payout card (active + draft complete) ── */}
+                  {league.status === 'active' && league.draft_status === 'completed' && (() => {
+                    const pool = buyIn * league.member_count;
+                    const pay1 = pool * ((league.payout_first  || 0) / 100);
+                    const pay2 = pool * ((league.payout_second || 0) / 100);
+                    const pay3 = pool * ((league.payout_third  || 0) / 100);
+                    const hasPayout = pool > 0 && (pay1 + pay2 + pay3) > 0;
+                    return (
+                      <div className="mb-4 rounded-xl bg-gray-800/50 border border-gray-700/60 px-3.5 py-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-green-400 text-xs">✓</span>
+                          <span className="text-gray-300 text-xs font-semibold">Draft complete — season underway</span>
+                        </div>
+                        {hasPayout && (
+                          <div className="text-[11px] text-gray-500 leading-relaxed">
+                            Pays 3 spots:&nbsp;
+                            <span className="text-amber-400 font-bold">1st {fmt(pay1)}</span>
+                            <span className="text-gray-600"> · </span>
+                            <span className="text-gray-300 font-semibold">2nd {fmt(pay2)}</span>
+                            <span className="text-gray-600"> · </span>
+                            <span className="text-gray-400">3rd {fmt(pay3)}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* CTA buttons */}
                   <div className="mt-auto flex flex-col gap-2">
                     <Link
