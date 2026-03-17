@@ -538,12 +538,21 @@ export default function Landing() {
 
           <div className="grid sm:grid-cols-3 gap-4 mb-10">
             {[
-              { icon: '🍺', title: 'Round up your group', desc: 'Invite friends, coworkers, or family. Anyone can join with an invite code.' },
-              { icon: '📅', title: 'Schedule your draft', desc: 'Pick a time that works for everyone. Commissioner sets it, everyone shows up.' },
-              { icon: '🏆', title: 'Play for real stakes', desc: 'Set your own buy-in. We charge $5 per team to play — your prize pool stays 100% yours.' },
+              {
+                svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+                title: 'Round up your group', desc: 'Invite friends, coworkers, or family. Anyone can join with an invite code.',
+              },
+              {
+                svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+                title: 'Schedule your draft', desc: 'Pick a time that works for everyone. Commissioner sets it, everyone shows up.',
+              },
+              {
+                svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
+                title: 'Play for real stakes', desc: 'Set your own buy-in. We charge $5 per team to play — your prize pool stays 100% yours.',
+              },
             ].map(card => (
               <div key={card.title} className="bg-gray-900 border border-gray-800 hover:border-brand-500/40 rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5">
-                <div className="text-3xl mb-3">{card.icon}</div>
+                <div style={{ background: '#1e3a5f22', borderRadius: 10, padding: 10, marginBottom: 14, display: 'inline-flex' }}>{card.svg}</div>
                 <h3 className="text-white font-bold text-base mb-2">{card.title}</h3>
                 <p className="text-gray-400 text-sm leading-relaxed">{card.desc}</p>
               </div>
@@ -610,14 +619,23 @@ export default function Landing() {
 
           <div className="grid sm:grid-cols-3 gap-4">
             {[
-              { icon: '💰', text: 'Set any buy-in your group agrees on — play for fun or play for some serious cash!' },
-              { icon: '🏆', text: 'Prize pool and payout structure decided by your league' },
-              { icon: '✅', text: 'TourneyRun just runs the game — you keep 100% of the pot' },
+              {
+                svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+                text: 'Set any buy-in your group agrees on — play for fun or play for some serious cash!',
+              },
+              {
+                svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+                text: 'Prize pool and payout structure decided by your league',
+              },
+              {
+                svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>,
+                text: 'TourneyRun just runs the game — you keep 100% of the pot',
+              },
             ].map(item => (
               <div key={item.text}
                 className="flex items-start gap-3 bg-gray-900 border border-gray-800 hover:border-brand-500/40 rounded-xl p-5 transition-all duration-200 group hover:-translate-y-0.5"
               >
-                <span className="text-2xl shrink-0 group-hover:scale-110 transition-transform">{item.icon}</span>
+                <div style={{ background: '#1e3a5f22', borderRadius: 10, padding: 10, display: 'inline-flex', flexShrink: 0 }}>{item.svg}</div>
                 <span className="text-gray-300 text-sm leading-relaxed font-medium">{item.text}</span>
               </div>
             ))}
