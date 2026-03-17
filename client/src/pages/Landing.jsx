@@ -885,6 +885,8 @@ export default function Landing() {
           <span className="text-gray-800">·</span>
           <Link to="/privacy" className="text-gray-500 hover:text-gray-300 transition-colors">Privacy</Link>
           <span className="text-gray-800">·</span>
+          <Link to="/terms" className="text-gray-500 hover:text-gray-300 transition-colors">Terms</Link>
+          <span className="text-gray-800">·</span>
           <a href="mailto:support@tourneyrun.app" className="text-gray-500 hover:text-gray-300 transition-colors">Contact</a>
         </div>
         <p className="text-gray-600 text-xs">

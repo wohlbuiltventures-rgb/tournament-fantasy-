@@ -46,6 +46,8 @@ import StrategyHub from './pages/StrategyHub';
 import FAQ from './pages/FAQ';
 import SuperAdmin from './pages/SuperAdmin';
 import Games from './pages/Games';
+import TermsOfService from './pages/TermsOfService';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 export default function App() {
   return (
@@ -75,6 +77,8 @@ export default function App() {
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/strategy" element={<ProtectedRoute><StrategyHub /></ProtectedRoute>} />
             <Route path="/faq" element={<FAQ />} />
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/games" element={<ProtectedRoute><Games /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
           </Routes>
