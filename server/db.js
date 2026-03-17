@@ -370,6 +370,11 @@ try {
   )`);
 } catch (e) {}
 
+// Compliance acknowledgments captured at registration
+try { db.exec('ALTER TABLE users ADD COLUMN agreement_accepted INTEGER DEFAULT 0'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN age_confirmed INTEGER DEFAULT 0'); } catch (e) {}
+try { db.exec('ALTER TABLE users ADD COLUMN state_eligible INTEGER DEFAULT 0'); } catch (e) {}
+
 // Superadmin role
 try { db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"); } catch (e) {}
 // Grant superadmin to platform owner — idempotent

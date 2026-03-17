@@ -20,12 +20,15 @@ function signToken(user) {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { email, username, password } = req.body;
+    const { email, username, password, agreement_accepted, age_confirmed, state_eligible } = req.body;
     if (!email || !username || !password) {
       return res.status(400).json({ error: 'Email, username, and password are required' });
     }
     if (password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    if (!agreement_accepted || !age_confirmed || !state_eligible) {
+      return res.status(400).json({ error: 'Please complete all required acknowledgments to continue.' });
     }
 
     const existing = db.prepare('SELECT id FROM users WHERE email = ? OR username = ?').get(email, username);
@@ -33,9 +36,12 @@ router.post('/register', async (req, res) => {
       return res.status(409).json({ error: 'Email or username already taken' });
     }
 
-    const password_hash = await bcrypt.hash(password, 12);
+    const password_hash = await bcrypt.hash(password, 10);
     const id = uuidv4();
-    db.prepare('INSERT INTO users (id, email, username, password_hash) VALUES (?, ?, ?, ?)').run(id, email, username, password_hash);
+    db.prepare(`
+      INSERT INTO users (id, email, username, password_hash, agreement_accepted, age_confirmed, state_eligible)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, email, username, password_hash, 1, 1, 1);
 
     const user = { id, email, username };
     const token = signToken(user);

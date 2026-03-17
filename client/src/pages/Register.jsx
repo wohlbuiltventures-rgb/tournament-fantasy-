@@ -13,8 +13,10 @@ export default function Register() {
   const sdSession = searchParams.get('smartdraft_session');
 
   const [form, setForm]     = useState({ email: '', username: '', password: '', confirmPassword: '' });
+  const [checks, setChecks] = useState({ terms: false, age: false, state: false });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
+  const allChecked = checks.terms && checks.age && checks.state;
   const [showPw, setShowPw]   = useState(false);
   const [showCPw, setShowCPw] = useState(false);
 
@@ -25,9 +27,14 @@ export default function Register() {
     setError('');
     if (form.password !== form.confirmPassword) return setError('Passwords do not match');
     if (form.password.length < 6) return setError('Password must be at least 6 characters');
+    if (!allChecked) return setError('Please complete all required acknowledgments to continue.');
     setLoading(true);
     try {
-      await register(form.email, form.username, form.password);
+      await register(form.email, form.username, form.password, {
+        agreement_accepted: checks.terms,
+        age_confirmed: checks.age,
+        state_eligible: checks.state,
+      });
       // Claim the standalone Smart Draft credit if we came from Stripe checkout
       if (sdSession) {
         try { await api.post('/payments/claim-credit', { session_id: sdSession }); } catch {}
@@ -116,9 +123,44 @@ export default function Register() {
           />
         </div>
 
+        {/* Compliance checkboxes */}
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {[
+            {
+              key: 'terms',
+              label: (
+                <>
+                  I agree to the{' '}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>Terms of Service</a>
+                  {' '}and{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>Privacy Policy</a>
+                </>,
+              ),
+            },
+            {
+              key: 'age',
+              label: 'I confirm that I am 18 years of age or older',
+            },
+            {
+              key: 'state',
+              label: 'I confirm that I am not located in or a resident of Washington (WA), Idaho (ID), Montana (MT), Nevada (NV), or Louisiana (LA)',
+            },
+          ].map(({ key, label }) => (
+            <label key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={checks[key]}
+                onChange={e => setChecks(c => ({ ...c, [key]: e.target.checked }))}
+                style={{ accentColor: '#f97316', marginTop: 2, flexShrink: 0, width: 15, height: 15 }}
+              />
+              <span style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.5 }}>{label}</span>
+            </label>
+          ))}
+        </div>
+
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !allChecked}
           className="w-full py-3 rounded-xl font-black text-base text-white transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-brand-500/25 disabled:opacity-50 disabled:scale-100"
           style={{ background: 'linear-gradient(135deg, #378ADD 0%, #2563EB 100%)' }}
         >
