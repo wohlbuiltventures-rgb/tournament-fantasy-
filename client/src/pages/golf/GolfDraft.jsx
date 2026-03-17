@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
@@ -25,9 +25,10 @@ function TierBadge({ salary }) {
 export default function GolfDraft() {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   useDocTitle('Golf Draft | TourneyRun');
 
-  const [state, setState] = useState(null);    // { league, members, picks, available, myRoster, currentPick, draftComplete }
+  const [state, setState] = useState(null);    // { league, members, picks, available, myRoster, currentPick, draftComplete, corePlayerIds }
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -40,6 +41,10 @@ export default function GolfDraft() {
     try {
       const r = await api.get(`/golf/leagues/${id}/draft`);
       setState(r.data);
+      // DK mode has no draft — redirect to lineup tab
+      if (r.data?.league?.format_type === 'dk') {
+        navigate(`/golf/league/${id}?tab=lineup`, { replace: true });
+      }
     } catch {}
     setLoading(false);
   }
@@ -85,9 +90,12 @@ export default function GolfDraft() {
     );
   }
 
-  const { league, members, picks, available, myRoster, currentPick, draftComplete } = state;
+  const { league, members, picks, available, myRoster, currentPick, draftComplete, corePlayerIds } = state;
   const isComm = league.commissioner_id === user?.id;
   const draftStarted = league.draft_status === 'drafting' || draftComplete;
+  const isPool = league.format_type === 'pool';
+  const isTourneyRun = league.format_type === 'tourneyrun';
+  const coreSet = new Set(corePlayerIds || []);
 
   // Whose turn is it?
   const numTeams = members.length;
@@ -103,14 +111,14 @@ export default function GolfDraft() {
   const pickedIds = new Set(picks.map(p => p.player_id));
   const myRosterIds = new Set((myRoster || []).map(r => r.player_id));
   const usedSalary = (myRoster || []).reduce((s, r) => s + (r.salary || 0), 0);
-  const cap = league.salary_cap || 3000;
+  const cap = league.salary_cap || 2400;
 
   const filtered = (available || []).filter(p => {
     const inRoster = myRosterIds.has(p.id);
     const inPicked = pickedIds.has(p.id);
     if (inRoster || inPicked) return false;
     if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterSalary !== 'all' && String(p.salary) !== filterSalary) return false;
+    if (!isPool && filterSalary !== 'all' && String(p.salary) !== filterSalary) return false;
     return true;
   });
 
@@ -183,12 +191,14 @@ export default function GolfDraft() {
               )}
               <div className="text-gray-500 text-sm">Pick #{currentPick} of {(members.length) * (league.roster_size || 8)}</div>
             </div>
-            <div className="text-right">
-              <div className="text-gray-500 text-xs">Your salary</div>
-              <div className={`font-black ${usedSalary > cap * 0.9 ? 'text-red-400' : 'text-white'}`}>
-                ${usedSalary.toLocaleString()} / ${cap.toLocaleString()}
+            {!isPool && (
+              <div className="text-right">
+                <div className="text-gray-500 text-xs">Your salary</div>
+                <div className={`font-black ${usedSalary > cap * 0.9 ? 'text-red-400' : 'text-white'}`}>
+                  ${usedSalary.toLocaleString()} / ${cap.toLocaleString()}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="lg:grid lg:grid-cols-[1fr_280px] lg:gap-6 space-y-5 lg:space-y-0">
@@ -204,18 +214,20 @@ export default function GolfDraft() {
                   onChange={e => setSearch(e.target.value)}
                   className="flex-1 min-w-0 bg-gray-900 border border-gray-700 text-white text-sm px-3 py-2 rounded-lg focus:outline-none focus:border-green-500"
                 />
-                <select
-                  value={filterSalary}
-                  onChange={e => setFilterSalary(e.target.value)}
-                  className="bg-gray-900 border border-gray-700 text-sm text-gray-300 px-3 py-2 rounded-lg focus:outline-none"
-                >
-                  <option value="all">All Tiers</option>
-                  <option value="800">Elite ($800)</option>
-                  <option value="600">Star ($600)</option>
-                  <option value="400">Value ($400)</option>
-                  <option value="300">Deep ($300)</option>
-                  <option value="200">Flier ($200)</option>
-                </select>
+                {!isPool && (
+                  <select
+                    value={filterSalary}
+                    onChange={e => setFilterSalary(e.target.value)}
+                    className="bg-gray-900 border border-gray-700 text-sm text-gray-300 px-3 py-2 rounded-lg focus:outline-none"
+                  >
+                    <option value="all">All Tiers</option>
+                    <option value="800">Elite ($800)</option>
+                    <option value="600">Star ($600)</option>
+                    <option value="400">Value ($400)</option>
+                    <option value="300">Deep ($300)</option>
+                    <option value="200">Flier ($200)</option>
+                  </select>
+                )}
               </div>
 
               <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
@@ -224,7 +236,7 @@ export default function GolfDraft() {
                 </div>
                 <div className="max-h-[480px] overflow-y-auto divide-y divide-gray-800">
                   {filtered.map(p => {
-                    const canAfford = usedSalary + p.salary <= cap;
+                    const canAfford = isPool || (usedSalary + p.salary <= cap);
                     const alreadyHave = myRosterIds.has(p.id);
                     const canPick = isMyTurn && canAfford && !alreadyHave;
                     return (
@@ -237,11 +249,11 @@ export default function GolfDraft() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-white text-sm font-medium">{p.name}</span>
-                            <TierBadge salary={p.salary} />
+                            {!isPool && <TierBadge salary={p.salary} />}
                           </div>
                           <div className="text-gray-500 text-xs mt-0.5">{p.country} · Rank #{p.world_ranking}</div>
                         </div>
-                        <div className="text-green-400 font-bold text-sm shrink-0">${p.salary}</div>
+                        {!isPool && <div className="text-green-400 font-bold text-sm shrink-0">${p.salary}</div>}
                         <button
                           onClick={() => makePick(p.id)}
                           disabled={!canPick || picking !== null}
@@ -275,12 +287,26 @@ export default function GolfDraft() {
                   {(myRoster || []).length === 0 ? (
                     <div className="py-4 text-center text-gray-600 text-xs">No picks yet</div>
                   ) : (
-                    (myRoster || []).map(p => (
-                      <div key={p.player_id} className="flex items-center justify-between px-4 py-2.5 gap-2">
-                        <span className="text-white text-xs font-medium truncate flex-1">{p.name}</span>
-                        <span className="text-green-400 text-xs font-bold shrink-0">${p.salary}</span>
-                      </div>
-                    ))
+                    (myRoster || []).map(p => {
+                      const isCore = isTourneyRun && coreSet.has(p.player_id);
+                      return (
+                        <div key={p.player_id} className="flex items-center justify-between px-4 py-2.5 gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            {isTourneyRun && (
+                              <span className={`text-[9px] font-black uppercase shrink-0 px-1.5 py-0.5 rounded border ${
+                                isCore
+                                  ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30'
+                                  : 'text-blue-400 bg-blue-500/10 border-blue-500/30'
+                              }`}>
+                                {isCore ? '⭐ CORE' : 'FLEX'}
+                              </span>
+                            )}
+                            <span className="text-white text-xs font-medium truncate">{p.name}</span>
+                          </div>
+                          {!isPool && <span className="text-green-400 text-xs font-bold shrink-0">${p.salary}</span>}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -294,15 +320,25 @@ export default function GolfDraft() {
                   {picks.length === 0 ? (
                     <div className="py-4 text-center text-gray-600 text-xs">No picks yet</div>
                   ) : (
-                    [...picks].reverse().slice(0, 20).map(p => (
-                      <div key={p.id} className="flex items-center justify-between px-4 py-2.5 gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-white text-xs truncate">{p.player_name}</div>
-                          <div className="text-gray-500 text-[10px]">{p.team_name} — Pick #{p.pick_number}</div>
+                    [...picks].reverse().slice(0, 20).map(p => {
+                      const isMyPick = isTourneyRun && coreSet.has(p.player_id);
+                      return (
+                        <div key={p.id} className="flex items-center justify-between px-4 py-2.5 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              {isMyPick && (
+                                <span className="text-[9px] font-black uppercase text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 px-1.5 py-0.5 rounded shrink-0">
+                                  ⭐ CORE
+                                </span>
+                              )}
+                              <span className="text-white text-xs truncate">{p.player_name}</span>
+                            </div>
+                            <div className="text-gray-500 text-[10px]">{p.team_name} — Pick #{p.pick_number}</div>
+                          </div>
+                          {!isPool && <span className="text-gray-600 text-xs shrink-0">${p.salary}</span>}
                         </div>
-                        <span className="text-gray-600 text-xs shrink-0">${p.salary}</span>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
