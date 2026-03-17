@@ -411,10 +411,9 @@ export default function Dashboard() {
                   {/* Stats grid — fixed 2×2 */}
                   {(() => {
                     const rd = rankings[league.id];
-                    const showPlace = league.status === 'active' && league.draft_status === 'completed' && rd?.rank != null;
-                    const rank = rd?.rank;
+                    const rank = rd?.rank ?? null;
                     const rankColor = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#fff';
-                    const allZero = league.total_points === 0;
+                    const noScore = !rank || league.total_points === 0;
                     return (
                   <div className="grid grid-cols-2 gap-2 mb-4">
                     {/* Row 1 */}
@@ -438,22 +437,15 @@ export default function Dashboard() {
                         <div className="text-white text-sm font-semibold">{league.total_rounds}</div>
                       </div>
                     )}
-                    {showPlace ? (
-                      <div className="bg-gray-800/60 rounded-xl px-3 py-2.5">
-                        <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-0.5">Place</div>
-                        {allZero
-                          ? <div className="text-gray-600 text-sm font-semibold">—</div>
-                          : <div className="text-sm font-bold" style={{ color: rankColor }}>
-                              {rank}{rankSuffix(rank)}<span className="text-gray-500 font-normal"> / {rd.total}</span>
-                            </div>
-                        }
-                      </div>
-                    ) : league.total_points > 0 ? (
-                      <div className="bg-gray-800/60 rounded-xl px-3 py-2.5">
-                        <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-0.5">Your Points</div>
-                        <div className="text-brand-400 text-sm font-bold">{league.total_points} pts</div>
-                      </div>
-                    ) : null}
+                    <div className="bg-gray-800/60 rounded-xl px-3 py-2.5">
+                      <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-0.5">Place</div>
+                      {noScore
+                        ? <div className="text-gray-600 text-sm font-semibold">—</div>
+                        : <div className="text-sm font-bold" style={{ color: rankColor }}>
+                            {rank}{rankSuffix(rank)}<span className="text-gray-500 font-normal"> / {rd.total}</span>
+                          </div>
+                      }
+                    </div>
                   </div>
                     );
                   })()}
