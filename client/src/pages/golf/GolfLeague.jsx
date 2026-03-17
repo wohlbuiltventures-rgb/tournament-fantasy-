@@ -587,12 +587,22 @@ function LineupTab({ leagueId, league }) {
 
 // ── Tab: Free Agency ───────────────────────────────────────────────────────────
 
+const getTier = (salary) => {
+  if (salary >= 800) return { label: 'Elite', color: '#f59e0b' };
+  if (salary >= 700) return { label: 'Prem', color: '#8b5cf6' };
+  if (salary >= 550) return { label: 'Mid',  color: '#3b82f6' };
+  if (salary >= 400) return { label: 'Val',  color: '#22c55e' };
+  return                     { label: 'Slpr', color: '#6b7280' };
+};
+
 function TierBadge({ salary }) {
-  if (salary >= 800) return <span className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 shrink-0">Elite</span>;
-  if (salary >= 700) return <span className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-400 shrink-0">Prem</span>;
-  if (salary >= 550) return <span className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-gray-700/60 border border-gray-700 text-gray-400 shrink-0">Mid</span>;
-  if (salary >= 400) return <span className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-green-500/15 border border-green-500/30 text-green-400 shrink-0">Val</span>;
-  return <span className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-gray-800 border border-gray-700 text-gray-500 shrink-0">Slpr</span>;
+  const { label, color } = getTier(salary || 0);
+  return (
+    <span style={{ color, borderColor: color + '55', backgroundColor: color + '18' }}
+      className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full border shrink-0">
+      {label}
+    </span>
+  );
 }
 
 function FreeAgencyTab({ leagueId, league }) {
