@@ -7,28 +7,57 @@ const { postEliminations, checkAndPostRankChanges } = require('./wallUtils');
 const SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard';
 const SUMMARY_BASE = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event=';
 
-// All 2026 NCAA tournament dates (First Four through Championship)
+// All 2026 NCAA tournament dates (First Four eve through Championship)
 const TOURNAMENT_DATES = [
-  '20260318','20260319','20260320','20260321','20260322',
-  '20260326','20260327','20260328','20260329',
-  '20260404','20260406',
+  '20260317',                                           // Tue  Mar 17 — First Four eve / Selection shows
+  '20260318','20260319',                                // Wed–Thu Mar 18–19 — First Four
+  '20260320','20260321','20260322',                     // Fri–Sun Mar 20–22 — Round of 64
+  '20260326','20260327','20260328','20260329',           // Thu–Sun Mar 26–29 — Round of 32
+  '20260403','20260404','20260405','20260406','20260407', // Thu–Mon Apr 3–7  — Sweet 16 / Elite 8 / Final Four / NCG
 ];
 
 const SCHEDULE_URL = date =>
   `${SCOREBOARD_URL}?dates=${date}&groups=100&seasontype=3&limit=100`;
 
-// ── Live-window detection ────────────────────────────────────────────────────
-// Poll aggressively on actual tournament dates (11am–midnight ET), slow otherwise.
-function isLiveWindow() {
+// ── Tournament window & polling interval ────────────────────────────────────
+// Returns the ms delay until next poll, or null to stop entirely.
+//
+//  Before  Mar 17 2026 8:00 PM ET  → every 60 min  (bracket data only)
+//  Mar 17 8PM → Apr 7 11:59PM ET   → active tournament:
+//    8AM–midnight ET               → every 2 min
+//    midnight–8AM ET               → every 30 min
+//  After Apr 7 11:59 PM ET         → null (stop)
+//
+// All comparisons are done in America/New_York to handle EST/EDT automatically.
+function getPollingInterval() {
   const now = new Date();
-  const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
-  const et = new Date(etStr);
-  const hour = et.getHours();
-  if (hour < 11 || hour >= 24) return false;
-  const y = et.getFullYear();
-  const mo = String(et.getMonth() + 1).padStart(2, '0');
-  const d  = String(et.getDate()).padStart(2, '0');
-  return TOURNAMENT_DATES.includes(`${y}${mo}${d}`);
+  const et  = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const y   = et.getFullYear();
+  const mo  = et.getMonth() + 1; // 1-based
+  const d   = et.getDate();
+  const h   = et.getHours();
+  const min = et.getMinutes();
+
+  // ── After tournament end: April 7 23:59 ET ──────────────────────────────
+  if (y > 2026
+    || (y === 2026 && mo > 4)
+    || (y === 2026 && mo === 4 && d > 7)
+    || (y === 2026 && mo === 4 && d === 7 && h === 23 && min >= 59)) {
+    return null; // stop poller
+  }
+
+  // ── Before tournament start: March 17 20:00 ET ──────────────────────────
+  const beforeStart =
+       y  <  2026
+    || mo  <  3
+    || (mo === 3 && d < 17)
+    || (mo === 3 && d === 17 && h < 20);
+
+  if (beforeStart) return 60 * 60 * 1000; // 60 min — bracket data only
+
+  // ── Active tournament window ─────────────────────────────────────────────
+  if (h >= 8) return 2 * 60 * 1000;   // 8AM–midnight  → 2 min
+  return 30 * 60 * 1000;              // midnight–8AM  → 30 min
 }
 
 // ── Round code helper ────────────────────────────────────────────────────────
@@ -107,6 +136,7 @@ async function processBoxScore(gameId, summary) {
   const roundCode = game ? roundNameToCode(game.round_name) : '';
   const playedAt  = new Date().toISOString();
 
+  let playersUpdated = 0;
   const playerGroups = summary.boxscore?.players || [];
   for (const group of playerGroups) {
     const statsBlock = group.statistics?.[0];
@@ -135,13 +165,15 @@ async function processBoxScore(gameId, summary) {
         INSERT INTO player_stats (id, game_id, player_id, points, round, opponent, played_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(game_id, player_id) DO UPDATE SET
-          points   = excluded.points,
-          round    = COALESCE(NULLIF(player_stats.round,    ''), excluded.round),
-          opponent = COALESCE(NULLIF(player_stats.opponent, ''), excluded.opponent),
+          points    = excluded.points,
+          round     = COALESCE(NULLIF(player_stats.round,    ''), excluded.round),
+          opponent  = COALESCE(NULLIF(player_stats.opponent, ''), excluded.opponent),
           played_at = COALESCE(player_stats.played_at, excluded.played_at)
       `).run(uuidv4(), gameId, player.id, pts, roundCode, opponent, playedAt);
+      playersUpdated++;
     }
   }
+  return playersUpdated;
 }
 
 function recordResult(game, winnerTeam, score1, score2) {
@@ -374,103 +406,107 @@ async function pullSchedule(io) {
 
 // ── Main poll ────────────────────────────────────────────────────────────────
 async function pollESPN(io) {
-  try {
-    console.log('[ESPN] Polling scoreboard...');
-    const data = await fetchJson(SCOREBOARD_URL);
-    const events = data.events || [];
+  const ts = new Date().toISOString();
+  const stats = { gamesChecked: 0, scoresUpdated: 0, eliminationsRecorded: 0 };
 
-    // Track which game IDs are currently in-progress
-    const nowLiveGameIds = new Set();
+  // Throws on fatal error so startSmartPoller can apply the back-off delay
+  const data = await fetchJson(SCOREBOARD_URL);
+  const events = data.events || [];
 
-    let processed = 0;
-    for (const event of events) {
-      const comp = event.competitions?.[0];
-      if (!comp) continue;
+  // Track which game IDs are currently in-progress
+  const nowLiveGameIds = new Set();
 
-      const statusType = comp.status?.type;
-      const isCompleted = statusType?.completed === true;
-      const statusName = statusType?.name || '';
-      const isInProgress = statusName === 'STATUS_IN_PROGRESS' || statusName === 'STATUS_HALFTIME';
-      const isScheduled = statusName === 'STATUS_SCHEDULED';
+  for (const event of events) {
+    const comp = event.competitions?.[0];
+    if (!comp) continue;
+    stats.gamesChecked++;
 
-      const espnTeam1 = comp.competitors?.[0]?.team?.displayName;
-      const espnTeam2 = comp.competitors?.[1]?.team?.displayName;
-      const score1 = parseInt(comp.competitors?.[0]?.score) || 0;
-      const score2 = parseInt(comp.competitors?.[1]?.score) || 0;
+    const statusType  = comp.status?.type;
+    const isCompleted = statusType?.completed === true;
+    const statusName  = statusType?.name || '';
+    const isInProgress = statusName === 'STATUS_IN_PROGRESS' || statusName === 'STATUS_HALFTIME';
 
-      // Match against all games (including completed) for metadata updates
-      const metaMatch = findMatchingGame(espnTeam1, espnTeam2, true);
-      if (metaMatch) {
-        updateGameMetadata(metaMatch.game.id, event, comp);
-      }
+    const espnTeam1 = comp.competitors?.[0]?.team?.displayName;
+    const espnTeam2 = comp.competitors?.[1]?.team?.displayName;
+    const score1 = parseInt(comp.competitors?.[0]?.score) || 0;
+    const score2 = parseInt(comp.competitors?.[1]?.score) || 0;
 
-      // Skip score processing for games not in-progress or completed
-      if (!isInProgress && !isCompleted) continue;
+    // Always update game metadata (tip-off time, TV, location, period, clock)
+    const metaMatch = findMatchingGame(espnTeam1, espnTeam2, true);
+    if (metaMatch) updateGameMetadata(metaMatch.game.id, event, comp);
 
-      const match = findMatchingGame(espnTeam1, espnTeam2);
-      if (!match) continue;
+    // Skip box score fetch for games not yet active
+    if (!isInProgress && !isCompleted) continue;
 
-      const { game, flipped } = match;
+    const match = findMatchingGame(espnTeam1, espnTeam2);
+    if (!match) continue;
 
-      if (isInProgress) {
-        nowLiveGameIds.add(game.id);
-        db.prepare('UPDATE games SET is_live = 1 WHERE id = ?').run(game.id);
-      }
+    const { game, flipped } = match;
 
-      try {
-        const summary = await fetchJson(SUMMARY_BASE + event.id);
-        await processBoxScore(game.id, summary);
-        processed++;
+    if (isInProgress) {
+      nowLiveGameIds.add(game.id);
+      db.prepare('UPDATE games SET is_live = 1 WHERE id = ?').run(game.id);
+    }
 
-        if (isCompleted) {
-          let winnerTeam;
-          if (flipped) {
-            winnerTeam = score2 > score1 ? game.team1 : game.team2;
-          } else {
-            winnerTeam = score1 > score2 ? game.team1 : game.team2;
-          }
-          recordResult(game, winnerTeam, flipped ? score2 : score1, flipped ? score1 : score2);
-          if (recordResult._lastLoser) {
-            postEliminations(recordResult._lastLoser, io);
-            recordResult._lastLoser = null;
-          }
+    try {
+      const summary = await fetchJson(SUMMARY_BASE + event.id);
+      const updated = await processBoxScore(game.id, summary);
+      stats.scoresUpdated += updated;
+
+      if (isCompleted) {
+        const winnerTeam = flipped
+          ? (score2 > score1 ? game.team1 : game.team2)
+          : (score1 > score2 ? game.team1 : game.team2);
+        recordResult(game, winnerTeam, flipped ? score2 : score1, flipped ? score1 : score2);
+        if (recordResult._lastLoser) {
+          postEliminations(recordResult._lastLoser, io);
+          recordResult._lastLoser = null;
+          stats.eliminationsRecorded++;
         }
-      } catch (err) {
-        console.error(`[ESPN] Error processing event ${event.id}:`, err.message);
       }
+    } catch (err) {
+      console.error(`[ESPN ${ts}] Error processing event ${event.id}: ${err.message}`);
     }
-
-    // Clear is_live for any games that are no longer in-progress
-    const allLiveGames = db.prepare('SELECT id FROM games WHERE is_live = 1').all();
-    for (const { id } of allLiveGames) {
-      if (!nowLiveGameIds.has(id)) {
-        db.prepare('UPDATE games SET is_live = 0, current_period = \'Final\', game_clock = \'\' WHERE id = ?').run(id);
-      }
-    }
-
-    if (processed > 0) {
-      pushStandingsToLeagues(io);
-      console.log(`[ESPN] Updated stats for ${processed} game(s), standings pushed.`);
-    } else {
-      console.log('[ESPN] No matching in-progress/completed games found.');
-    }
-
-    // Always push games update so the Games page reflects metadata + live status
-    pushGamesUpdate(io);
-  } catch (err) {
-    console.error('[ESPN poller] Fatal error:', err.message);
   }
+
+  // Clear is_live for games no longer in-progress
+  for (const { id } of db.prepare('SELECT id FROM games WHERE is_live = 1').all()) {
+    if (!nowLiveGameIds.has(id)) {
+      db.prepare("UPDATE games SET is_live = 0, current_period = 'Final', game_clock = '' WHERE id = ?").run(id);
+    }
+  }
+
+  if (stats.scoresUpdated > 0) pushStandingsToLeagues(io);
+  pushGamesUpdate(io);
+
+  console.log(
+    `[ESPN ${ts}] games=${stats.gamesChecked} scores=${stats.scoresUpdated} elims=${stats.eliminationsRecorded}`
+  );
+  return stats;
 }
 
 // ── Smart poller ─────────────────────────────────────────────────────────────
-// 2-min intervals during live window (Thu-Sun 12PM-11PM ET), 30-min otherwise.
 let _pollerTimeout = null;
 
 function startSmartPoller(io) {
   async function tick() {
-    await pollESPN(io);
-    const delay = isLiveWindow() ? 5 * 60 * 1000 : 30 * 60 * 1000;
-    console.log(`[ESPN] Next poll in ${delay / 60000} min (tournament window: ${isLiveWindow()})`);
+    let delay;
+    try {
+      await pollESPN(io);
+      delay = getPollingInterval();
+    } catch (err) {
+      // ESPN returned an error or rate-limited — back off 5 min before retrying
+      console.error(`[ESPN] Poll failed, backing off 5 min: ${err.message}`);
+      delay = 5 * 60 * 1000;
+    }
+
+    if (delay === null) {
+      console.log('[ESPN] Tournament over (Apr 7 11:59 PM ET passed) — poller stopped.');
+      return;
+    }
+
+    const mins = (delay / 60000).toFixed(0);
+    console.log(`[ESPN] Next poll in ${mins} min`);
     _pollerTimeout = setTimeout(tick, delay);
   }
 
