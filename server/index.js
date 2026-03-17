@@ -73,6 +73,7 @@ app.use('/api/news', require('./routes/news'));
 app.use('/api/superadmin', require('./routes/superadmin'));
 app.use('/api/wall', require('./routes/wall').router);
 app.use('/api/games', require('./routes/games'));
+app.use('/api/sindarius', require('./routes/sindarius'));
 
 // Serve uploaded avatars
 const path = require('path');

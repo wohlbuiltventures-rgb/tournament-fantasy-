@@ -5,6 +5,7 @@ import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import BossMode from './components/BossMode';
 import FloatingChat from './components/FloatingChat';
+import SindariusWidget from './components/SindariusWidget';
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -57,6 +58,7 @@ export default function App() {
           <Navbar />
           <BossMode />
           <FloatingChat />
+          <SindariusWidget />
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
