@@ -71,8 +71,10 @@ db.exec(`
     end_date TEXT NOT NULL,
     season_year INTEGER DEFAULT 2026,
     is_major INTEGER DEFAULT 0,
+    is_signature INTEGER DEFAULT 0,
     status TEXT DEFAULT 'scheduled',
     purse INTEGER DEFAULT 0,
+    prize_money INTEGER DEFAULT 0,
     external_id TEXT
   );
 
@@ -205,6 +207,8 @@ const _golfColMigrations = [
   `ALTER TABLE golf_leagues ADD COLUMN faab_weekly_budget INTEGER DEFAULT 100`,
   `ALTER TABLE golf_leagues ADD COLUMN draft_type TEXT DEFAULT 'snake'`,
   `ALTER TABLE golf_leagues ADD COLUMN bid_timer_seconds INTEGER DEFAULT 30`,
+  `ALTER TABLE golf_tournaments ADD COLUMN is_signature INTEGER DEFAULT 0`,
+  `ALTER TABLE golf_tournaments ADD COLUMN prize_money INTEGER DEFAULT 0`,
 ];
 for (const sql of _golfColMigrations) { try { db.exec(sql); } catch (_) {} }
 
@@ -289,47 +293,39 @@ if (existingCount === 0) {
   console.log('[golf-db] Seeded', GOLF_PLAYERS.length, 'golf players');
 }
 
-// ── Seed golf_tournaments (2026 PGA Tour season) ──────────────────────────────
+// ── Seed golf_tournaments (2026 Signature / Major schedule) ───────────────────
 const TOURNAMENTS_2026 = [
-  { name: 'The Players Championship',   course: 'TPC Sawgrass',                 start_date: '2026-03-12', end_date: '2026-03-15', is_major: 0, purse: 25000000, forceStatus: 'completed' },
-  { name: 'Valspar Championship',       course: 'Innisbrook Resort',            start_date: '2026-03-16', end_date: '2026-03-22', is_major: 0, purse: 8700000,  forceStatus: 'active'    },
-  { name: 'Houston Open',               course: 'Memorial Park GC',             start_date: '2026-03-23', end_date: '2026-03-29', is_major: 0, purse: 9200000  },
-  { name: 'Valero Texas Open',          course: 'TPC San Antonio',              start_date: '2026-03-30', end_date: '2026-04-05', is_major: 0, purse: 8900000  },
-  { name: 'The Masters Tournament',     course: 'Augusta National Golf Club',   start_date: '2026-04-06', end_date: '2026-04-12', is_major: 1, purse: 20000000 },
-  { name: 'RBC Heritage',              course: 'Harbour Town Golf Links',      start_date: '2026-04-13', end_date: '2026-04-19', is_major: 0, purse: 20000000 },
-  { name: 'Truist Championship',        course: 'Quail Hollow Club',            start_date: '2026-05-07', end_date: '2026-05-10', is_major: 0, purse: 20000000 },
-  { name: 'PGA Championship',          course: 'Aronimink Golf Club',          start_date: '2026-05-11', end_date: '2026-05-17', is_major: 1, purse: 18500000 },
-  { name: 'Memorial Tournament',        course: 'Muirfield Village Golf Club',  start_date: '2026-06-04', end_date: '2026-06-07', is_major: 0, purse: 20000000 },
-  { name: 'US Open',                    course: 'Shinnecock Hills GC',          start_date: '2026-06-15', end_date: '2026-06-21', is_major: 1, purse: 21500000 },
-  { name: 'Travelers Championship',     course: 'TPC River Highlands',          start_date: '2026-06-22', end_date: '2026-06-28', is_major: 0, purse: 20000000 },
-  { name: 'The Open Championship',      course: 'Royal Birkdale',               start_date: '2026-07-13', end_date: '2026-07-19', is_major: 1, purse: 17000000 },
-  { name: 'TOUR Championship',          course: 'East Lake Golf Club',          start_date: '2026-08-27', end_date: '2026-08-30', is_major: 0, purse: 100000000 },
+  { name: 'AT&T Pebble Beach Pro-Am',  course: 'Pebble Beach Golf Links, CA',    start_date: '2026-02-12', end_date: '2026-02-15', is_major: 0, is_signature: 1, prize_money: 20000000, forceStatus: 'completed' },
+  { name: 'Genesis Invitational',      course: 'Riviera Country Club, CA',       start_date: '2026-02-19', end_date: '2026-02-22', is_major: 0, is_signature: 1, prize_money: 20000000, forceStatus: 'completed' },
+  { name: 'Arnold Palmer Invitational',course: 'Bay Hill Club & Lodge, FL',      start_date: '2026-03-05', end_date: '2026-03-08', is_major: 0, is_signature: 1, prize_money: 20000000, forceStatus: 'completed' },
+  { name: 'The Players Championship',  course: 'TPC Sawgrass, FL',              start_date: '2026-03-12', end_date: '2026-03-15', is_major: 0, is_signature: 0, prize_money: 25000000, forceStatus: 'completed' },
+  { name: 'Masters Tournament',        course: 'Augusta National Golf Club, GA', start_date: '2026-04-06', end_date: '2026-04-12', is_major: 1, is_signature: 1, prize_money: 21000000, forceStatus: 'scheduled' },
+  { name: 'RBC Heritage',              course: 'Harbour Town Golf Links, SC',   start_date: '2026-04-16', end_date: '2026-04-19', is_major: 0, is_signature: 1, prize_money: 20000000, forceStatus: 'scheduled' },
+  { name: 'Cadillac Championship',     course: 'Trump National Doral, FL',      start_date: '2026-04-30', end_date: '2026-05-03', is_major: 0, is_signature: 1, prize_money: 20000000, forceStatus: 'scheduled' },
+  { name: 'Truist Championship',       course: 'Quail Hollow Club, NC',         start_date: '2026-05-07', end_date: '2026-05-10', is_major: 0, is_signature: 1, prize_money: 20000000, forceStatus: 'scheduled' },
+  { name: 'PGA Championship',          course: 'Aronimink Golf Club, PA',       start_date: '2026-05-11', end_date: '2026-05-17', is_major: 1, is_signature: 1, prize_money: 21000000, forceStatus: 'scheduled' },
+  { name: 'The Memorial Tournament',   course: 'Muirfield Village Golf Club, OH',start_date: '2026-06-04', end_date: '2026-06-07', is_major: 0, is_signature: 1, prize_money: 20000000, forceStatus: 'scheduled' },
+  { name: 'US Open',                   course: 'Shinnecock Hills Golf Club, NY', start_date: '2026-06-15', end_date: '2026-06-21', is_major: 1, is_signature: 1, prize_money: 21000000, forceStatus: 'scheduled' },
+  { name: 'Travelers Championship',    course: 'TPC River Highlands, CT',       start_date: '2026-06-25', end_date: '2026-06-28', is_major: 0, is_signature: 1, prize_money: 20000000, forceStatus: 'scheduled' },
+  { name: 'The Open Championship',     course: 'Royal Birkdale, England',       start_date: '2026-07-13', end_date: '2026-07-19', is_major: 1, is_signature: 1, prize_money: 21000000, forceStatus: 'scheduled' },
 ];
 
-// Migration: replace 2025 tournaments with 2026 schedule
-const existing2025 = db.prepare("SELECT COUNT(*) as c FROM golf_tournaments WHERE season_year = 2025").get().c;
-if (existing2025 > 0) {
+// Force-replace tournaments if the new schedule isn't seeded yet
+const hasPebble = db.prepare("SELECT COUNT(*) as c FROM golf_tournaments WHERE name = 'AT&T Pebble Beach Pro-Am'").get().c;
+if (hasPebble === 0) {
+  db.prepare("DELETE FROM golf_tournaments WHERE season_year = 2026").run();
   db.prepare("DELETE FROM golf_tournaments WHERE season_year = 2025").run();
-  console.log('[golf-db] Removed 2025 tournament data — replacing with 2026 schedule');
-}
-
-const existingT = db.prepare('SELECT COUNT(*) as c FROM golf_tournaments').get().c;
-if (existingT === 0) {
-  const insT = db.prepare(`INSERT OR IGNORE INTO golf_tournaments (id, name, course, start_date, end_date, season_year, is_major, status, purse) VALUES (?, ?, ?, ?, ?, 2026, ?, ?, ?)`);
-  const now = new Date();
+  const insT = db.prepare(`
+    INSERT OR IGNORE INTO golf_tournaments
+      (id, name, course, start_date, end_date, season_year, is_major, is_signature, status, purse, prize_money)
+    VALUES (?, ?, ?, ?, ?, 2026, ?, ?, ?, ?, ?)
+  `);
   db.transaction(() => {
     for (const t of TOURNAMENTS_2026) {
-      let status;
-      if (t.forceStatus) {
-        status = t.forceStatus;
-      } else {
-        const s = new Date(t.start_date), e = new Date(t.end_date);
-        status = now > e ? 'completed' : now >= s ? 'active' : 'scheduled';
-      }
-      insT.run(uuidv4(), t.name, t.course, t.start_date, t.end_date, t.is_major, status, t.purse);
+      insT.run(uuidv4(), t.name, t.course, t.start_date, t.end_date, t.is_major, t.is_signature, t.forceStatus, t.prize_money, t.prize_money);
     }
   })();
-  console.log('[golf-db] Seeded', TOURNAMENTS_2026.length, '2026 golf tournaments');
+  console.log('[golf-db] Seeded', TOURNAMENTS_2026.length, '2026 signature/major tournaments');
 }
 
 module.exports = db;

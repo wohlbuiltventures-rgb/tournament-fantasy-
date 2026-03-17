@@ -1,22 +1,108 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Ticket, Plus, Flag, ChevronRight, Users } from 'lucide-react';
+import { Ticket, Plus, Flag, ChevronRight, Users, Calendar, Trophy, Star } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
 import BallLoader from '../../components/BallLoader';
 
+function NextTournamentBanner({ tournament }) {
+  if (!tournament) return null;
+  const isLive = tournament.status === 'active';
+  const start = new Date(tournament.start_date);
+  const end = new Date(tournament.end_date);
+  const now = new Date();
+  const daysUntil = Math.ceil((start - now) / (1000 * 60 * 60 * 24));
+
+  const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const dateRange = `${fmt(start)} – ${fmt(end)}, 2026`;
+
+  return (
+    <div className={`relative overflow-hidden rounded-2xl border p-4 sm:p-5 mb-6 ${
+      isLive
+        ? 'bg-green-500/8 border-green-500/30'
+        : tournament.is_major
+        ? 'bg-yellow-500/5 border-yellow-500/25'
+        : 'bg-gray-900 border-gray-800'
+    }`}>
+      {/* Subtle glow */}
+      {isLive && (
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(34,197,94,0.08)_0%,_transparent_60%)] pointer-events-none" />
+      )}
+      <div className="relative flex flex-wrap items-center gap-3 sm:gap-4">
+        {/* Icon */}
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+          isLive ? 'bg-green-500/20' : tournament.is_major ? 'bg-yellow-500/10' : 'bg-gray-800'
+        }`}>
+          {tournament.is_major
+            ? <Trophy className="w-5 h-5 text-yellow-400" />
+            : <Flag className="w-5 h-5 text-green-400" />}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-0.5">
+            <span className="text-white font-black text-sm sm:text-base truncate">{tournament.name}</span>
+            {isLive && (
+              <span className="inline-flex items-center gap-1 bg-green-500/20 border border-green-500/40 text-green-400 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> LIVE NOW
+              </span>
+            )}
+            {!isLive && tournament.is_major && (
+              <span className="inline-block bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">MAJOR</span>
+            )}
+            {!isLive && tournament.is_signature === 1 && !tournament.is_major && (
+              <span className="inline-block bg-green-500/15 border border-green-500/30 text-green-400 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">SIGNATURE</span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {dateRange}</span>
+            <span className="text-gray-600">·</span>
+            <span className="truncate">{tournament.course}</span>
+          </div>
+        </div>
+
+        {/* Countdown */}
+        {!isLive && daysUntil > 0 && (
+          <div className="text-right shrink-0">
+            <div className={`font-black text-lg tabular-nums ${tournament.is_major ? 'text-yellow-400' : 'text-green-400'}`}>
+              {daysUntil}d
+            </div>
+            <div className="text-gray-500 text-[10px] uppercase tracking-wide">until start</div>
+          </div>
+        )}
+        {isLive && (
+          <div className="text-right shrink-0">
+            <div className="text-green-400 font-black text-sm">In Progress</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function GolfDashboard() {
   useDocTitle('Golf Dashboard | TourneyRun');
   const { user } = useAuth();
   const [leagues, setLeagues] = useState([]);
+  const [nextTournament, setNextTournament] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/golf/leagues')
-      .then(r => setLeagues(r.data.leagues || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.get('/golf/leagues'),
+      api.get('/golf/tournaments'),
+    ]).then(([lr, tr]) => {
+      setLeagues(lr.data.leagues || []);
+      const tournaments = tr.data.tournaments || [];
+      // Prefer active tournament, then nearest upcoming
+      const live = tournaments.find(t => t.status === 'active');
+      if (live) { setNextTournament(live); return; }
+      const upcoming = tournaments
+        .filter(t => t.status === 'scheduled')
+        .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+      setNextTournament(upcoming[0] || null);
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <BallLoader />;
@@ -47,6 +133,9 @@ export default function GolfDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* ── Next Tournament Banner ── */}
+      <NextTournamentBanner tournament={nextTournament} />
 
       {/* ── Empty state ── */}
       {leagues.length === 0 && (
