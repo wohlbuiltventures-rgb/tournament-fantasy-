@@ -2,12 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../api';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
-// Pages where the widget is hidden
-const HIDDEN_PATHS = ['/', '/login', '/register', '/forgot-password', '/reset-password'];
 
 function initials(name) {
   if (!name) return '?';
@@ -26,7 +23,6 @@ export default function FloatingChat() {
   const token = localStorage.getItem('token');
 
   const [open, setOpen] = useState(false);
-  const [leagueId, setLeagueId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [unread, setUnread] = useState(0);
   const [text, setText] = useState('');
@@ -34,6 +30,9 @@ export default function FloatingChat() {
   const socketRef = useRef(null);
   const bottomRef = useRef(null);
   const openRef = useRef(false);
+
+  // Derive leagueId directly from the URL: /league/:id or /league/:id/*
+  const leagueId = location.pathname.match(/^\/league\/([^/]+)/)?.[1] ?? null;
 
   // Keep openRef in sync (used inside socket callback)
   useEffect(() => { openRef.current = open; }, [open]);
@@ -43,18 +42,8 @@ export default function FloatingChat() {
     if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, open]);
 
-  // Fetch user's leagues → pick first active one
-  useEffect(() => {
-    if (!user) return;
-    api.get('/leagues').then(res => {
-      const leagues = res.data.leagues || [];
-      const pick =
-        leagues.find(l => l.status === 'active') ||
-        leagues.find(l => l.status === 'drafting') ||
-        leagues[0];
-      if (pick) setLeagueId(pick.id);
-    }).catch(() => {});
-  }, [user]);
+  // Reset messages when leagueId changes (navigating between leagues)
+  useEffect(() => { setMessages([]); setUnread(0); }, [leagueId]);
 
   // Socket connection tied to leagueId
   useEffect(() => {
@@ -92,9 +81,8 @@ export default function FloatingChat() {
     setText('');
   };
 
-  // Hide on auth/landing pages or when not logged in or no league
-  const pathname = location.pathname;
-  if (!user || HIDDEN_PATHS.includes(pathname) || !leagueId) return null;
+  // Only show on /league/* pages and when logged in
+  if (!user || !leagueId) return null;
 
   const myInitials = initials(user.display_name || user.username);
 
