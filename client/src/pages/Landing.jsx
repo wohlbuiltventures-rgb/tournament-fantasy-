@@ -372,7 +372,7 @@ export default function Landing() {
     }
   };
 
-  const tickerText = '🏀 The 2026 Tournament starts Thursday March 19th at 12PM ET  ·  Draft day is coming  ·  Secure your spot before your friends do  ·  $5 entry per team  ·  You keep 100% of the prize pool  ·  ';
+  const tickerText = '🏀 The 2026 Tournament starts Thursday March 19th at 12PM ET  ·  Draft day is coming  ·  Secure your spot before your friends do  ·  $5 platform fee per team  ·  Prize pool managed by your league  ·  ';
 
   const SHARE_TEXT = "Skip the bracket this year 🏀 We're doing TourneyRun — draft real players, score real points, win real money.\n\nJoin here → https://www.tourneyrun.app";
 
@@ -436,9 +436,9 @@ export default function Landing() {
               <span style={{ color: '#1e3a5f', margin: '0 10px', fontSize: 14 }}>·</span>
               Secure your spot before your friends do
               <span style={{ color: '#1e3a5f', margin: '0 14px', fontSize: 14 }}>·</span>
-              $5 entry per team
+              $5 platform fee per team
               <span style={{ color: '#1e3a5f', margin: '0 10px', fontSize: 14 }}>·</span>
-              You keep 100% of the prize pool
+              Prize pool managed by your league
               <span style={{ color: '#1e3a5f', margin: '0 14px', fontSize: 14 }}>·</span>
             </span>
           ))}
@@ -480,7 +480,7 @@ export default function Landing() {
 
           {/* Supporting subheadline */}
           <p className="text-gray-300 text-base sm:text-lg leading-relaxed mb-8 max-w-sm mx-auto">
-            Draft college basketball players. Score points as they win games. Play for 3 full weeks. Win real money.
+            Draft college basketball players. Score points as they win games. Play for 3 full weeks with your crew.
           </p>
 
           {/* 2 CTAs stacked full-width */}
@@ -526,7 +526,7 @@ export default function Landing() {
               },
               {
                 svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
-                title: 'Play for real stakes', desc: 'Set your own buy-in. We charge $5 per team to play — your prize pool stays 100% yours.',
+                title: 'Play for real stakes', desc: 'Set your own buy-in with your group. TourneyRun charges a $5 platform fee per team. Your prize pool is managed entirely outside the platform.',
               },
             ].map(card => (
               <div key={card.title} className="bg-gray-900 border border-gray-800 hover:border-brand-500/40 rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5">
@@ -575,7 +575,7 @@ export default function Landing() {
             What started as a friend-group tradition is now built for everyone.
           </p>
           <p className="text-brand-400 font-bold text-lg">
-            Real players. Real points. Real money.
+            Real players. Real points. Real stakes.
           </p>
 
         </div>
@@ -590,8 +590,8 @@ export default function Landing() {
               You set the stakes.<br className="hidden sm:block" /> You keep the winnings.
             </h2>
             <p className="text-gray-400 text-lg max-w-2xl mx-auto leading-relaxed">
-              TourneyRun takes nothing from your prize pool. Commissioners set the entry fee, teams pay to join, and winners get paid however your league decides —{' '}
-              <span className="text-white">Venmo, Zelle, cash, whatever works.</span>
+              TourneyRun charges a flat $5 platform fee per team — that's it. Commissioners collect buy-ins and pay out winners directly via Venmo, Zelle, or cash.{' '}
+              <span className="text-white">We never hold or touch your prize money.</span>
             </p>
           </div>
 
@@ -599,7 +599,7 @@ export default function Landing() {
             {[
               {
                 svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
-                text: 'Set any buy-in your group agrees on — play for fun or play for some serious cash!',
+                text: 'Set any buy-in your group agrees on — your league collects and pays out directly.',
               },
               {
                 svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
@@ -646,8 +646,8 @@ export default function Landing() {
               },
               {
                 svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>,
-                title: 'Win Real Money',
-                desc: 'Commissioner sets the stakes. Everyone pays. Winner takes the pot. No middleman. No platform cut.',
+                title: 'Play for Real Stakes',
+                desc: 'Commissioner sets the buy-in. Your league handles payouts directly via Venmo or Zelle. TourneyRun never touches your prize pool.',
               },
             ].map(card => (
               <div
@@ -714,7 +714,7 @@ export default function Landing() {
             >
               Create Your League — Free
             </Link>
-            <p className="text-gray-600 text-xs mt-3">Free to join · $5 entry per team · We never touch your prize pool</p>
+            <p className="text-gray-600 text-xs mt-3">Free to create · $5 platform fee per team · Prize pool managed by your league</p>
           </div>
         </div>
       </section>
