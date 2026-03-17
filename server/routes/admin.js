@@ -637,4 +637,248 @@ router.post('/pull-schedule', authMiddleware, async (req, res) => {
   }
 });
 
+// ── Draft Import ─────────────────────────────────────────────────────────────
+// Maps ownerName (from import data) → DB username or email
+const IMPORT_OWNER_MAP = {
+  'Collin Wohlfert':  'cwohlfert',
+  'Tate Small':       'Tate Small',
+  'Austin Helms':     'athelms',
+  'Patrick Taylor':   'Patster7',
+  'Preston Trout':    'preston_trout@yahoo.com',
+  'Tom Sheehan':      'SheehanT16',
+  'Sean Meekins':     'Smeekins22',
+  'Garrett Washenko': 'Gwashenko',
+  // TBD — handled as ghost users below
+};
+
+function ghostSlug(ownerName) {
+  return ownerName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+}
+
+function findOrCreateGhostUser(ownerName) {
+  const slug      = ghostSlug(ownerName);
+  const email     = `ghost_${slug}@tourneyrun.internal`;
+  const username  = `ghost_${slug}`;
+  let user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  if (!user) {
+    const id   = uuidv4();
+    const hash = bcrypt.hashSync(`ghost_no_access_${id}`, 4);
+    db.prepare('INSERT INTO users (id, email, username, password_hash) VALUES (?, ?, ?, ?)')
+      .run(id, email, username, hash);
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  }
+  return user;
+}
+
+// POST /api/admin/import-draft
+// Body: { leagueId, teams: [{ ownerName, players: [{ name, school, seed, region }] }] }
+router.post('/import-draft', authMiddleware, (req, res) => {
+  try {
+    const { leagueId, teams } = req.body;
+    if (!leagueId || !Array.isArray(teams) || !teams.length) {
+      return res.status(400).json({ error: 'leagueId and teams[] are required' });
+    }
+    const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(leagueId);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the commissioner can import a draft' });
+    }
+
+    const numTeams  = teams.length;
+    const numRounds = teams[0].players.length;
+    const results   = { imported: 0, skipped: 0, unmatched: [], playerNotFound: [] };
+
+    db.transaction(() => {
+      // Update league dimensions and mark draft complete
+      db.prepare(`
+        UPDATE leagues
+        SET max_teams = ?, total_rounds = ?, status = 'active',
+            draft_status = 'completed', current_pick = ?
+        WHERE id = ?
+      `).run(numTeams, numRounds, numTeams * numRounds + 1, leagueId);
+
+      for (let i = 0; i < teams.length; i++) {
+        const { ownerName, players } = teams[i];
+        const draftOrder = i + 1;
+
+        // Resolve user (known mapping or ghost placeholder)
+        const knownUsername = IMPORT_OWNER_MAP[ownerName];
+        let userId, isGhost = false;
+
+        if (knownUsername !== undefined) {
+          const u = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?')
+            .get(knownUsername, knownUsername);
+          if (!u) throw new Error(`User not found for "${ownerName}" (lookup: "${knownUsername}")`);
+          userId = u.id;
+        } else {
+          const ghost = findOrCreateGhostUser(ownerName);
+          userId  = ghost.id;
+          isGhost = true;
+          results.unmatched.push(ownerName);
+        }
+
+        // Upsert league_member
+        const existMember = db.prepare(
+          'SELECT id FROM league_members WHERE league_id = ? AND user_id = ?'
+        ).get(leagueId, userId);
+        if (existMember) {
+          db.prepare(
+            'UPDATE league_members SET draft_order = ?, pending_owner_name = ? WHERE id = ?'
+          ).run(draftOrder, isGhost ? ownerName : null, existMember.id);
+        } else {
+          db.prepare(`
+            INSERT INTO league_members (id, league_id, user_id, team_name, draft_order, pending_owner_name)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(uuidv4(), leagueId, userId, ownerName, draftOrder, isGhost ? ownerName : null);
+        }
+
+        // Ensure payment is marked paid
+        const existPay = db.prepare(
+          'SELECT id FROM member_payments WHERE league_id = ? AND user_id = ?'
+        ).get(leagueId, userId);
+        if (existPay) {
+          db.prepare(`
+            UPDATE member_payments SET status = 'paid', amount = 5.00,
+              paid_at = COALESCE(paid_at, CURRENT_TIMESTAMP) WHERE id = ?
+          `).run(existPay.id);
+        } else {
+          db.prepare(`
+            INSERT INTO member_payments (id, league_id, user_id, amount, status, paid_at)
+            VALUES (?, ?, ?, 5.00, 'paid', CURRENT_TIMESTAMP)
+          `).run(uuidv4(), leagueId, userId);
+        }
+
+        // Insert picks (snake draft order)
+        for (let j = 0; j < players.length; j++) {
+          const { name, school } = players[j];
+          const round      = j + 1;
+          const pickNumber = round % 2 === 1
+            ? (round - 1) * numTeams + (i + 1)
+            : (round - 1) * numTeams + (numTeams - i);
+
+          // Exact match first, then fuzzy + school disambiguation
+          let player = db.prepare('SELECT * FROM players WHERE LOWER(name) = LOWER(?)').get(name);
+          if (!player) {
+            const candidates = db.prepare(
+              'SELECT * FROM players WHERE LOWER(name) LIKE ?'
+            ).all(`%${name.toLowerCase()}%`);
+            if (candidates.length === 1) {
+              player = candidates[0];
+            } else if (candidates.length > 1) {
+              player = school
+                ? (candidates.find(c => c.team.toLowerCase().includes(school.toLowerCase())) || candidates[0])
+                : candidates[0];
+            }
+          }
+
+          if (!player) {
+            results.playerNotFound.push({ ownerName, name, school, round, pickNumber });
+            continue;
+          }
+
+          const info = db.prepare(`
+            INSERT OR IGNORE INTO draft_picks (id, league_id, user_id, player_id, pick_number, round)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(uuidv4(), leagueId, userId, player.id, pickNumber, round);
+
+          if (info.changes > 0) results.imported++;
+          else results.skipped++;
+        }
+      }
+    })();
+
+    res.json({
+      success: true,
+      imported:      results.imported,
+      skipped:       results.skipped,
+      unmatched:     results.unmatched,
+      playerNotFound: results.playerNotFound,
+    });
+  } catch (err) {
+    console.error('[import-draft]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/import-draft/unmatched/:leagueId
+router.get('/import-draft/unmatched/:leagueId', authMiddleware, (req, res) => {
+  try {
+    const { leagueId } = req.params;
+    const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(leagueId);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the commissioner can view this' });
+    }
+    const unmatched = db.prepare(`
+      SELECT lm.id AS member_id, lm.user_id, lm.pending_owner_name,
+             lm.draft_order, u.username,
+             COUNT(dp.id) AS pick_count
+      FROM league_members lm
+      JOIN users u ON lm.user_id = u.id
+      LEFT JOIN draft_picks dp ON dp.league_id = lm.league_id AND dp.user_id = lm.user_id
+      WHERE lm.league_id = ? AND lm.pending_owner_name IS NOT NULL
+      GROUP BY lm.id
+      ORDER BY lm.draft_order
+    `).all(leagueId);
+    res.json({ unmatched });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/import-draft/map-owner
+// Body: { leagueId, ghostUserId, realUsername }
+router.post('/import-draft/map-owner', authMiddleware, (req, res) => {
+  try {
+    const { leagueId, ghostUserId, realUsername } = req.body;
+    if (!leagueId || !ghostUserId || !realUsername) {
+      return res.status(400).json({ error: 'leagueId, ghostUserId, and realUsername are required' });
+    }
+    const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(leagueId);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the commissioner can map owners' });
+    }
+    const ghostUser = db.prepare(
+      "SELECT * FROM users WHERE id = ? AND email LIKE '%@tourneyrun.internal'"
+    ).get(ghostUserId);
+    if (!ghostUser) return res.status(404).json({ error: 'Ghost user not found' });
+
+    const realUser = db.prepare('SELECT * FROM users WHERE username = ? OR email = ?')
+      .get(realUsername, realUsername);
+    if (!realUser) return res.status(404).json({ error: `User "${realUsername}" not found` });
+
+    const existMember = db.prepare(
+      'SELECT id FROM league_members WHERE league_id = ? AND user_id = ?'
+    ).get(leagueId, realUser.id);
+    if (existMember) {
+      return res.status(409).json({ error: `"${realUsername}" is already a member of this league` });
+    }
+
+    db.transaction(() => {
+      db.prepare('UPDATE draft_picks SET user_id = ? WHERE league_id = ? AND user_id = ?')
+        .run(realUser.id, leagueId, ghostUserId);
+      db.prepare(
+        'UPDATE league_members SET user_id = ?, pending_owner_name = NULL WHERE league_id = ? AND user_id = ?'
+      ).run(realUser.id, leagueId, ghostUserId);
+      db.prepare('UPDATE member_payments SET user_id = ? WHERE league_id = ? AND user_id = ?')
+        .run(realUser.id, leagueId, ghostUserId);
+      // Remove ghost user only if they have no other memberships
+      const others = db.prepare(
+        'SELECT COUNT(*) as cnt FROM league_members WHERE user_id = ?'
+      ).get(ghostUserId);
+      if (others.cnt === 0) {
+        db.prepare('DELETE FROM member_payments WHERE user_id = ?').run(ghostUserId);
+        db.prepare('DELETE FROM users WHERE id = ?').run(ghostUserId);
+      }
+    })();
+
+    res.json({ success: true, mapped: { from: ghostUser.username, to: realUser.username } });
+  } catch (err) {
+    console.error('[map-owner]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

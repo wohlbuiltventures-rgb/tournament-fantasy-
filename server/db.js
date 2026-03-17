@@ -187,6 +187,8 @@ try { db.exec("ALTER TABLE players ADD COLUMN espn_athlete_id TEXT DEFAULT ''");
 try { db.exec('ALTER TABLE players ADD COLUMN is_first_four INTEGER DEFAULT 0'); } catch (e) {}
 // Draft order randomizer lock
 try { db.exec('ALTER TABLE leagues ADD COLUMN draft_order_randomized INTEGER DEFAULT 0'); } catch (e) {}
+// Draft import — tracks placeholder members awaiting real account assignment
+try { db.exec('ALTER TABLE league_members ADD COLUMN pending_owner_name TEXT'); } catch (e) {}
 // Password reset tokens
 try { db.exec('ALTER TABLE users ADD COLUMN password_reset_token TEXT'); } catch (e) {}
 try { db.exec('ALTER TABLE users ADD COLUMN password_reset_expires DATETIME'); } catch (e) {}
