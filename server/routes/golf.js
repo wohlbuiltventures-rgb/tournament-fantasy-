@@ -620,4 +620,42 @@ router.post('/leagues/:id/draft/pick', authMiddleware, (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
+// ── ESPN Auto-Sync routes ───────────────────────────────────────────────────────
+const { syncTournamentScores, getSyncStatus } = require('../golfSyncService');
+
+// POST /admin/sync/:tournamentId — manual sync trigger (commissioner or superadmin)
+router.post('/admin/sync/:tournamentId', authMiddleware, async (req, res) => {
+  try {
+    const { tournamentId } = req.params;
+    const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tournamentId);
+    if (!tourn) return res.status(404).json({ error: 'Tournament not found' });
+
+    // Must be superadmin OR commissioner of a league using this tournament
+    if (req.user.role !== 'superadmin') {
+      const league = db.prepare(`
+        SELECT gl.id FROM golf_leagues gl
+        WHERE gl.commissioner_id = ?
+        LIMIT 1
+      `).get(req.user.id);
+      if (!league) return res.status(403).json({ error: 'Commissioner access required' });
+    }
+
+    const par = parseInt(req.body.par) || 72;
+    const result = await syncTournamentScores(tournamentId, { par, silent: false });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[golf-sync] Manual sync error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /admin/sync/status
+router.get('/admin/sync/status', authMiddleware, (req, res) => {
+  try {
+    res.json(getSyncStatus());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

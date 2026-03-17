@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Save, Search, Trophy, Flag } from 'lucide-react';
+import { ArrowLeft, Save, Search, Trophy, Flag, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
@@ -45,6 +45,8 @@ export default function GolfScoreEntry() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -97,6 +99,34 @@ export default function GolfScoreEntry() {
       ...prev,
       [playerId]: { ...(prev[playerId] || { ...BLANK }), [field]: value },
     }));
+  }
+
+  async function handleEspnSync() {
+    if (!selectedTournId) return;
+    setSyncing(true);
+    setSyncResult(null);
+    setSaveError('');
+    try {
+      const r = await api.post(`/golf/admin/sync/${selectedTournId}`, { par: parseInt(par) });
+      setSyncResult(r.data);
+      // Reload scores from DB after sync
+      const sr = await api.get(`/golf/tournaments/${selectedTournId}/scores`);
+      const existing = {};
+      for (const s of (sr.data.scores || [])) {
+        existing[s.player_id] = {
+          r1: s.round1 ?? '',
+          r2: s.round2 ?? '',
+          r3: s.round3 ?? '',
+          r4: s.round4 ?? '',
+          made_cut: s.made_cut === 1,
+          finish_position: s.finish_position ?? '',
+        };
+      }
+      setScores(existing);
+    } catch (err) {
+      setSaveError(err.response?.data?.error || 'ESPN sync failed');
+    }
+    setSyncing(false);
   }
 
   async function handleSave() {
@@ -194,6 +224,34 @@ export default function GolfScoreEntry() {
             <Flag className="w-3.5 h-3.5 shrink-0" /> Signature event
           </div>
         ) : null}
+
+        {/* ESPN Sync */}
+        {selectedTournId && (
+          <div className="pt-1">
+            <button
+              onClick={handleEspnSync}
+              disabled={syncing}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing from ESPN...' : 'Sync from ESPN'}
+            </button>
+            {syncResult && (
+              <div className="mt-2 text-xs space-y-0.5">
+                <p className="text-green-400">
+                  ✓ Synced {syncResult.synced} players from "{syncResult.espnEventName}"
+                </p>
+                {syncResult.notMatched?.length > 0 && (
+                  <p className="text-yellow-500">
+                    Unmatched ({syncResult.notMatched.length}): {syncResult.notMatched.slice(0, 5).join(', ')}{syncResult.notMatched.length > 5 ? '…' : ''}
+                  </p>
+                )}
+                {syncResult.warning && <p className="text-yellow-400">{syncResult.warning}</p>}
+                {syncResult.error && <p className="text-red-400">{syncResult.error}</p>}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {selectedTournId && (

@@ -209,6 +209,8 @@ const _golfColMigrations = [
   `ALTER TABLE golf_leagues ADD COLUMN bid_timer_seconds INTEGER DEFAULT 30`,
   `ALTER TABLE golf_tournaments ADD COLUMN is_signature INTEGER DEFAULT 0`,
   `ALTER TABLE golf_tournaments ADD COLUMN prize_money INTEGER DEFAULT 0`,
+  `ALTER TABLE golf_tournaments ADD COLUMN espn_event_id TEXT`,
+  `ALTER TABLE golf_tournaments ADD COLUMN last_synced_at DATETIME`,
 ];
 for (const sql of _golfColMigrations) { try { db.exec(sql); } catch (_) {} }
 

@@ -470,6 +470,11 @@ setInterval(() => {
   }
 }, 30000);
 
+// Golf score auto-sync — 30 min intervals Thu–Sun during active tournaments
+const { scheduleAutoSync, backfillCompleted } = require('./golfSyncService');
+scheduleAutoSync();
+setTimeout(backfillCompleted, 15 * 1000); // backfill after server is up
+
 // ESPN live scoring poller — smart polling (2 min live window, 30 min otherwise)
 const { startSmartPoller, pullSchedule } = require('./espnPoller');
 startSmartPoller(io);
