@@ -99,7 +99,10 @@ Keep responses under 4 sentences. Be entertaining. Drop basketball slang natural
 
     if (!anthropicRes.ok) {
       const errText = await anthropicRes.text();
-      console.error('[sindarius] Anthropic API error:', anthropicRes.status, errText);
+      console.error('[sindarius] Anthropic status:', anthropicRes.status);
+      console.error('[sindarius] Anthropic body:', errText);
+      console.error('[sindarius] API key present:', !!process.env.ANTHROPIC_API_KEY);
+      console.error('[sindarius] API key prefix:', process.env.ANTHROPIC_API_KEY?.substring(0, 15));
       return res.status(500).json({ error: 'Anthropic API error — try again.' });
     }
 
