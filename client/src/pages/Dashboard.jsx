@@ -289,7 +289,7 @@ export default function Dashboard() {
                     const rd = rankings[league.id];
                     const showPlace = league.status === 'active' && league.draft_status === 'completed' && rd?.rank != null;
                     const rank = rd?.rank;
-                    const rankColor = rank === 1 ? '#f59e0b' : rank <= 3 ? '#22c55e' : '#fff';
+                    const rankColor = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#fff';
                     const allZero = league.total_points === 0;
                     return (
                   <div className={`grid gap-2 mb-4 ${showPlace ? 'grid-cols-3' : 'grid-cols-2'}`}>
@@ -369,11 +369,11 @@ export default function Dashboard() {
                         {hasPayout && (
                           <div className="text-[11px] text-gray-500 leading-relaxed">
                             Pays 3 spots:&nbsp;
-                            <span className="text-amber-400 font-bold">1st {fmt(pay1)}</span>
+                            <span style={{ color: '#FFD700', fontWeight: 600 }}>1st {fmt(pay1)}</span>
                             <span className="text-gray-600"> · </span>
-                            <span className="text-gray-300 font-semibold">2nd {fmt(pay2)}</span>
+                            <span style={{ color: '#C0C0C0', fontWeight: 600 }}>2nd {fmt(pay2)}</span>
                             <span className="text-gray-600"> · </span>
-                            <span className="text-gray-400">3rd {fmt(pay3)}</span>
+                            <span style={{ color: '#CD7F32', fontWeight: 600 }}>3rd {fmt(pay3)}</span>
                           </div>
                         )}
                       </div>
