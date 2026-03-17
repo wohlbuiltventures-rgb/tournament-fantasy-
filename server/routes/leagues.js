@@ -81,9 +81,13 @@ router.post('/', authMiddleware, (req, res) => {
 // POST /api/leagues/join — join by invite code
 router.post('/join', authMiddleware, (req, res) => {
   try {
-    const { invite_code, team_name } = req.body;
+    const { invite_code, team_name, venmo_handle = '', zelle_handle = '' } = req.body;
     if (!invite_code || !team_name) {
       return res.status(400).json({ error: 'Invite code and team name are required' });
+    }
+    const FREE_CODE_CHECK = 'G7V9XM6W';
+    if (invite_code.toUpperCase() !== FREE_CODE_CHECK && !venmo_handle.trim() && !zelle_handle.trim()) {
+      return res.status(400).json({ error: 'Please provide at least one payment handle (Venmo or Zelle)' });
     }
     if (!isClean(team_name)) return res.status(400).json({ error: NAME_BLOCKED_MSG });
 
@@ -116,8 +120,9 @@ router.post('/join', authMiddleware, (req, res) => {
 
     // Insert league member row
     db.prepare(`
-      INSERT INTO league_members (id, league_id, user_id, team_name) VALUES (?, ?, ?, ?)
-    `).run(uuidv4(), league.id, req.user.id, team_name);
+      INSERT INTO league_members (id, league_id, user_id, team_name, venmo_handle, zelle_handle)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(uuidv4(), league.id, req.user.id, team_name, venmo_handle.trim(), zelle_handle.trim());
 
     // Free access code — skip payment entirely
     const FREE_CODE = 'G7V9XM6W';
@@ -190,7 +195,9 @@ router.get('/:id', authMiddleware, (req, res) => {
     if (!league) return res.status(404).json({ error: 'League not found' });
 
     const members = db.prepare(`
-      SELECT lm.*, u.username, u.email, u.venmo_handle
+      SELECT lm.*, u.username, u.email,
+        COALESCE(NULLIF(lm.venmo_handle, ''), u.venmo_handle, '') AS venmo_handle,
+        lm.zelle_handle
       FROM league_members lm
       JOIN users u ON lm.user_id = u.id
       WHERE lm.league_id = ?

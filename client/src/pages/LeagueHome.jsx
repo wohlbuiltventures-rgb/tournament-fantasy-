@@ -833,6 +833,12 @@ export default function LeagueHome() {
                         <span className="text-gray-400 text-[10px] truncate">{member.venmo_handle}</span>
                       </div>
                     )}
+                    {member.zelle_handle && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span style={{ background: '#6D1ED4', color: '#fff', fontWeight: 700, fontSize: 10, borderRadius: 20, padding: '2px 7px', lineHeight: 1.4, whiteSpace: 'nowrap' }}>Zelle</span>
+                        <span className="text-gray-400 text-[10px] truncate">{member.zelle_handle}</span>
+                      </div>
+                    )}
                     {member.user_id === user?.id && avatarError && (
                       <div className="text-red-400 text-[10px] mt-0.5">{avatarError}</div>
                     )}

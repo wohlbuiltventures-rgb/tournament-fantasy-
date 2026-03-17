@@ -9,7 +9,7 @@ function fmt(n) {
 
 export default function JoinLeague() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ invite_code: '', team_name: '' });
+  const [form, setForm] = useState({ invite_code: '', team_name: '', venmo_handle: '', zelle_handle: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -258,9 +258,52 @@ export default function JoinLeague() {
             />
           </div>
 
-          <button type="submit" disabled={loading || !!previewError} className="btn-primary w-full py-3 disabled:opacity-50">
-            {loading ? 'Joining...' : 'Join League →'}
-          </button>
+          {/* Payment handles — required for all leagues except the free one */}
+          {preview && form.invite_code.toUpperCase() !== 'G7V9XM6W' && (
+            <div className="rounded-xl border border-gray-700 bg-gray-800/40 p-4 space-y-3">
+              <div>
+                <div className="text-white font-semibold text-sm mb-0.5">How will you pay your buy-in?</div>
+                <p className="text-gray-500 text-xs">At least one payment handle is required so your commissioner can collect.</p>
+              </div>
+              <div>
+                <label className="label">Venmo</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="@yourhandle"
+                  value={form.venmo_handle}
+                  onChange={e => setForm({ ...form, venmo_handle: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Zelle</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="phone number or email"
+                  value={form.zelle_handle}
+                  onChange={e => setForm({ ...form, zelle_handle: e.target.value })}
+                />
+              </div>
+              {!form.venmo_handle.trim() && !form.zelle_handle.trim() && (
+                <p className="text-amber-400/80 text-xs">⚠ Fill in at least one to continue</p>
+              )}
+            </div>
+          )}
+
+          {(() => {
+            const isFree = form.invite_code.toUpperCase() === 'G7V9XM6W';
+            const needsHandle = preview && !isFree && !form.venmo_handle.trim() && !form.zelle_handle.trim();
+            return (
+              <button
+                type="submit"
+                disabled={loading || !!previewError || needsHandle}
+                className="btn-primary w-full py-3 disabled:opacity-50"
+              >
+                {loading ? 'Joining...' : 'Join League →'}
+              </button>
+            );
+          })()}
 
           {buyIn > 0 && (
             <p className="text-gray-500 text-xs text-center">
