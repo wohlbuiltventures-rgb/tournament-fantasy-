@@ -506,26 +506,18 @@ export default function Dashboard() {
                   <div className="mt-auto flex flex-col gap-2">
                     <Link
                       to={actionTo}
-                      className={`block w-full text-center font-bold py-2.5 rounded-xl text-sm transition-all duration-200 ${
+                      className={`flex items-center justify-center w-full font-medium py-2.5 rounded-xl text-sm transition-all duration-200 ${
                         league.status === 'drafting'
                           ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/25'
-                          : 'bg-gray-800 hover:bg-brand-500 border border-gray-700 hover:border-brand-500 text-gray-300 hover:text-white'
+                          : 'bg-gray-800/60 hover:bg-gray-800 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white'
                       }`}
                     >
                       {actionLabel}
                     </Link>
-                    {(league.status === 'active' || league.status === 'completed') && (
-                      <Link
-                        to={`/league/${league.id}`}
-                        className="block w-full text-center font-bold py-2.5 rounded-xl text-sm border border-gray-600 hover:border-gray-400 bg-gray-900 hover:bg-gray-800 text-white transition-all duration-200"
-                      >
-                        Go to League →
-                      </Link>
-                    )}
                     {league.draft_status === 'completed' && (
                       <Link
                         to={`/league/${league.id}?tab=roster`}
-                        className="block w-full text-center font-semibold py-2.5 rounded-xl text-sm border border-gray-700 hover:border-gray-500 bg-transparent hover:bg-gray-800/60 text-gray-400 hover:text-gray-200 transition-all duration-200"
+                        className="flex items-center justify-center w-full font-medium py-2.5 rounded-xl text-sm border border-gray-700 hover:border-gray-500 bg-gray-800/60 hover:bg-gray-800 text-gray-300 hover:text-white transition-all duration-200"
                       >
                         👤 My Roster
                       </Link>
