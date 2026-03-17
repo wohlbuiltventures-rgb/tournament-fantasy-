@@ -1,45 +1,52 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target, Zap, Star, Trophy, Flag, Settings, DollarSign, Check, Award } from 'lucide-react';
+import { Flag, DollarSign, Trophy, Settings, Check, Award, Target } from 'lucide-react';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
+
+// ── Format definitions ──────────────────────────────────────────────────────
 
 const FORMATS = [
   {
     key: 'pool',
-    Icon: Target,
+    Icon: Flag,
+    iconBg: 'bg-green-500/10',
+    iconColor: 'text-green-400',
     title: 'Pool',
-    subtitle: 'Classic tournament pool',
-    details: 'Pick 8 golfers. Combined score wins. Simple.',
-    badge: 'Most Casual',
-    badgeColor: 'bg-blue-500/15 border-blue-500/30 text-blue-400',
-    border: 'border-blue-500/40',
-    glow: 'bg-blue-500/8',
+    badge: 'Casual',
+    badgeColor: 'bg-gray-700/60 text-gray-400 border-gray-600',
+    description: 'Pick 8 golfers per tournament. Combined score vs par wins. No weekly management.',
+    activeBorder: 'border-green-500/50',
+    activeBg: 'bg-green-500/5',
   },
   {
     key: 'dk',
-    Icon: Zap,
+    Icon: DollarSign,
+    iconBg: 'bg-blue-500/10',
+    iconColor: 'text-blue-400',
     title: 'Daily Fantasy',
-    subtitle: 'Fresh picks every week',
-    details: '$50,000 cap resets each tournament. Pick 6 players. Season leaderboard tracks cumulative points.',
-    badge: 'DFS Style',
-    badgeColor: 'bg-purple-500/15 border-purple-500/30 text-purple-400',
-    border: 'border-purple-500/40',
-    glow: 'bg-purple-500/8',
+    badge: 'DFS',
+    badgeColor: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+    description: '$50,000 salary cap resets every tournament. Pick 6 players each week from scratch.',
+    activeBorder: 'border-blue-500/50',
+    activeBg: 'bg-blue-500/5',
   },
   {
     key: 'tourneyrun',
-    Icon: Star,
+    Icon: Trophy,
+    iconBg: 'bg-yellow-500/10',
+    iconColor: 'text-yellow-400',
     title: 'TourneyRun',
-    subtitle: 'Dynasty season league',
-    details: 'Draft 4 core players for the season. 4 flex spots via waiver wire. FAAB bidding or reverse-standings wire. Majors 1.5×.',
     badge: 'Signature',
-    badgeColor: 'bg-green-500/15 border-green-500/30 text-green-400',
-    border: 'border-green-500/40',
-    glow: 'bg-green-500/8',
+    badgeColor: 'bg-green-500/15 text-green-400 border-green-500/30',
+    description: 'Draft core players locked for the season. Fill flex spots via waiver wire. Majors score 1.5×.',
+    activeBorder: 'border-green-500/50',
+    activeBg: 'bg-green-500/5',
     recommended: true,
   },
 ];
+
+// ── Shared UI components ─────────────────────────────────────────────────────
 
 function PillSelector({ options, value, onChange }) {
   return (
@@ -64,7 +71,7 @@ function PillSelector({ options, value, onChange }) {
 
 function Card({ children }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 sm:p-6">
       {children}
     </div>
   );
@@ -78,6 +85,8 @@ function CardHeader({ icon: Icon, title }) {
     </div>
   );
 }
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CreateGolfLeague() {
   useDocTitle('Create Golf League | TourneyRun');
@@ -132,120 +141,150 @@ export default function CreateGolfLeague() {
   const selectedFmt = FORMATS.find(f => f.key === format);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-10">
+    <div className="max-w-2xl mx-auto px-4 py-8 sm:py-10">
 
       <div className="mb-8">
-        <h1 className="text-3xl font-black text-white">Create Golf League</h1>
-        <p className="text-gray-400 mt-1">Set up your PGA Tour fantasy league for the 2026 season.</p>
+        <h1 className="text-2xl sm:text-3xl font-black text-white">Create Golf League</h1>
+        <p className="text-gray-400 mt-1 text-sm sm:text-base">Set up your PGA Tour fantasy league for the 2026 season.</p>
       </div>
 
       {error && (
         <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg p-3 text-sm mb-6">{error}</div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
 
-        {/* ── Format selector ── */}
+        {/* ── 1. Choose Your Format ── */}
         <Card>
           <CardHeader icon={Trophy} title="Choose Your Format" />
-          <div className="space-y-3">
+          <div className="grid md:grid-cols-3 gap-3">
             {FORMATS.map(f => (
               <button
                 key={f.key}
                 type="button"
                 onClick={() => setFormat(f.key)}
-                className={`w-full text-left rounded-xl border-2 p-4 transition-all ${
+                className={`relative text-left rounded-2xl border-2 p-4 transition-all ${
                   format === f.key
-                    ? `${f.border} ${f.glow}`
-                    : 'border-gray-700 hover:border-gray-600'
+                    ? `${f.activeBorder} ${f.activeBg}`
+                    : 'border-gray-700 bg-gray-800/20 hover:border-gray-600'
                 }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <f.Icon className="w-5 h-5 mt-0.5 shrink-0 text-gray-300" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`font-black text-base ${format === f.key ? 'text-white' : 'text-gray-300'}`}>{f.title}</span>
-                        <span className={`inline-block border px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${f.badgeColor}`}>{f.badge}</span>
-                        {f.recommended && <span className="inline-block bg-green-500/20 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Recommended</span>}
-                      </div>
-                      <div className="text-gray-400 text-xs mt-0.5">{f.subtitle}</div>
-                      <div className="text-gray-500 text-xs mt-1.5 leading-relaxed">{f.details}</div>
-                    </div>
+                {/* Selected checkmark */}
+                {format === f.key && (
+                  <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                    <Check className="w-3 h-3 text-white" />
                   </div>
-                  <div className={`w-5 h-5 rounded-full border-2 shrink-0 mt-0.5 flex items-center justify-center transition-all ${
-                    format === f.key ? 'bg-green-500 border-green-500' : 'border-gray-600'
-                  }`}>
-                    {format === f.key && <Check className="w-3 h-3 text-white" />}
-                  </div>
+                )}
+
+                {/* Icon box */}
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${f.iconBg}`}>
+                  <f.Icon className={`w-5 h-5 ${f.iconColor}`} />
                 </div>
+
+                {/* Title + badge */}
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap pr-6">
+                  <span className={`font-black text-sm sm:text-base ${format === f.key ? 'text-white' : 'text-gray-300'}`}>
+                    {f.title}
+                  </span>
+                  <span className={`inline-block border px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${f.badgeColor}`}>
+                    {f.badge}
+                  </span>
+                  {f.recommended && (
+                    <span className="inline-block bg-green-500/20 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">
+                      Default
+                    </span>
+                  )}
+                </div>
+
+                {/* Description */}
+                <p className="text-gray-500 text-xs leading-relaxed">{f.description}</p>
               </button>
             ))}
           </div>
         </Card>
 
-        {/* ── League Basics ── */}
+        {/* ── 2. League Basics ── */}
         <Card>
           <CardHeader icon={Flag} title="League Basics" />
           <div className="space-y-4">
             <div>
               <label className="label">League Name *</label>
-              <input type="text" className="input text-base" placeholder={format === 'dk' ? 'DFS Golf 2026' : format === 'pool' ? 'Golf Pool 2026' : 'Golf Degens 2026'} value={form.name} onChange={e => set('name', e.target.value)} required />
+              <input
+                type="text"
+                className="input text-base"
+                placeholder={format === 'dk' ? 'DFS Golf 2026' : format === 'pool' ? 'Golf Pool 2026' : 'Golf Degens 2026'}
+                value={form.name}
+                onChange={e => set('name', e.target.value)}
+                required
+              />
             </div>
             <div>
               <label className="label">Your Team Name *</label>
-              <input type="text" className="input text-base" placeholder="The Bogey Boys" value={form.team_name} onChange={e => set('team_name', e.target.value)} required />
+              <input
+                type="text"
+                className="input text-base"
+                placeholder="The Bogey Boys"
+                value={form.team_name}
+                onChange={e => set('team_name', e.target.value)}
+                required
+              />
             </div>
           </div>
         </Card>
 
-        {/* ── Format-specific settings ── */}
+        {/* ── 3. League Settings (format-specific) ── */}
         <Card>
           <CardHeader icon={Settings} title="League Settings" />
           <div className="space-y-5">
 
             <div>
               <label className="label mb-2.5">Max Teams</label>
-              <PillSelector options={[4, 6, 8, 10, 12].map(n => ({ value: n, label: String(n) }))} value={form.max_teams} onChange={v => set('max_teams', v)} />
+              <PillSelector
+                options={[4, 6, 8, 10, 12].map(n => ({ value: n, label: String(n) }))}
+                value={form.max_teams}
+                onChange={v => set('max_teams', v)}
+              />
             </div>
 
             {/* Pool settings */}
             {format === 'pool' && (
               <div>
-                <label className="label mb-2.5">Picks Per Team</label>
-                <PillSelector options={[5, 6, 7, 8, 10, 12].map(n => ({ value: n, label: String(n) }))} value={form.picks_per_team} onChange={v => set('picks_per_team', v)} />
-                <p className="text-gray-600 text-xs mt-2">Each manager picks this many golfers in a snake draft. Combined score wins.</p>
+                <label className="label mb-2.5">Picks Per Tournament</label>
+                <PillSelector
+                  options={[6, 8, 10].map(n => ({ value: n, label: String(n) }))}
+                  value={form.picks_per_team}
+                  onChange={v => set('picks_per_team', v)}
+                />
+                <p className="text-gray-600 text-xs mt-2">
+                  Each manager drafts this many golfers per tournament. Combined score vs par wins.
+                </p>
               </div>
             )}
 
             {/* DK settings */}
             {format === 'dk' && (
-              <>
-                <div>
-                  <label className="label mb-2.5">Weekly Salary Cap</label>
-                  <PillSelector
-                    options={[
-                      { value: 40000, label: '$40k' },
-                      { value: 50000, label: '$50k' },
-                      { value: 60000, label: '$60k' },
-                    ]}
-                    value={form.weekly_salary_cap}
-                    onChange={v => set('weekly_salary_cap', v)}
-                  />
-                  <p className="text-gray-600 text-xs mt-2">Cap resets every tournament. Pick {form.starters_count} players within the cap.</p>
-                </div>
-                <div>
-                  <label className="label mb-2.5">Starters Per Week</label>
-                  <PillSelector options={[4, 5, 6].map(n => ({ value: n, label: String(n) }))} value={form.starters_count} onChange={v => set('starters_count', v)} />
-                </div>
-              </>
+              <div>
+                <label className="label mb-2.5">Weekly Salary Cap</label>
+                <PillSelector
+                  options={[
+                    { value: 25000,  label: '$25k'  },
+                    { value: 50000,  label: '$50k'  },
+                    { value: 100000, label: '$100k' },
+                  ]}
+                  value={form.weekly_salary_cap}
+                  onChange={v => set('weekly_salary_cap', v)}
+                />
+                <p className="text-gray-600 text-xs mt-2">
+                  Cap resets every tournament. Pick {form.starters_count} starters within the cap.
+                </p>
+              </div>
             )}
 
             {/* TourneyRun settings */}
             {format === 'tourneyrun' && (
               <>
                 <div>
-                  <label className="label mb-2.5">Draft Cap</label>
+                  <label className="label mb-2.5">Draft Salary Cap</label>
                   <PillSelector
                     options={[
                       { value: 2000, label: '$2,000' },
@@ -256,40 +295,51 @@ export default function CreateGolfLeague() {
                     value={form.salary_cap}
                     onChange={v => set('salary_cap', v)}
                   />
-                  <p className="text-gray-600 text-xs mt-2">Salary cap applied during the initial draft of core players.</p>
+                  <p className="text-gray-600 text-xs mt-2">Applied during the initial draft of core players.</p>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="label mb-2.5">Core Spots</label>
-                    <PillSelector options={[2, 3, 4, 5].map(n => ({ value: n, label: String(n) }))} value={form.core_spots} onChange={v => set('core_spots', v)} />
+                    <PillSelector
+                      options={[2, 3, 4, 5].map(n => ({ value: n, label: String(n) }))}
+                      value={form.core_spots}
+                      onChange={v => set('core_spots', v)}
+                    />
                   </div>
                   <div>
                     <label className="label mb-2.5">Flex Spots</label>
-                    <PillSelector options={[2, 3, 4, 5, 6].map(n => ({ value: n, label: String(n) }))} value={form.flex_spots} onChange={v => set('flex_spots', v)} />
+                    <PillSelector
+                      options={[2, 3, 4, 5, 6].map(n => ({ value: n, label: String(n) }))}
+                      value={form.flex_spots}
+                      onChange={v => set('flex_spots', v)}
+                    />
                   </div>
                 </div>
                 <p className="text-gray-600 text-xs -mt-2">
                   Core players are locked for the season. Flex spots fill via waiver wire.
                   Total roster: {form.core_spots + form.flex_spots} players.
                 </p>
+
                 <div>
                   <label className="label mb-2.5">FAAB Budget Per Team</label>
                   <PillSelector
                     options={[
-                      { value: 250, label: '$250' },
-                      { value: 500, label: '$500' },
+                      { value: 250,  label: '$250'   },
+                      { value: 500,  label: '$500'   },
                       { value: 1000, label: '$1,000' },
                     ]}
                     value={form.faab_budget}
                     onChange={v => set('faab_budget', v)}
                   />
                 </div>
+
                 <div>
                   <label className="label mb-2.5">Waiver Wire Type</label>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { val: true, label: 'FAAB Bidding', desc: 'Blind bids — highest wins' },
-                      { val: false, label: 'Reverse Standings', desc: 'Last place picks first' },
+                      { val: true,  label: 'FAAB Bidding',      desc: 'Blind bids — highest wins'   },
+                      { val: false, label: 'Reverse Standings',  desc: 'Last place picks first'      },
                     ].map(opt => (
                       <button
                         key={String(opt.val)}
@@ -301,7 +351,9 @@ export default function CreateGolfLeague() {
                             : 'border-gray-700 hover:border-gray-600'
                         }`}
                       >
-                        <div className={`font-bold text-sm ${form.use_faab === opt.val ? 'text-green-400' : 'text-gray-300'}`}>{opt.label}</div>
+                        <div className={`font-bold text-sm ${form.use_faab === opt.val ? 'text-green-400' : 'text-gray-300'}`}>
+                          {opt.label}
+                        </div>
                         <div className="text-gray-500 text-xs mt-0.5">{opt.desc}</div>
                       </button>
                     ))}
@@ -312,7 +364,7 @@ export default function CreateGolfLeague() {
           </div>
         </Card>
 
-        {/* ── Buy-in (optional) ── */}
+        {/* ── 4. Buy-in (optional) ── */}
         <Card>
           <CardHeader icon={DollarSign} title="Buy-in (Optional)" />
           <div className="space-y-4">
@@ -320,24 +372,39 @@ export default function CreateGolfLeague() {
               <label className="label">Buy-in Per Team</label>
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                <input type="number" min="0" step="1" className="input pl-8" placeholder="0" value={form.buy_in_amount} onChange={e => set('buy_in_amount', e.target.value)} />
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="input pl-8"
+                  placeholder="0"
+                  value={form.buy_in_amount}
+                  onChange={e => set('buy_in_amount', e.target.value)}
+                />
               </div>
             </div>
             {parseFloat(form.buy_in_amount) > 0 && (
               <div>
                 <label className="label mb-2.5">Payout Split (%)</label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   {[
-                    { label: '1st Place', key: 'payout_first',  color: 'text-yellow-400' },
-                    { label: '2nd Place', key: 'payout_second', color: 'text-gray-300'   },
-                    { label: '3rd Place', key: 'payout_third',  color: 'text-orange-400' },
-                  ].map(({ label, key }) => (
+                    { label: '1st',  key: 'payout_first',  color: 'text-yellow-400' },
+                    { label: '2nd',  key: 'payout_second', color: 'text-gray-300'   },
+                    { label: '3rd',  key: 'payout_third',  color: 'text-orange-400' },
+                  ].map(({ label, key, color }) => (
                     <div key={key} className="bg-gray-800/50 border border-gray-700/60 rounded-xl p-3">
-                      <div className={`text-xs font-semibold mb-2 flex items-center gap-1.5 ${color}`}>
-                        <Award className="w-3.5 h-3.5" />{label}
+                      <div className={`text-xs font-semibold mb-2 flex items-center gap-1 ${color}`}>
+                        <Award className="w-3 h-3 shrink-0" /> {label}
                       </div>
                       <div className="relative">
-                        <input type="number" min="0" max="100" className="input pr-6 text-right font-bold py-1.5" value={form[key]} onChange={e => set(key, e.target.value)} />
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          className="input pr-6 text-right font-bold py-1.5 text-sm"
+                          value={form[key]}
+                          onChange={e => set(key, e.target.value)}
+                        />
                         <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs">%</span>
                       </div>
                     </div>
@@ -348,9 +415,9 @@ export default function CreateGolfLeague() {
           </div>
         </Card>
 
-        {/* ── Scoring info ── */}
+        {/* ── Scoring reference ── */}
         {format !== 'pool' && (
-          <div className="bg-green-500/5 border border-green-500/20 rounded-2xl p-5">
+          <div className="bg-green-500/5 border border-green-500/20 rounded-2xl p-4 sm:p-5">
             <div className="flex items-center gap-2 mb-3">
               <Trophy className="w-4 h-4 text-green-400" />
               <span className="text-green-400 font-bold text-sm">Scoring System</span>
@@ -367,12 +434,15 @@ export default function CreateGolfLeague() {
           </div>
         )}
         {format === 'pool' && (
-          <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5">
+          <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 sm:p-5">
             <div className="flex items-center gap-2 mb-2">
               <Target className="w-4 h-4 text-blue-400" />
               <span className="text-blue-400 font-bold text-sm">Pool Scoring</span>
             </div>
-            <p className="text-gray-400 text-xs leading-relaxed">Points are scored per golfer using the same eagle/birdie/par/bogey system. Your {form.picks_per_team} golfers' scores combine each tournament. Lowest combined score wins each week.</p>
+            <p className="text-gray-400 text-xs leading-relaxed">
+              Points scored per golfer using eagle/birdie/par/bogey system.
+              Your {form.picks_per_team} golfers' scores combine each tournament. Highest combined points wins each week.
+            </p>
           </div>
         )}
 
