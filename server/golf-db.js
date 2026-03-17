@@ -15,7 +15,7 @@ db.exec(`
     payout_first INTEGER DEFAULT 70,
     payout_second INTEGER DEFAULT 20,
     payout_third INTEGER DEFAULT 10,
-    season_year INTEGER DEFAULT 2025,
+    season_year INTEGER DEFAULT 2026,
     week_lock_day TEXT DEFAULT 'thursday',
     roster_size INTEGER DEFAULT 8,
     starters_per_week INTEGER DEFAULT 6,
@@ -69,7 +69,7 @@ db.exec(`
     course TEXT DEFAULT '',
     start_date TEXT NOT NULL,
     end_date TEXT NOT NULL,
-    season_year INTEGER DEFAULT 2025,
+    season_year INTEGER DEFAULT 2026,
     is_major INTEGER DEFAULT 0,
     status TEXT DEFAULT 'scheduled',
     purse INTEGER DEFAULT 0,
@@ -202,53 +202,47 @@ if (existingCount === 0) {
   console.log('[golf-db] Seeded', GOLF_PLAYERS.length, 'golf players');
 }
 
-// ── Seed golf_tournaments (2025 PGA Tour season) ──────────────────────────────
-const TOURNAMENTS_2025 = [
-  { name: 'The Sentry',                     course: 'Plantation Course at Kapalua',  start_date: '2025-01-02', end_date: '2025-01-05', is_major: 0, purse: 20000000 },
-  { name: 'Sony Open in Hawaii',             course: 'Waialae Country Club',          start_date: '2025-01-09', end_date: '2025-01-12', is_major: 0, purse: 8300000  },
-  { name: 'The American Express',            course: 'PGA West',                      start_date: '2025-01-16', end_date: '2025-01-19', is_major: 0, purse: 8200000  },
-  { name: 'Farmers Insurance Open',          course: 'Torrey Pines GC',               start_date: '2025-01-23', end_date: '2025-01-26', is_major: 0, purse: 8800000  },
-  { name: 'AT&T Pebble Beach Pro-Am',        course: 'Pebble Beach Golf Links',       start_date: '2025-01-30', end_date: '2025-02-02', is_major: 0, purse: 8700000  },
-  { name: 'WM Phoenix Open',                 course: 'TPC Scottsdale',                start_date: '2025-02-06', end_date: '2025-02-09', is_major: 0, purse: 9100000  },
-  { name: 'Genesis Invitational',            course: 'Riviera Country Club',          start_date: '2025-02-13', end_date: '2025-02-16', is_major: 0, purse: 20000000 },
-  { name: 'The Honda Classic',               course: 'PGA National',                  start_date: '2025-02-20', end_date: '2025-02-23', is_major: 0, purse: 8400000  },
-  { name: 'Arnold Palmer Invitational',      course: 'Bay Hill Club & Lodge',         start_date: '2025-02-27', end_date: '2025-03-02', is_major: 0, purse: 20000000 },
-  { name: 'The Players Championship',        course: 'TPC Sawgrass',                  start_date: '2025-03-13', end_date: '2025-03-16', is_major: 0, purse: 25000000 },
-  { name: 'Valspar Championship',            course: 'Innisbrook Resort',             start_date: '2025-03-20', end_date: '2025-03-23', is_major: 0, purse: 8700000  },
-  { name: 'Texas Children\'s Houston Open',  course: 'Memorial Park GC',              start_date: '2025-03-27', end_date: '2025-03-30', is_major: 0, purse: 9200000  },
-  { name: 'The Masters Tournament',          course: 'Augusta National Golf Club',    start_date: '2025-04-10', end_date: '2025-04-13', is_major: 1, purse: 20000000 },
-  { name: 'RBC Heritage',                   course: 'Harbour Town Golf Links',       start_date: '2025-04-17', end_date: '2025-04-20', is_major: 0, purse: 20000000 },
-  { name: 'Zurich Classic of New Orleans',   course: 'TPC Louisiana',                 start_date: '2025-04-24', end_date: '2025-04-27', is_major: 0, purse: 8900000  },
-  { name: 'Wells Fargo Championship',        course: 'Quail Hollow Club',             start_date: '2025-05-01', end_date: '2025-05-04', is_major: 0, purse: 20000000 },
-  { name: 'PGA Championship',               course: 'Quail Hollow Club',             start_date: '2025-05-15', end_date: '2025-05-18', is_major: 1, purse: 18500000 },
-  { name: 'Charles Schwab Challenge',        course: 'Colonial Country Club',         start_date: '2025-05-22', end_date: '2025-05-25', is_major: 0, purse: 8900000  },
-  { name: 'Memorial Tournament',             course: 'Muirfield Village Golf Club',   start_date: '2025-06-05', end_date: '2025-06-08', is_major: 0, purse: 20000000 },
-  { name: 'US Open',                         course: 'Oakmont Country Club',          start_date: '2025-06-12', end_date: '2025-06-15', is_major: 1, purse: 21500000 },
-  { name: 'Travelers Championship',          course: 'TPC River Highlands',           start_date: '2025-06-19', end_date: '2025-06-22', is_major: 0, purse: 20000000 },
-  { name: 'Rocket Classic',                  course: 'Detroit Golf Club',             start_date: '2025-06-26', end_date: '2025-06-29', is_major: 0, purse: 8400000  },
-  { name: 'John Deere Classic',              course: 'TPC Deere Run',                 start_date: '2025-07-03', end_date: '2025-07-06', is_major: 0, purse: 8200000  },
-  { name: 'The Open Championship',           course: 'Royal Portrush Golf Club',      start_date: '2025-07-17', end_date: '2025-07-20', is_major: 1, purse: 17000000 },
-  { name: '3M Open',                         course: 'TPC Twin Cities',               start_date: '2025-07-24', end_date: '2025-07-27', is_major: 0, purse: 8200000  },
-  { name: 'Barracuda Championship',          course: 'Tahoe Mountain Club',           start_date: '2025-07-24', end_date: '2025-07-27', is_major: 0, purse: 4500000  },
-  { name: 'Olympic Club Invitational',       course: 'The Olympic Club',              start_date: '2025-07-31', end_date: '2025-08-03', is_major: 0, purse: 20000000 },
-  { name: 'Wyndham Championship',            course: 'Sedgefield Country Club',       start_date: '2025-08-07', end_date: '2025-08-10', is_major: 0, purse: 7900000  },
-  { name: 'FedEx St. Jude Championship',     course: 'TPC Southwind',                 start_date: '2025-08-14', end_date: '2025-08-17', is_major: 0, purse: 20000000 },
-  { name: 'BMW Championship',               course: 'Caves Valley Golf Club',        start_date: '2025-08-21', end_date: '2025-08-24', is_major: 0, purse: 20000000 },
-  { name: 'TOUR Championship',              course: 'East Lake Golf Club',           start_date: '2025-08-28', end_date: '2025-08-31', is_major: 0, purse: 100000000 },
+// ── Seed golf_tournaments (2026 PGA Tour season) ──────────────────────────────
+const TOURNAMENTS_2026 = [
+  { name: 'The Players Championship',   course: 'TPC Sawgrass',                 start_date: '2026-03-12', end_date: '2026-03-15', is_major: 0, purse: 25000000, forceStatus: 'completed' },
+  { name: 'Valspar Championship',       course: 'Innisbrook Resort',            start_date: '2026-03-16', end_date: '2026-03-22', is_major: 0, purse: 8700000,  forceStatus: 'active'    },
+  { name: 'Houston Open',               course: 'Memorial Park GC',             start_date: '2026-03-23', end_date: '2026-03-29', is_major: 0, purse: 9200000  },
+  { name: 'Valero Texas Open',          course: 'TPC San Antonio',              start_date: '2026-03-30', end_date: '2026-04-05', is_major: 0, purse: 8900000  },
+  { name: 'The Masters Tournament',     course: 'Augusta National Golf Club',   start_date: '2026-04-06', end_date: '2026-04-12', is_major: 1, purse: 20000000 },
+  { name: 'RBC Heritage',              course: 'Harbour Town Golf Links',      start_date: '2026-04-13', end_date: '2026-04-19', is_major: 0, purse: 20000000 },
+  { name: 'Truist Championship',        course: 'Quail Hollow Club',            start_date: '2026-05-07', end_date: '2026-05-10', is_major: 0, purse: 20000000 },
+  { name: 'PGA Championship',          course: 'Aronimink Golf Club',          start_date: '2026-05-11', end_date: '2026-05-17', is_major: 1, purse: 18500000 },
+  { name: 'Memorial Tournament',        course: 'Muirfield Village Golf Club',  start_date: '2026-06-04', end_date: '2026-06-07', is_major: 0, purse: 20000000 },
+  { name: 'US Open',                    course: 'Shinnecock Hills GC',          start_date: '2026-06-15', end_date: '2026-06-21', is_major: 1, purse: 21500000 },
+  { name: 'Travelers Championship',     course: 'TPC River Highlands',          start_date: '2026-06-22', end_date: '2026-06-28', is_major: 0, purse: 20000000 },
+  { name: 'The Open Championship',      course: 'Royal Birkdale',               start_date: '2026-07-13', end_date: '2026-07-19', is_major: 1, purse: 17000000 },
+  { name: 'TOUR Championship',          course: 'East Lake Golf Club',          start_date: '2026-08-27', end_date: '2026-08-30', is_major: 0, purse: 100000000 },
 ];
+
+// Migration: replace 2025 tournaments with 2026 schedule
+const existing2025 = db.prepare("SELECT COUNT(*) as c FROM golf_tournaments WHERE season_year = 2025").get().c;
+if (existing2025 > 0) {
+  db.prepare("DELETE FROM golf_tournaments WHERE season_year = 2025").run();
+  console.log('[golf-db] Removed 2025 tournament data — replacing with 2026 schedule');
+}
 
 const existingT = db.prepare('SELECT COUNT(*) as c FROM golf_tournaments').get().c;
 if (existingT === 0) {
-  const insT = db.prepare(`INSERT OR IGNORE INTO golf_tournaments (id, name, course, start_date, end_date, season_year, is_major, status, purse) VALUES (?, ?, ?, ?, ?, 2025, ?, ?, ?)`);
+  const insT = db.prepare(`INSERT OR IGNORE INTO golf_tournaments (id, name, course, start_date, end_date, season_year, is_major, status, purse) VALUES (?, ?, ?, ?, ?, 2026, ?, ?, ?)`);
   const now = new Date();
   db.transaction(() => {
-    for (const t of TOURNAMENTS_2025) {
-      const s = new Date(t.start_date), e = new Date(t.end_date);
-      const status = now > e ? 'completed' : now >= s ? 'active' : 'scheduled';
+    for (const t of TOURNAMENTS_2026) {
+      let status;
+      if (t.forceStatus) {
+        status = t.forceStatus;
+      } else {
+        const s = new Date(t.start_date), e = new Date(t.end_date);
+        status = now > e ? 'completed' : now >= s ? 'active' : 'scheduled';
+      }
       insT.run(uuidv4(), t.name, t.course, t.start_date, t.end_date, t.is_major, status, t.purse);
     }
   })();
-  console.log('[golf-db] Seeded', TOURNAMENTS_2025.length, 'golf tournaments');
+  console.log('[golf-db] Seeded', TOURNAMENTS_2026.length, '2026 golf tournaments');
 }
 
 module.exports = db;

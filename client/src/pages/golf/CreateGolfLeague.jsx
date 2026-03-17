@@ -10,7 +10,7 @@ export default function CreateGolfLeague() {
     name: '',
     team_name: '',
     max_teams: 8,
-    salary_cap: 3000,
+    salary_cap: 2400,
     roster_size: 8,
     starters_count: 6,
   });
@@ -56,7 +56,7 @@ export default function CreateGolfLeague() {
 
       <div className="mb-8">
         <h1 className="text-3xl font-black text-white">Create Golf League</h1>
-        <p className="text-gray-400 mt-1">Set up your PGA Tour fantasy league for the 2025 season.</p>
+        <p className="text-gray-400 mt-1">Set up your PGA Tour fantasy league for the 2026 season.</p>
       </div>
 
       {error && (
@@ -118,10 +118,10 @@ export default function CreateGolfLeague() {
               <label className="label mb-2.5">Salary Cap</label>
               <PillSelector
                 options={[
-                  { value: 2500, label: '$2,500' },
-                  { value: 3000, label: '$3,000' },
-                  { value: 3500, label: '$3,500' },
-                  { value: 4000, label: '$4,000' },
+                  { value: 2000, label: '$2,000' },
+                  { value: 2400, label: '$2,400' },
+                  { value: 2800, label: '$2,800' },
+                  { value: 3200, label: '$3,200' },
                 ]}
                 value={form.salary_cap}
                 onChange={v => set('salary_cap', v)}

@@ -11,11 +11,11 @@ const SCORING = [
 ];
 
 const FEATURES = [
-  { icon: '🏌️', title: 'Salary Cap Draft', body: 'Each golfer has a salary. Build the best lineup within your $3,000 budget.' },
+  { icon: '🏌️', title: 'Salary Cap Draft', body: 'Each golfer has a salary. Build the best lineup within your $2,400 budget.' },
   { icon: '📅', title: 'Weekly Lineups', body: 'Set your 6-man starting lineup before Thursday 12pm ET each week. Lock it in or miss out.' },
   { icon: '⛳', title: 'Real Scoring', body: 'Fantasy points tied to actual round-by-round performance — eagles, birdies, finish bonuses.' },
   { icon: '🏆', title: '1.5× Major Bonus', body: 'All points double-and-a-half during The Masters, PGA Championship, US Open, and The Open.' },
-  { icon: '🔁', title: 'Waiver Wire', body: 'Drop and add players any time a tournament is not locked. Manage your $3,000 cap strategically.' },
+  { icon: '🔁', title: 'Waiver Wire', body: 'Drop and add players any time a tournament is not locked. Manage your $2,400 cap strategically.' },
   { icon: '🎯', title: 'Season Leaderboard', body: 'Points accumulate all season long. The best manager across all PGA Tour events wins.' },
 ];
 
@@ -32,7 +32,7 @@ export default function GolfLanding() {
         <div className="relative max-w-3xl mx-auto">
           <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            2025 PGA Tour Season
+            2026 PGA Tour Season
           </div>
           <h1 className="text-5xl sm:text-6xl font-black text-white leading-tight mb-4">
             Golf Fantasy<br />
