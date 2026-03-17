@@ -189,21 +189,21 @@ function DraftMockup() {
 function CountdownBlock() {
   const { days, hours, mins, secs } = useCountdown();
   return (
-    <div className="flex items-center justify-center gap-3 flex-wrap">
+    <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
       {[
         { v: days,  l: 'DAYS'  },
         { v: hours, l: 'HRS'   },
         { v: mins,  l: 'MIN'   },
         { v: secs,  l: 'SEC'   },
       ].map(({ v, l }, i) => (
-        <div key={l} className="flex items-center gap-3">
-          <div className="text-center">
-            <div className="text-4xl sm:text-5xl font-black text-white tabular-nums w-16 sm:w-20">
+        <div key={l} className="flex items-center gap-2 sm:gap-4">
+          <div className="bg-gray-900/80 border border-gray-700 rounded-2xl px-4 sm:px-6 py-4 sm:py-5 text-center min-w-[72px] sm:min-w-[90px]">
+            <div className="text-5xl sm:text-6xl font-black text-white tabular-nums leading-none">
               {String(v).padStart(2, '0')}
             </div>
-            <div className="text-gray-500 text-[10px] font-bold tracking-widest mt-1">{l}</div>
+            <div className="text-gray-500 text-[10px] sm:text-xs font-bold tracking-widest mt-2">{l}</div>
           </div>
-          {i < 3 && <span className="text-gray-600 text-3xl font-bold mb-4">:</span>}
+          {i < 3 && <span className="text-gray-600 text-3xl sm:text-4xl font-bold mb-2">:</span>}
         </div>
       ))}
     </div>
@@ -555,10 +555,10 @@ export default function Landing() {
                 init:  'GW',
               },
               {
-                quote: 'Finally a fantasy game that keeps me locked in all three weeks. Not just day one.',
-                name:  'Jordan K.',
-                loc:   'Chicago, IL',
-                init:  'JK',
+                quote: 'Finally a fantasy game that lasts the whole tournament. We run 3 leagues now.',
+                name:  'Jon W.',
+                loc:   'Naples, FL',
+                init:  'JW',
               },
             ].map(t => (
               <div key={t.name} className="bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col gap-4">
@@ -578,55 +578,78 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Smart Draft feature section ── */}
+      {/* ── Smart Draft comparison ── */}
       <section className="py-16 px-4">
         <div className="max-w-4xl mx-auto">
-          <div className="relative overflow-hidden rounded-3xl border border-brand-500/30 bg-gradient-to-br from-brand-900/40 via-gray-900 to-gray-900 p-8 sm:p-12"
-            style={{ boxShadow: '0 0 60px rgba(55,138,221,0.12), 0 0 120px rgba(55,138,221,0.06)' }}>
-            {/* Glow */}
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(55,138,221,0.15)_0%,_transparent_65%)] pointer-events-none" />
-
-            <div className="relative">
-              {/* Badge */}
-              <div className="inline-flex items-center gap-2 bg-brand-500/20 border border-brand-500/30 rounded-full px-3 py-1 text-brand-400 text-xs font-bold uppercase tracking-widest mb-5">
-                ⚡ Premium Feature
-              </div>
-
-              {/* Headline */}
-              <h2 className="text-3xl sm:text-4xl font-black text-white mb-3 leading-tight">
-                Can't make the draft?<br />
-                <span className="text-brand-400">We've got you. ⚡</span>
-              </h2>
-
-              <p className="text-gray-300 text-lg mb-8 max-w-xl">
-                Smart Draft is your AI-powered backup plan. For just <span className="text-white font-bold">$2.99</span> it drafts like a seasoned pro while you're stuck in traffic, at dinner, or just forgot. No bad picks. No excuses.
-              </p>
-
-              {/* Three bullets */}
-              <div className="grid sm:grid-cols-3 gap-4 mb-8">
-                {[
-                  { icon: '🚫', title: 'Avoids injured players', desc: 'Automatically skips anyone flagged with injury news.' },
-                  { icon: '🗺️', title: 'Balances regions & teams', desc: 'No stacking — diversifies your roster like an expert.' },
-                  { icon: '📈', title: 'Targets the highest upside', desc: 'Picks by ETP with context — never leaves value on the board.' },
-                ].map(b => (
-                  <div key={b.title} className="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-4">
-                    <div className="text-2xl mb-2">{b.icon}</div>
-                    <div className="font-bold text-white text-sm mb-1">{b.title}</div>
-                    <div className="text-gray-500 text-xs leading-relaxed">{b.desc}</div>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={handleSmartDraftCta}
-                disabled={sdLoading}
-                className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-400 text-white font-black text-base px-7 py-3.5 rounded-xl transition-all duration-200 hover:scale-105 shadow-lg shadow-brand-500/30 disabled:opacity-70 disabled:scale-100"
-              >
-                {sdLoading ? 'Redirecting…' : '⚡ Add Smart Draft for $2.99'}
-                {!sdLoading && <span className="text-brand-200 text-sm">›</span>}
-              </button>
-              <p className="text-gray-600 text-xs mt-3">Available per manager, per league — upgrade any time before or during the draft.</p>
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 bg-brand-500/20 border border-brand-500/30 rounded-full px-3 py-1 text-brand-400 text-xs font-bold uppercase tracking-widest mb-4">
+              ⚡ Premium Feature
             </div>
+            <h2 className="text-3xl sm:text-4xl font-black text-white mb-3 leading-tight">
+              Can't make the draft?<br />
+              <span className="text-brand-400">We've got you. ⚡</span>
+            </h2>
+            <p className="text-gray-400 text-base max-w-xl mx-auto">
+              Smart Draft is your backup plan for <span className="text-white font-bold">$2.99</span> — it drafts like a seasoned pro while you're stuck in traffic, at dinner, or just forgot.
+            </p>
+          </div>
+
+          {/* Side-by-side comparison */}
+          <div className="grid sm:grid-cols-2 gap-4 mb-8">
+            {/* Free auto-pick */}
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6">
+              <div className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-4">Free Auto-Pick</div>
+              <ul className="space-y-3">
+                {[
+                  'Uses raw PPG only',
+                  'Ignores injuries',
+                  'No team balance',
+                  'No region balance',
+                ].map(item => (
+                  <li key={item} className="flex items-center gap-3 text-gray-400 text-sm">
+                    <span className="text-red-500 font-black text-base shrink-0">✗</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Smart Draft */}
+            <div className="relative bg-gray-900 border border-amber-500/50 rounded-2xl p-6 overflow-hidden"
+              style={{ boxShadow: '0 0 40px rgba(245,158,11,0.08)' }}>
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(245,158,11,0.06)_0%,_transparent_65%)] pointer-events-none" />
+              <div className="relative">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-amber-400 text-xs font-bold uppercase tracking-widest">⚡ Smart Draft</span>
+                  <span className="bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full">$2.99</span>
+                </div>
+                <ul className="space-y-3">
+                  {[
+                    'ETP scoring (expected tournament points)',
+                    'Skips injured players automatically',
+                    'No team stacking',
+                    'Region balance built in',
+                  ].map(item => (
+                    <li key={item} className="flex items-center gap-3 text-gray-200 text-sm">
+                      <span className="text-green-400 font-black text-base shrink-0">✓</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center">
+            <button
+              onClick={handleSmartDraftCta}
+              disabled={sdLoading}
+              className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-base px-8 py-4 rounded-xl transition-all duration-200 hover:scale-105 shadow-lg shadow-amber-500/30 disabled:opacity-70 disabled:scale-100"
+            >
+              {sdLoading ? 'Redirecting…' : '⚡ Add Smart Draft — $2.99'}
+              {!sdLoading && <span className="text-gray-700 text-sm">›</span>}
+            </button>
+            <p className="text-gray-600 text-xs mt-3">Per manager, per league — upgrade any time before or during the draft.</p>
           </div>
         </div>
       </section>
@@ -648,7 +671,10 @@ export default function Landing() {
           </p>
 
           <CountdownBlock />
-          <p className="text-gray-500 text-xs mt-4">Tournament tips off Thursday, March 19th at 12PM ET</p>
+          <p className="text-gray-500 text-xs mt-5 flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+            Tournament tips off Thursday, March 19th at 12PM ET
+          </p>
 
           <div className="mt-10">
             <Link
@@ -664,15 +690,21 @@ export default function Landing() {
       </section>
 
       {/* ── Footer strip ── */}
-      <div className="border-t border-gray-800 py-6 px-4 text-center space-y-2">
-        <div className="flex items-center justify-center gap-4 text-xs">
-          <Link to="/strategy" className="text-gray-500 hover:text-gray-300 transition-colors">Strategy Hub</Link>
+      <div className="border-t border-gray-800 py-8 px-4 text-center space-y-3">
+        <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-2 text-xs">
+          <Link to="/strategy" className="text-gray-500 hover:text-gray-300 transition-colors">How to Play</Link>
           <span className="text-gray-800">·</span>
           <Link to="/faq" className="text-gray-500 hover:text-gray-300 transition-colors">FAQ</Link>
+          <span className="text-gray-800">·</span>
+          <Link to="/privacy" className="text-gray-500 hover:text-gray-300 transition-colors">Privacy</Link>
+          <span className="text-gray-800">·</span>
+          <a href="mailto:support@tourneyrun.app" className="text-gray-500 hover:text-gray-300 transition-colors">Contact</a>
         </div>
         <p className="text-gray-600 text-xs">
-          © 2026 TourneyRun · Skill-based fantasy game · Payments powered by Stripe ·
-          <span className="ml-1">Not available in WA, ID, MT, NV, LA</span>
+          © 2026 TourneyRun · WohlBuilt Group LLC · Payments by Stripe
+        </p>
+        <p className="text-gray-700 text-xs">
+          Skill-based fantasy game · Not available in WA, ID, MT, NV, LA
         </p>
       </div>
     </div>
