@@ -1004,7 +1004,7 @@ export default function LeagueHome() {
                             {pick.player_name}
                           </div>
                           <div className="text-gray-500 text-xs truncate">
-                            {teamEmoji(pick.team)} {pick.team}{pick.position ? ` · ${pick.position}` : ''}
+                            {pick.team} <span style={{ fontSize: 14 }}>{teamEmoji(pick.team)}</span>{pick.position ? ` · ${pick.position}` : ''}
                             {pick.region ? ` · ${pick.region}` : ''}
                           </div>
                         </div>
@@ -1260,7 +1260,7 @@ export default function LeagueHome() {
                           </div>
                         )}
                         <div className="text-right w-10">
-                          <div className="text-brand-400 font-bold">{row.total_points}</div>
+                          <div className="text-brand-400 font-bold">{row.total_points > 0 ? row.total_points : '—'}</div>
                         </div>
                       </div>
                     </div>

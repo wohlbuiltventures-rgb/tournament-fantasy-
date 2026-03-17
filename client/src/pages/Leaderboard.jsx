@@ -99,7 +99,7 @@ function SgBonusCard({ sgLeader, sgBoard, bonus }) {
                 </div>
                 {/* School · round · opponent */}
                 <div className="text-gray-400 text-sm mt-1 flex flex-wrap items-center gap-1.5">
-                  {sgLeader.player_team && <span className="font-medium text-gray-300">{teamEmoji(sgLeader.player_team)} {sgLeader.player_team}</span>}
+                  {sgLeader.player_team && <span className="font-medium text-gray-300">{sgLeader.player_team} <span style={{ fontSize: 16 }}>{teamEmoji(sgLeader.player_team)}</span></span>}
                   {sgLeader.player_team && <span className="text-gray-600">·</span>}
                   {sgLeader.round_name && <span>{sgLeader.round_name}</span>}
                   {sgLeader.round_name && sgLeader.opponent && <span className="text-gray-600">·</span>}
@@ -153,7 +153,7 @@ function SgBonusCard({ sgLeader, sgBoard, bonus }) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline gap-2 flex-wrap">
                           <span className={`font-bold text-sm ${i === 0 ? 'text-white' : 'text-gray-300'}`}>{row.player_name}</span>
-                          <span className="text-gray-500 text-xs">{teamEmoji(row.player_team)} {row.player_team}</span>
+                          <span className="text-gray-500 text-xs">{row.player_team} <span style={{ fontSize: 16 }}>{teamEmoji(row.player_team)}</span></span>
                           {row.round_name && <span className="text-gray-600 text-xs">· {row.round_name}</span>}
                         </div>
                         {row.owner_user_id ? (
@@ -568,7 +568,7 @@ export default function Leaderboard() {
                         </span>
                       )}
                       <div className="text-right min-w-[40px]">
-                        <div className="font-black leading-tight" style={{ fontSize: 22, color: ptsColor }}>{team.total_points}</div>
+                        <div className="font-black leading-tight" style={{ fontSize: 22, color: ptsColor }}>{team.total_points > 0 ? team.total_points : '—'}</div>
                         <div className="text-gray-500 text-[10px]">pts</div>
                       </div>
                       <svg
@@ -624,8 +624,12 @@ export default function Leaderboard() {
                                   style={{ opacity: player.is_eliminated ? 0.4 : 1 }}
                                 >
                                   {/* Status dot */}
-                                  <div className="w-2 h-2 rounded-full flex-shrink-0"
-                                    style={{ backgroundColor: player.is_eliminated ? '#6b7280' : playerIsLive ? '#34d399' : '#378ADD' }} />
+                                  {(() => {
+                                    const hasPlayed = player.fantasy_points > 0 || playerIsLive || !!player.is_eliminated;
+                                    if (!hasPlayed) return <div className="w-2 h-2 flex-shrink-0" />;
+                                    const dotColor = player.is_eliminated ? '#ef4444' : '#34d399';
+                                    return <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: dotColor }} />;
+                                  })()}
 
                                   {/* Player info */}
                                   <div className="flex-1 min-w-0">
@@ -653,7 +657,7 @@ export default function Leaderboard() {
                                       )}
                                     </div>
                                     <div className="text-gray-500 text-[10px] mt-0.5">
-                                      {teamEmoji(player.team)} {player.team}{player.position ? ` · ${player.position}` : ''}
+                                      {player.team} <span style={{ fontSize: 14 }}>{teamEmoji(player.team)}</span>{player.position ? ` · ${player.position}` : ''}
                                     </div>
                                   </div>
 
