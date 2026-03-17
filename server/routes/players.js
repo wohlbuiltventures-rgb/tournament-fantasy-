@@ -42,6 +42,8 @@ router.get('/available/:leagueId', authMiddleware, (req, res) => {
       WHERE p.id NOT IN (
         SELECT player_id FROM draft_picks WHERE league_id = ?
       )
+      AND (p.status IS NULL OR p.status != 'OUT')
+      AND (p.injury_status IS NULL OR p.injury_status NOT LIKE '%OUT%')
     `;
     const params = [req.params.leagueId];
 

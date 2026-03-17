@@ -246,6 +246,20 @@ try {
     }
   })();
 } catch (e) { console.error('[db] injury seed error:', e.message); }
+
+// ── Mark specific players OUT by UUID (idempotent) ───────────────────────────
+try {
+  const OUT_PLAYER_IDS = [
+    '9295ab0f-f77e-499a-9a01-987cc7d6ecbb', // Richie Saunders
+    'acab7dfa-63c0-4eee-bb91-be97c23c611d', // JT Toppin
+    '3e8875cd-9848-4f8d-9f16-8d9a95bdfd14', // L.J. Cason
+    'd3de0b11-441d-47b6-9495-9b4a13a8a31d', // Matt Hodge
+    '7d40f7fb-1e2c-4436-8d87-5289dfd0138b', // Aden Holloway
+  ];
+  const setOut = db.prepare(`UPDATE players SET injury_flagged = 1, injury_status = 'OUT' WHERE id = ? AND (injury_status IS NULL OR injury_status = '')`);
+  db.transaction(() => { for (const id of OUT_PLAYER_IDS) setOut.run(id); })();
+} catch (e) { console.error('[db] OUT player migration error:', e.message); }
+
 // Strategy Hub news cache
 try {
   db.exec(`CREATE TABLE IF NOT EXISTS news_articles (
