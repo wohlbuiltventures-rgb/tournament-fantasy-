@@ -251,6 +251,7 @@ export default function Leaderboard() {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [secondsSince, setSecondsSince] = useState(null);
   const [sortBy, setSortBy] = useState('points');
+  const [sortDir, setSortDir] = useState('desc');
   useDocTitle(league ? `${league.name} Standings | TourneyRun` : 'Standings | TourneyRun');
 
   // ── "X seconds ago" ticker ────────────────────────────────────────────────
@@ -438,44 +439,60 @@ export default function Leaderboard() {
           <p>No standings yet. Stats will appear here once games are played.</p>
         </div>
       ) : (() => {
+        const handleSort = (col) => {
+          if (sortBy === col) {
+            setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+          } else {
+            setSortBy(col);
+            setSortDir(col === 'name' ? 'asc' : 'desc');
+          }
+        };
+
         const sortedStandings = [...standings].sort((a, b) => {
-          if (sortBy === 'points') return b.total_points - a.total_points;
-          if (sortBy === 'etp') {
+          let cmp = 0;
+          if (sortBy === 'points') {
+            cmp = a.total_points - b.total_points;
+          } else if (sortBy === 'etp') {
             const etpA = a.players?.filter(p => !p.is_eliminated).reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0) ?? 0;
             const etpB = b.players?.filter(p => !p.is_eliminated).reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0) ?? 0;
-            return etpB - etpA;
-          }
-          if (sortBy === 'name') return a.team_name.localeCompare(b.team_name);
-          if (sortBy === 'alive') {
+            cmp = etpA - etpB;
+          } else if (sortBy === 'name') {
+            cmp = a.team_name.localeCompare(b.team_name);
+          } else if (sortBy === 'alive') {
             const aliveA = a.players?.filter(p => !p.is_eliminated).length ?? 0;
             const aliveB = b.players?.filter(p => !p.is_eliminated).length ?? 0;
-            return aliveB - aliveA;
+            cmp = aliveA - aliveB;
           }
-          return 0;
+          return sortDir === 'desc' ? -cmp : cmp;
         });
+
+        const ColHdr = ({ col, label }) => {
+          const active = sortBy === col;
+          const arrow = active ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
+          return (
+            <span
+              onClick={() => handleSort(col)}
+              className={`cursor-pointer select-none text-xs font-semibold uppercase tracking-wider transition-colors ${
+                active ? 'text-white font-bold' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {label}{arrow}
+            </span>
+          );
+        };
+
         return (
         <>
-          <div className="flex gap-2 mb-3 flex-wrap">
-            {[
-              { key: 'points', label: 'Points' },
-              { key: 'etp',    label: 'Proj. ETP' },
-              { key: 'alive',  label: 'Players Alive' },
-              { key: 'name',   label: 'Team Name' },
-            ].map(s => (
-              <button
-                key={s.key}
-                onClick={() => setSortBy(s.key)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                  sortBy === s.key
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-                }`}
-              >
-                {s.label}{sortBy === s.key ? (s.key === 'name' ? ' ↑' : ' ↓') : ''}
-              </button>
-            ))}
+          {/* Column header bar */}
+          <div className="flex items-center justify-between px-4 py-2.5 mb-3 rounded-xl bg-gray-900 border border-gray-800">
+            <ColHdr col="name"   label="Team" />
+            <div className="flex items-center gap-5">
+              <ColHdr col="etp"    label="Proj. ETP" />
+              <ColHdr col="alive"  label="Alive" />
+              <ColHdr col="points" label="Pts" />
+            </div>
           </div>
-          <div className="space-y-3">
+          <div key={`${sortBy}-${sortDir}`} className="space-y-3 animate-sort">
           {sortedStandings.map((team, i) => {
             const isMe = team.user_id === user?.id;
             const isLast = i === sortedStandings.length - 1 && sortedStandings.length > 1;

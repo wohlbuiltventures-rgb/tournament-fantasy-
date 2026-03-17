@@ -180,6 +180,7 @@ export default function LeagueHome() {
   const [myStandingsPlayers, setMyStandingsPlayers] = useState([]);
   const [allStandings, setAllStandings] = useState([]);
   const [standingsSort, setStandingsSort] = useState('points');
+  const [standingsSortDir, setStandingsSortDir] = useState('desc');
   const [tab, setTab]             = useState('overview');
   const [loading, setLoading]     = useState(true);
   const [copied, setCopied]       = useState(false);
@@ -1046,55 +1047,77 @@ export default function LeagueHome() {
       {/* ════════════════════════════════════════════════════════════════════ */}
       {tab === 'standings' && (() => {
         const hasStandingsData = allStandings.length > 0;
+
+        const handleStandingsSort = (col) => {
+          if (!hasStandingsData) return;
+          if (standingsSort === col) {
+            setStandingsSortDir(d => d === 'desc' ? 'asc' : 'desc');
+          } else {
+            setStandingsSort(col);
+            setStandingsSortDir(col === 'name' ? 'asc' : 'desc');
+          }
+        };
+
         const sortedRows = hasStandingsData
           ? [...allStandings].sort((a, b) => {
-              if (standingsSort === 'points') return b.total_points - a.total_points;
-              if (standingsSort === 'etp') {
+              let cmp = 0;
+              if (standingsSort === 'points') {
+                cmp = a.total_points - b.total_points;
+              } else if (standingsSort === 'etp') {
                 const etpA = a.players?.filter(p => !p.is_eliminated).reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0) ?? 0;
                 const etpB = b.players?.filter(p => !p.is_eliminated).reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0) ?? 0;
-                return etpB - etpA;
-              }
-              if (standingsSort === 'name') return a.team_name.localeCompare(b.team_name);
-              if (standingsSort === 'alive') {
+                cmp = etpA - etpB;
+              } else if (standingsSort === 'name') {
+                cmp = a.team_name.localeCompare(b.team_name);
+              } else if (standingsSort === 'alive') {
                 const aliveA = a.players?.filter(p => !p.is_eliminated).length ?? 0;
                 const aliveB = b.players?.filter(p => !p.is_eliminated).length ?? 0;
-                return aliveB - aliveA;
+                cmp = aliveA - aliveB;
               }
-              return 0;
+              return standingsSortDir === 'desc' ? -cmp : cmp;
             })
           : [...members].sort((a, b) => b.total_points - a.total_points);
 
+        const ColHeader = ({ col, label, align = 'right' }) => {
+          const active = standingsSort === col;
+          const arrow = active ? (standingsSortDir === 'desc' ? ' ↓' : ' ↑') : '';
+          return (
+            <span
+              onClick={() => handleStandingsSort(col)}
+              className={`select-none transition-colors ${
+                hasStandingsData ? 'cursor-pointer' : ''
+              } ${
+                active
+                  ? 'text-white font-bold'
+                  : 'text-gray-500 hover:text-gray-300 font-semibold'
+              } ${align === 'left' ? '' : ''}`}
+            >
+              {label}{arrow}
+            </span>
+          );
+        };
+
         return (
           <div>
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              {hasStandingsData && (
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { key: 'points', label: 'Points' },
-                    { key: 'etp',    label: 'Proj. ETP' },
-                    { key: 'alive',  label: 'Alive' },
-                    { key: 'name',   label: 'Name' },
-                  ].map(s => (
-                    <button
-                      key={s.key}
-                      onClick={() => setStandingsSort(s.key)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        standingsSort === s.key
-                          ? 'bg-brand-500 text-white'
-                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-                      }`}
-                    >
-                      {s.label}{standingsSort === s.key ? (s.key === 'name' ? ' ↑' : ' ↓') : ''}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <Link to={`/league/${id}/leaderboard`} className="text-brand-400 hover:text-brand-300 text-sm font-medium ml-auto">
+            <div className="flex justify-end mb-3">
+              <Link to={`/league/${id}/leaderboard`} className="text-brand-400 hover:text-brand-300 text-sm font-medium">
                 Full Leaderboard →
               </Link>
             </div>
             <div className="card overflow-hidden">
-              <div className="divide-y divide-gray-800">
+              {/* Column headers */}
+              <div className="flex items-center justify-between px-5 py-2.5 border-b border-gray-800 text-xs">
+                <ColHeader col="name" label="Team" align="left" />
+                {hasStandingsData && (
+                  <div className="flex items-center gap-5">
+                    <ColHeader col="etp"   label="Proj. ETP" />
+                    <ColHeader col="alive" label="Alive" />
+                    <ColHeader col="points" label="Pts" />
+                  </div>
+                )}
+              </div>
+              {/* Rows — key triggers fade animation on sort change */}
+              <div key={`${standingsSort}-${standingsSortDir}`} className="divide-y divide-gray-800 animate-sort">
                 {sortedRows.map((row, i) => {
                   const alivePlayers = row.players?.filter(p => !p.is_eliminated) ?? [];
                   const aliveCount = row.players ? alivePlayers.length : null;
@@ -1103,35 +1126,36 @@ export default function LeagueHome() {
                     : null;
                   return (
                     <div key={row.id || row.user_id} className="flex items-center justify-between px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
                           i === 0 ? 'bg-yellow-500/20 text-yellow-400' :
                           i === 1 ? 'bg-gray-400/20 text-gray-300'   :
                           i === 2 ? 'bg-amber-900/30 text-amber-600'  :
                                     'bg-gray-800 text-gray-500'
                         }`}>{i + 1}</span>
                         <TeamAvatar avatarUrl={row.avatar_url} teamName={row.team_name} size="sm" />
-                        <div>
-                          <div className="text-white font-medium">{row.team_name}</div>
+                        <div className="min-w-0">
+                          <div className="text-white font-medium truncate">{row.team_name}</div>
                           <div className="text-gray-500 text-xs">@{row.username}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        {projETP !== null && projETP > 0 && (
-                          <div className="text-right">
-                            <div className="text-amber-400 font-bold text-sm">{projETP.toFixed(1)}</div>
-                            <div className="text-gray-600 text-[10px]">Proj. ETP</div>
+                      <div className="flex items-center gap-5 shrink-0 ml-3">
+                        {projETP !== null && (
+                          <div className="text-right w-14">
+                            <div className={`font-bold text-sm ${projETP > 0 ? 'text-amber-400' : 'text-gray-600'}`}>
+                              {projETP > 0 ? projETP.toFixed(1) : '—'}
+                            </div>
                           </div>
                         )}
                         {aliveCount !== null && (
-                          <div className="text-right">
-                            <div className={`font-bold text-sm ${aliveCount === 0 ? 'text-red-400' : 'text-green-400'}`}>{aliveCount}</div>
-                            <div className="text-gray-600 text-[10px]">alive</div>
+                          <div className="text-right w-8">
+                            <div className={`font-bold text-sm ${aliveCount === 0 ? 'text-red-400' : 'text-green-400'}`}>
+                              {aliveCount}
+                            </div>
                           </div>
                         )}
-                        <div className="text-right">
+                        <div className="text-right w-10">
                           <div className="text-brand-400 font-bold">{row.total_points}</div>
-                          <div className="text-gray-600 text-[10px]">pts</div>
                         </div>
                       </div>
                     </div>
