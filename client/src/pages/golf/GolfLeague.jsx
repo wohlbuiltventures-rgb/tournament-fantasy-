@@ -587,55 +587,73 @@ function LineupTab({ leagueId, league }) {
 
 // ── Tab: Free Agency ───────────────────────────────────────────────────────────
 
+function TierBadge({ salary }) {
+  if (salary >= 800) return <span className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 shrink-0">Elite</span>;
+  if (salary >= 700) return <span className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-400 shrink-0">Prem</span>;
+  if (salary >= 550) return <span className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-gray-700/60 border border-gray-700 text-gray-400 shrink-0">Mid</span>;
+  if (salary >= 400) return <span className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-green-500/15 border border-green-500/30 text-green-400 shrink-0">Val</span>;
+  return <span className="inline-block text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-gray-800 border border-gray-700 text-gray-500 shrink-0">Slpr</span>;
+}
+
 function FreeAgencyTab({ leagueId, league }) {
-  const [budget, setBudget] = useState(null);
-  const [players, setPlayers] = useState([]);
+  const [waivers, setWaivers] = useState(null);  // { available, myBids, faabBudget, faabRemaining, useFaab }
   const [roster, setRoster] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [bidTarget, setBidTarget] = useState(null);
   const [bidAmount, setBidAmount] = useState('');
+  const [dropPlayerId, setDropPlayerId] = useState('');
   const [bidding, setBidding] = useState(false);
   const [bidError, setBidError] = useState('');
   const [bidSuccess, setBidSuccess] = useState('');
 
   async function load() {
+    setLoadError('');
     try {
-      const [pRes, rRes, bRes] = await Promise.all([
-        api.get('/golf/players'),
+      const [wRes, rRes] = await Promise.all([
+        api.get(`/golf/leagues/${leagueId}/waivers`),
         api.get(`/golf/leagues/${leagueId}/roster`),
-        api.get(`/golf/leagues/${leagueId}/faab/bids`),
       ]);
-      setPlayers(pRes.data.players || []);
+      setWaivers(wRes.data);
       setRoster(rRes.data.roster || []);
-      setBudget(bRes.data);
-    } catch {}
+    } catch (err) {
+      setLoadError(err.response?.data?.error || 'Failed to load waiver data');
+    }
     setLoading(false);
   }
 
   useEffect(() => { load(); }, [leagueId]);
 
-  const rosterIds = new Set(roster.map(r => r.player_id));
-
-  // Available = not on my roster (and not on any roster if pool)
-  const available = players.filter(p =>
-    !rosterIds.has(p.id) &&
+  const available = (waivers?.available || []).filter(p =>
+    p.owner_count === 0 &&
     (!search || p.name.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const rosterFull = roster.length >= (league.roster_size || 8);
+  const droppable = roster.filter(p => !p.is_core);
+
+  function openBid(p) {
+    setBidTarget(p);
+    setBidAmount('');
+    setDropPlayerId('');
+    setBidError('');
+    setBidSuccess('');
+  }
 
   async function placeBid(e) {
     e.preventDefault();
     setBidding(true);
     setBidError('');
-    setBidSuccess('');
     try {
-      await api.post(`/golf/leagues/${leagueId}/faab/bid`, {
+      const body = {
         player_id: bidTarget.id,
         bid_amount: parseInt(bidAmount) || 0,
-      });
-      setBidSuccess(`Bid of $${bidAmount} placed on ${bidTarget.name}`);
+      };
+      if (dropPlayerId) body.drop_player_id = dropPlayerId;
+      await api.post(`/golf/leagues/${leagueId}/waivers/bid`, body);
+      setBidSuccess(`Bid of $${bidAmount || 0} placed on ${bidTarget.name}`);
       setBidTarget(null);
-      setBidAmount('');
       await load();
     } catch (err) {
       setBidError(err.response?.data?.error || 'Failed to place bid');
@@ -645,31 +663,45 @@ function FreeAgencyTab({ leagueId, league }) {
 
   if (loading) return <div className="py-10 text-center text-gray-500">Loading...</div>;
 
+  if (loadError) {
+    return (
+      <div className="py-10 text-center">
+        <div className="bg-red-900/30 border border-red-700/50 text-red-400 rounded-2xl p-6 text-sm max-w-sm mx-auto">
+          {loadError}
+        </div>
+      </div>
+    );
+  }
+
+  const pendingBids = (waivers?.myBids || []).filter(b => b.status === 'pending');
+
   return (
     <div className="space-y-4">
       {/* Budget card */}
-      {budget && (
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-800">
-            <Trophy className="w-4 h-4 text-green-400" />
-            <h3 className="text-white font-bold">My FAAB Budget</h3>
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-800">
+          <Trophy className="w-4 h-4 text-green-400" />
+          <h3 className="text-white font-bold">My FAAB Budget</h3>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-gray-800/60 rounded-xl px-3 py-2.5 text-center">
+            <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Remaining</div>
+            <div className="text-green-400 font-black text-xl tabular-nums">${waivers?.faabRemaining ?? '—'}</div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-800/60 rounded-xl px-4 py-3 text-center">
-              <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Weekly Remaining</div>
-              <div className="text-green-400 font-black text-2xl">${budget.faab_remaining ?? '—'}</div>
-            </div>
-            <div className="bg-gray-800/60 rounded-xl px-4 py-3 text-center">
-              <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Pending Bids</div>
-              <div className="text-white font-black text-2xl">{budget.pending_bids?.length ?? 0}</div>
-            </div>
+          <div className="bg-gray-800/60 rounded-xl px-3 py-2.5 text-center">
+            <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Budget</div>
+            <div className="text-white font-black text-xl tabular-nums">${waivers?.faabBudget ?? '—'}</div>
+          </div>
+          <div className="bg-gray-800/60 rounded-xl px-3 py-2.5 text-center">
+            <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Pending</div>
+            <div className="text-yellow-400 font-black text-xl tabular-nums">{pendingBids.length}</div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Success message */}
+      {/* Success banner */}
       {bidSuccess && (
-        <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg p-3 text-sm flex items-center gap-2">
+        <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-xl p-3 text-sm flex items-center gap-2">
           <Check className="w-4 h-4 shrink-0" /> {bidSuccess}
         </div>
       )}
@@ -681,45 +713,68 @@ function FreeAgencyTab({ leagueId, league }) {
             <h3 className="text-white font-bold">Place FAAB Bid</h3>
             <button onClick={() => setBidTarget(null)} className="text-gray-500 hover:text-gray-300 text-sm">Cancel</button>
           </div>
-          <div className="mb-4">
-            <div className="text-white font-semibold">{bidTarget.name}</div>
-            <div className="text-gray-500 text-xs">{bidTarget.country} · Rank #{bidTarget.world_ranking}</div>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex-1 min-w-0">
+              <div className="text-white font-semibold">{bidTarget.name}</div>
+              <div className="text-gray-500 text-xs">{bidTarget.country} · Rank #{bidTarget.world_ranking}</div>
+            </div>
+            <TierBadge salary={bidTarget.salary} />
+            <div className="text-green-400 font-bold text-sm shrink-0">${bidTarget.salary}</div>
           </div>
           {bidError && (
             <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg p-3 text-sm mb-3">{bidError}</div>
           )}
-          <form onSubmit={placeBid} className="flex gap-2">
-            <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+          <form onSubmit={placeBid} className="space-y-3">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">$</span>
               <input
                 type="number"
                 min="0"
-                className="input pl-7"
-                placeholder="0"
+                max={waivers?.faabRemaining ?? 9999}
+                className="w-full bg-gray-800 border border-gray-700 focus:border-green-500 focus:outline-none text-white text-sm rounded-xl pl-7 pr-4 py-2.5"
+                placeholder="Bid amount"
                 value={bidAmount}
                 onChange={e => setBidAmount(e.target.value)}
-                required
                 autoFocus
               />
             </div>
+            {rosterFull && (
+              <div>
+                <label className="block text-xs text-gray-400 font-semibold mb-1.5">Drop player (roster full)</label>
+                <select
+                  value={dropPlayerId}
+                  onChange={e => setDropPlayerId(e.target.value)}
+                  required
+                  className="w-full bg-gray-800 border border-gray-700 focus:border-green-500 focus:outline-none text-white text-sm rounded-xl px-3 py-2.5"
+                >
+                  <option value="">Select player to drop...</option>
+                  {droppable.map(p => (
+                    <option key={p.player_id} value={p.player_id}>{p.name} (${p.salary})</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <button
               type="submit"
-              disabled={bidding}
-              className="px-5 py-2.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-bold rounded-xl transition-all"
+              disabled={bidding || (rosterFull && !dropPlayerId)}
+              className="w-full py-2.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-bold rounded-xl transition-all"
             >
-              {bidding ? '...' : 'Bid'}
+              {bidding ? 'Placing bid...' : 'Place Blind Bid'}
             </button>
           </form>
-          <p className="text-gray-600 text-xs mt-2">Blind bids process at the waiver wire deadline.</p>
+          <p className="text-gray-600 text-xs mt-2">Bids are blind — processed at waiver deadline.</p>
         </div>
       )}
 
       {/* Available players */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-800">
-          <div className="flex items-center gap-2 mb-3">
-            <Flag className="w-4 h-4 text-gray-400" />
-            <h3 className="text-white font-bold">Available Players</h3>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <Flag className="w-4 h-4 text-gray-400" />
+              <h3 className="text-white font-bold">Free Agents</h3>
+            </div>
+            <span className="text-gray-600 text-xs">{available.length} available</span>
           </div>
           <input
             type="text"
@@ -729,39 +784,56 @@ function FreeAgencyTab({ leagueId, league }) {
             className="w-full bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none focus:border-green-500"
           />
         </div>
-        <div className="max-h-96 overflow-y-auto divide-y divide-gray-800">
-          {available.slice(0, 50).map(p => (
-            <div key={p.id} className="flex items-center justify-between px-5 py-3.5 gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="text-white text-sm font-medium truncate">{p.name}</div>
-                <div className="text-gray-500 text-xs">{p.country} · Rank #{p.world_ranking}</div>
+        <div className="max-h-[480px] overflow-y-auto divide-y divide-gray-800">
+          {available.slice(0, 60).map(p => (
+            <div key={p.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="w-7 text-center shrink-0">
+                <span className="text-gray-600 text-xs font-bold tabular-nums">#{p.world_ranking}</span>
               </div>
-              <div className="text-green-400 font-bold text-sm shrink-0">${p.salary}</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-sm font-semibold truncate">{p.name}</div>
+                <div className="text-gray-500 text-xs">{p.country}</div>
+              </div>
+              <TierBadge salary={p.salary} />
+              <div className="text-green-400 font-bold text-sm shrink-0 tabular-nums w-10 text-right">${p.salary}</div>
               <button
-                onClick={() => { setBidTarget(p); setBidAmount(''); setBidError(''); setBidSuccess(''); }}
+                onClick={() => openBid(p)}
                 className="text-xs px-2.5 py-1.5 bg-green-500/15 border border-green-500/30 text-green-400 rounded-lg hover:bg-green-500/25 transition-colors font-semibold shrink-0"
               >
                 Bid
               </button>
             </div>
           ))}
-          {available.length === 0 && (
-            <div className="py-8 text-center text-gray-500 text-sm">No players found.</div>
+          {available.length === 0 && !search && (
+            <div className="py-10 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-gray-800 flex items-center justify-center mx-auto mb-3">
+                <Flag className="w-6 h-6 text-gray-600" />
+              </div>
+              <p className="text-gray-500 text-sm">All players are rostered.</p>
+            </div>
+          )}
+          {available.length === 0 && search && (
+            <div className="py-8 text-center text-gray-500 text-sm">No players match "{search}".</div>
           )}
         </div>
       </div>
 
       {/* Pending bids */}
-      {budget?.pending_bids?.length > 0 && (
+      {pendingBids.length > 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
             <ArrowRight className="w-4 h-4 text-yellow-400" />
             <h3 className="text-white font-bold">My Pending Bids</h3>
           </div>
           <div className="divide-y divide-gray-800">
-            {budget.pending_bids.map(b => (
-              <div key={b.id} className="flex items-center justify-between px-5 py-3.5">
-                <div className="text-white text-sm font-medium">{b.player_name || b.player_id}</div>
+            {pendingBids.map(b => (
+              <div key={b.id} className="flex items-center justify-between px-5 py-3.5 gap-3">
+                <div className="min-w-0">
+                  <div className="text-white text-sm font-medium truncate">{b.player_name}</div>
+                  {b.drop_player_name && (
+                    <div className="text-gray-500 text-xs">Drop: {b.drop_player_name}</div>
+                  )}
+                </div>
                 <Chip color="yellow">${b.bid_amount}</Chip>
               </div>
             ))}
