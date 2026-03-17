@@ -617,6 +617,8 @@ function FreeAgencyTab({ leagueId, league }) {
   const [bidding, setBidding] = useState(false);
   const [bidError, setBidError] = useState('');
   const [bidSuccess, setBidSuccess] = useState('');
+  const [expandedId, setExpandedId] = useState(null);
+  const [logs, setLogs] = useState({});  // { [playerId]: { loading, data, error } }
 
   async function load() {
     setLoadError('');
@@ -649,6 +651,19 @@ function FreeAgencyTab({ leagueId, league }) {
     setDropPlayerId('');
     setBidError('');
     setBidSuccess('');
+  }
+
+  async function toggleRow(playerId) {
+    if (expandedId === playerId) { setExpandedId(null); return; }
+    setExpandedId(playerId);
+    if (logs[playerId]) return; // already cached
+    setLogs(prev => ({ ...prev, [playerId]: { loading: true } }));
+    try {
+      const r = await api.get(`/golf/players/${playerId}/gamelog`);
+      setLogs(prev => ({ ...prev, [playerId]: { loading: false, data: r.data } }));
+    } catch {
+      setLogs(prev => ({ ...prev, [playerId]: { loading: false, error: 'Failed to load' } }));
+    }
   }
 
   async function placeBid(e) {
@@ -794,26 +809,117 @@ function FreeAgencyTab({ leagueId, league }) {
             className="w-full bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none focus:border-green-500"
           />
         </div>
-        <div className="max-h-[480px] overflow-y-auto divide-y divide-gray-800">
-          {available.slice(0, 60).map(p => (
-            <div key={p.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="w-7 text-center shrink-0">
-                <span className="text-gray-600 text-xs font-bold tabular-nums">#{p.world_ranking}</span>
+        <div className="max-h-[560px] overflow-y-auto">
+          {available.slice(0, 60).map(p => {
+            const isOpen = expandedId === p.id;
+            const log = logs[p.id];
+            return (
+              <div key={p.id} className="border-b border-gray-800 last:border-0">
+                {/* ── Main row ── */}
+                <div
+                  onClick={() => toggleRow(p.id)}
+                  className="flex items-center gap-2 px-4 min-h-[48px] py-2.5 cursor-pointer active:bg-gray-800/50 transition-colors select-none"
+                >
+                  {/* Chevron */}
+                  <svg
+                    style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                    className="w-3 h-3 text-gray-500 shrink-0"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  <span className="text-gray-600 text-[11px] font-bold tabular-nums w-6 text-center shrink-0">#{p.world_ranking}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white text-sm font-semibold truncate">{p.name}</div>
+                    <div className="text-gray-500 text-[11px]">{p.country}</div>
+                  </div>
+                  <TierBadge salary={p.salary} />
+                  <span className="text-green-400 font-bold text-sm shrink-0 tabular-nums">${p.salary}</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); openBid(p); }}
+                    className="text-xs px-2.5 py-1.5 bg-green-500/15 border border-green-500/30 text-green-400 rounded-lg active:bg-green-500/25 transition-colors font-semibold shrink-0"
+                  >
+                    Bid
+                  </button>
+                </div>
+
+                {/* ── Game log (expanded) ── */}
+                {isOpen && (
+                  <div className="bg-gray-950/70 border-t border-gray-800/60 px-4 py-3">
+                    {log?.loading && (
+                      <div className="py-3 text-center text-gray-500 text-xs">Loading...</div>
+                    )}
+                    {log?.error && (
+                      <div className="py-2 text-center text-red-400 text-xs">{log.error}</div>
+                    )}
+                    {log?.data && (
+                      log.data.gamelog.length === 0 ? (
+                        <div className="py-3 text-center text-gray-500 text-xs">No results this season</div>
+                      ) : (
+                        <>
+                          {/* Table — horizontally scrollable */}
+                          <div className="overflow-x-auto -mx-4 px-4">
+                            <table className="w-full text-xs min-w-[400px]">
+                              <thead>
+                                <tr className="text-gray-600 text-[10px] uppercase tracking-wide">
+                                  <th className="text-left pb-2 font-semibold pr-2">Tournament</th>
+                                  <th className="text-center pb-2 font-semibold w-9">R1</th>
+                                  <th className="text-center pb-2 font-semibold w-9">R2</th>
+                                  <th className="text-center pb-2 font-semibold w-9">R3</th>
+                                  <th className="text-center pb-2 font-semibold w-9">R4</th>
+                                  <th className="text-center pb-2 font-semibold w-8">Cut</th>
+                                  <th className="text-center pb-2 font-semibold w-10">Fin</th>
+                                  <th className="text-right pb-2 font-semibold w-12">Pts</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {log.data.gamelog.map((g, i) => (
+                                  <tr key={i} className="border-t border-gray-800/50">
+                                    <td className="py-1.5 pr-2 text-gray-300 max-w-[120px]">
+                                      <span className="truncate block">{g.tournament_name}{g.is_major ? ' ★' : ''}</span>
+                                    </td>
+                                    <td className="py-1.5 text-center text-gray-400 tabular-nums">{g.r1 ?? '—'}</td>
+                                    <td className="py-1.5 text-center text-gray-400 tabular-nums">{g.r2 ?? '—'}</td>
+                                    <td className="py-1.5 text-center text-gray-400 tabular-nums">{g.made_cut ? (g.r3 ?? '—') : '—'}</td>
+                                    <td className="py-1.5 text-center text-gray-400 tabular-nums">{g.made_cut ? (g.r4 ?? '—') : '—'}</td>
+                                    <td className="py-1.5 text-center font-bold">
+                                      {g.made_cut
+                                        ? <span style={{ color: '#22c55e' }}>Y</span>
+                                        : <span style={{ color: '#ef4444' }}>N</span>}
+                                    </td>
+                                    <td className="py-1.5 text-center text-gray-400 tabular-nums">{g.finish_position ?? '—'}</td>
+                                    <td className="py-1.5 text-right tabular-nums font-bold"
+                                      style={{ color: g.fantasy_points >= 0 ? '#22c55e' : '#ef4444' }}>
+                                      {g.fantasy_points > 0 ? '+' : ''}{g.fantasy_points}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Summary */}
+                          <div className="mt-3 pt-2.5 border-t border-gray-800/60 grid grid-cols-4 gap-2">
+                            {[
+                              { label: 'Avg Pts', value: `${log.data.season_avg > 0 ? '+' : ''}${log.data.season_avg}`, color: log.data.season_avg >= 0 ? '#22c55e' : '#ef4444' },
+                              { label: 'Events',  value: String(log.data.events_played), color: '#9ca3af' },
+                              { label: 'Cuts',    value: `${log.data.cuts_made}/${log.data.events_played}`, color: '#9ca3af' },
+                              { label: 'Best',    value: log.data.best_finish ?? '—', color: '#f59e0b' },
+                            ].map(s => (
+                              <div key={s.label} className="text-center">
+                                <div className="text-gray-600 text-[10px] uppercase tracking-wide mb-0.5">{s.label}</div>
+                                <div className="font-black text-sm tabular-nums" style={{ color: s.color }}>{s.value}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-white text-sm font-semibold truncate">{p.name}</div>
-                <div className="text-gray-500 text-xs">{p.country}</div>
-              </div>
-              <TierBadge salary={p.salary} />
-              <div className="text-green-400 font-bold text-sm shrink-0 tabular-nums w-10 text-right">${p.salary}</div>
-              <button
-                onClick={() => openBid(p)}
-                className="text-xs px-2.5 py-1.5 bg-green-500/15 border border-green-500/30 text-green-400 rounded-lg hover:bg-green-500/25 transition-colors font-semibold shrink-0"
-              >
-                Bid
-              </button>
-            </div>
-          ))}
+            );
+          })}
           {available.length === 0 && !search && (
             <div className="py-10 text-center">
               <div className="w-12 h-12 rounded-2xl bg-gray-800 flex items-center justify-center mx-auto mb-3">

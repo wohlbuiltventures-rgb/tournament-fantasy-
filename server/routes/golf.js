@@ -103,6 +103,49 @@ router.get('/players', authMiddleware, (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
+router.get('/players/:id/gamelog', authMiddleware, (req, res) => {
+  try {
+    const recent = db.prepare(`
+      SELECT gs.round1, gs.round2, gs.round3, gs.round4,
+             gs.made_cut, gs.finish_position, gs.fantasy_points,
+             gt.name as tournament_name, gt.is_major, gt.start_date
+      FROM golf_scores gs
+      JOIN golf_tournaments gt ON gs.tournament_id = gt.id
+      WHERE gs.player_id = ?
+      ORDER BY gt.start_date DESC LIMIT 5
+    `).all(req.params.id);
+
+    const all = db.prepare(`
+      SELECT gs.fantasy_points, gs.made_cut, gs.finish_position
+      FROM golf_scores gs WHERE gs.player_id = ?
+    `).all(req.params.id);
+
+    const eventsPlayed = all.length;
+    const cutsMade = all.filter(s => s.made_cut === 1).length;
+    const seasonAvg = eventsPlayed > 0
+      ? Math.round((all.reduce((s, r) => s + r.fantasy_points, 0) / eventsPlayed) * 10) / 10
+      : 0;
+    const finishes = all.map(s => s.finish_position).filter(f => f !== null && f > 0);
+    const best = finishes.length > 0 ? Math.min(...finishes) : null;
+    const ordinal = n => n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
+
+    res.json({
+      gamelog: recent.map(s => ({
+        tournament_name: s.tournament_name,
+        is_major: !!s.is_major,
+        r1: s.round1, r2: s.round2, r3: s.round3, r4: s.round4,
+        made_cut: s.made_cut === 1,
+        finish_position: s.finish_position,
+        fantasy_points: s.fantasy_points,
+      })),
+      season_avg: seasonAvg,
+      events_played: eventsPlayed,
+      cuts_made: cutsMade,
+      best_finish: best ? ordinal(best) : null,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
 // ── Tournaments ────────────────────────────────────────────────────────────────
 router.get('/tournaments', authMiddleware, (req, res) => {
   try {
