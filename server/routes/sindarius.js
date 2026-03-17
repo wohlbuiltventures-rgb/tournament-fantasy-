@@ -81,11 +81,14 @@ Keep responses under 4 sentences. Be entertaining. Drop basketball slang natural
       .slice(-8);
 
     const body = {
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 300,
       system: systemPrompt,
       messages: [...safeHistory, { role: 'user', content: message.trim() }],
     };
+
+    console.log('[sindarius] key present:', !!process.env.ANTHROPIC_API_KEY);
+    console.log('[sindarius] key prefix:', process.env.ANTHROPIC_API_KEY?.slice(0, 14));
 
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -98,11 +101,9 @@ Keep responses under 4 sentences. Be entertaining. Drop basketball slang natural
     });
 
     if (!anthropicRes.ok) {
-      const errText = await anthropicRes.text();
-      console.error('[sindarius] Anthropic status:', anthropicRes.status);
-      console.error('[sindarius] Anthropic body:', errText);
-      console.error('[sindarius] API key present:', !!process.env.ANTHROPIC_API_KEY);
-      console.error('[sindarius] API key prefix:', process.env.ANTHROPIC_API_KEY?.substring(0, 15));
+      const errBody = await anthropicRes.text();
+      console.log('[sindarius] status:', anthropicRes.status);
+      console.log('[sindarius] body:', errBody);
       return res.status(500).json({ error: 'Anthropic API error — try again.' });
     }
 
