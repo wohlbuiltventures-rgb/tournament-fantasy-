@@ -194,7 +194,10 @@ export default function LeagueHome() {
   const [sgExpanded, setSgExpanded] = useState(false);
   const [standingsSort, setStandingsSort] = useState('points');
   const [standingsSortDir, setStandingsSortDir] = useState('desc');
-  const [tab, setTab]             = useState('overview');
+  const [tab, setTab]             = useState(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return ['overview','roster','standings','trashtalk'].includes(t) ? t : 'overview';
+  });
   const [loading, setLoading]     = useState(true);
   const [copied, setCopied]       = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);

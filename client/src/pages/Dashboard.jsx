@@ -521,6 +521,14 @@ export default function Dashboard() {
                         Go to League →
                       </Link>
                     )}
+                    {league.draft_status === 'completed' && (
+                      <Link
+                        to={`/league/${league.id}?tab=roster`}
+                        className="block w-full text-center font-semibold py-2.5 rounded-xl text-sm border border-gray-700 hover:border-gray-500 bg-transparent hover:bg-gray-800/60 text-gray-400 hover:text-gray-200 transition-all duration-200"
+                      >
+                        👤 My Roster
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>
