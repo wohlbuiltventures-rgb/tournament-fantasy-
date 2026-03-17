@@ -27,9 +27,12 @@ function calcETP(ppg, seed, isFirstFour = false) {
   return Math.round(ppg * games * 10) / 10;
 }
 
-// ── Venmo badge ───────────────────────────────────────────────────────────────
+// ── Payment badges ────────────────────────────────────────────────────────────
 const VenmoBadge = () => (
   <span style={{ background: '#008CFF', color: '#fff', fontWeight: 700, fontSize: 10, borderRadius: 20, padding: '2px 7px', lineHeight: 1.4, whiteSpace: 'nowrap' }}>Venmo</span>
+);
+const ZelleBadge = () => (
+  <span style={{ background: '#6D1ED4', color: '#fff', fontWeight: 700, fontSize: 10, borderRadius: 20, padding: '2px 7px', lineHeight: 1.4, whiteSpace: 'nowrap' }}>Zelle</span>
 );
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -212,6 +215,9 @@ export default function LeagueHome() {
   const [smartDraftUsers, setSmartDraftUsers] = useState(new Set());
   const [instrCopied, setInstrCopied]         = useState(false);
   const [hasLiveGames, setHasLiveGames]       = useState(false);
+  const [payHandleDismissed, setPayHandleDismissed] = useState(
+    () => !!sessionStorage.getItem('payHandleBannerDismissed')
+  );
 
   // Edit settings modal
   const [editOpen, setEditOpen]       = useState(false);
@@ -445,6 +451,9 @@ export default function LeagueHome() {
 
   const myPayment    = paymentInfo?.payments?.find(p => p.user_id === user?.id);
   const myPaymentDue = myPayment?.status === 'pending';
+
+  const myMember = members.find(m => m.user_id === user?.id);
+  const showPayHandleBanner = !payHandleDismissed && !!myMember && !myMember.venmo_handle && !myMember.zelle_handle;
   const paidCount    = paymentInfo?.paid_count ?? 0;
   const totalCount   = paymentInfo?.total_count ?? 0;
   const allPaid      = totalCount > 0 && paidCount === totalCount;
@@ -488,6 +497,30 @@ export default function LeagueHome() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
+
+      {/* ── Payment handle reminder banner ── */}
+      {showPayHandleBanner && (
+        <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl px-4 py-3 mb-4 text-sm">
+          <span>⚠️</span>
+          <span className="flex-1">
+            Add your Venmo or Zelle so your commissioner can collect your buy-in.
+          </span>
+          <Link
+            to="/profile"
+            className="font-semibold text-amber-200 hover:text-white underline underline-offset-2 whitespace-nowrap transition-colors"
+          >
+            Update Profile
+          </Link>
+          <button
+            onClick={() => {
+              sessionStorage.setItem('payHandleBannerDismissed', '1');
+              setPayHandleDismissed(true);
+            }}
+            className="text-amber-500 hover:text-amber-300 text-lg leading-none transition-colors ml-1"
+            aria-label="Dismiss"
+          >×</button>
+        </div>
+      )}
 
       {/* ── Post-payment banners ── */}
       {paymentResult === 'success' && (
@@ -837,7 +870,7 @@ export default function LeagueHome() {
                     )}
                     {member.zelle_handle && (
                       <div className="flex items-center gap-1 mt-0.5">
-                        <span style={{ background: '#6D1ED4', color: '#fff', fontWeight: 700, fontSize: 10, borderRadius: 20, padding: '2px 7px', lineHeight: 1.4, whiteSpace: 'nowrap' }}>Zelle</span>
+                        <ZelleBadge />
                         <span className="text-gray-400 text-[10px] truncate">{member.zelle_handle}</span>
                       </div>
                     )}

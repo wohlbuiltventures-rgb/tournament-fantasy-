@@ -180,10 +180,13 @@ function SgBonusCard({ sgLeader, sgBoard, bonus }) {
   );
 }
 
-// ── Venmo badge ────────────────────────────────────────────────────────────────
+// ── Payment badges ──────────────────────────────────────────────────────────────
 
 const VenmoBadge = () => (
   <span style={{ background: '#008CFF', color: '#fff', fontWeight: 700, fontSize: 10, borderRadius: 20, padding: '2px 7px', lineHeight: 1.4, whiteSpace: 'nowrap' }}>Venmo</span>
+);
+const ZelleBadge = () => (
+  <span style={{ background: '#6D1ED4', color: '#fff', fontWeight: 700, fontSize: 10, borderRadius: 20, padding: '2px 7px', lineHeight: 1.4, whiteSpace: 'nowrap' }}>Zelle</span>
 );
 
 // ── Team avatar (inline colors — safe from Tailwind purging in prod) ───────────
@@ -555,6 +558,11 @@ export default function Leaderboard() {
                         {team.venmo_handle && (
                           <span className="inline-flex items-center gap-1">
                             <VenmoBadge /><span className="text-gray-400 text-[10px]">{team.venmo_handle}</span>
+                          </span>
+                        )}
+                        {team.zelle_handle && (
+                          <span className="inline-flex items-center gap-1">
+                            <ZelleBadge /><span className="text-gray-400 text-[10px]">{team.zelle_handle}</span>
                           </span>
                         )}
                       </div>
