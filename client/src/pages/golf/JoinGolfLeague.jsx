@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Flag, ArrowRight } from 'lucide-react';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
 
@@ -30,10 +31,12 @@ export default function JoinGolfLeague() {
   };
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
+    <div className="max-w-md mx-auto px-4 py-12 sm:py-16">
       <div className="text-center mb-8">
-        <div className="text-5xl mb-4">⛳</div>
-        <h1 className="text-3xl font-black text-white">Join a Golf League</h1>
+        <div className="w-16 h-16 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto mb-4">
+          <Flag className="w-8 h-8 text-green-400" />
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-black text-white">Join a Golf League</h1>
         <p className="text-gray-400 mt-2">Enter your invite code to join the competition.</p>
       </div>
 
@@ -43,7 +46,7 @@ export default function JoinGolfLeague() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-4">
+      <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-4">
         <div>
           <label className="label">Invite Code *</label>
           <input
@@ -70,9 +73,9 @@ export default function JoinGolfLeague() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-black rounded-xl transition-all shadow-lg shadow-green-500/20"
+          className="w-full flex items-center justify-center gap-2 py-3.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-black rounded-xl transition-all shadow-lg shadow-green-500/20"
         >
-          {loading ? 'Joining...' : 'Join League →'}
+          {loading ? 'Joining...' : <><span>Join League</span><ArrowRight className="w-4 h-4" /></>}
         </button>
       </form>
     </div>

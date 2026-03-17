@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { Users, Zap, Star, Flag, Trophy, Target, Check, Lock, ArrowLeft, ArrowRight, ChevronRight, Award, Copy } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
@@ -9,11 +10,12 @@ import BallLoader from '../../components/BallLoader';
 
 function Chip({ children, color = 'gray' }) {
   const colors = {
-    gray:  'bg-gray-700/60 text-gray-400 border-gray-700',
-    green: 'bg-green-500/15 text-green-400 border-green-500/30',
-    yellow:'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-    blue:  'bg-blue-500/15 text-blue-400 border-blue-500/30',
-    red:   'bg-red-500/15 text-red-400 border-red-500/30',
+    gray:   'bg-gray-700/60 text-gray-400 border-gray-700',
+    green:  'bg-green-500/15 text-green-400 border-green-500/30',
+    yellow: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+    blue:   'bg-blue-500/15 text-blue-400 border-blue-500/30',
+    red:    'bg-red-500/15 text-red-400 border-red-500/30',
+    purple: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
   };
   return (
     <span className={`inline-block border px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${colors[color]}`}>
@@ -42,9 +44,16 @@ function SalaryCap({ used, cap }) {
 
 // ── Tab: Overview ──────────────────────────────────────────────────────────────
 
+const FORMAT_META = {
+  pool:        { label: 'Pool',          color: 'blue'  },
+  dk:          { label: 'Daily Fantasy', color: 'purple' },
+  tourneyrun:  { label: 'TourneyRun',    color: 'green' },
+};
+
 function OverviewTab({ league, members, user, isComm, navigate }) {
   const inviteUrl = `${window.location.origin}/golf/join?code=${league.invite_code}`;
   const [copied, setCopied] = useState(false);
+  const fmt = FORMAT_META[league.format_type] || FORMAT_META.tourneyrun;
 
   function copyInvite() {
     navigator.clipboard.writeText(inviteUrl).then(() => {
@@ -53,23 +62,48 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
     });
   }
 
+  // Format-specific stat cards
+  const statCards = (() => {
+    if (league.format_type === 'pool') return [
+      { label: 'Members',         value: `${members.length}/${league.max_teams}` },
+      { label: 'Picks Per Team',  value: String(league.picks_per_team || 8) },
+      { label: 'Format',          value: 'Pool' },
+    ];
+    if (league.format_type === 'dk') return [
+      { label: 'Members',         value: `${members.length}/${league.max_teams}` },
+      { label: 'Weekly Cap',      value: `$${(league.weekly_salary_cap || 50000).toLocaleString()}` },
+      { label: 'Starters / Wk',   value: String(league.starters_per_week || 6) },
+    ];
+    // tourneyrun default
+    return [
+      { label: 'Members',         value: `${members.length}/${league.max_teams}` },
+      { label: 'Core + Flex',     value: `${league.core_spots || 4} + ${league.flex_spots || 4}` },
+      { label: 'FAAB Budget',     value: `$${(league.faab_budget || 500).toLocaleString()}` },
+    ];
+  })();
+
   return (
     <div className="space-y-5">
+      {/* Format badge */}
+      <div className="flex items-center gap-2">
+        <Chip color={fmt.color}>{fmt.label}</Chip>
+        {league.format_type === 'tourneyrun' && league.use_faab
+          ? <Chip color="yellow">FAAB Wire</Chip>
+          : league.format_type === 'tourneyrun'
+          ? <Chip color="gray">Priority Wire</Chip>
+          : null
+        }
+      </div>
+
       {/* League info card */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
         <div className="grid sm:grid-cols-3 gap-4 mb-5">
-          <div className="bg-gray-800/60 rounded-xl px-4 py-3 text-center">
-            <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Members</div>
-            <div className="text-white font-black text-2xl">{members.length}/{league.max_teams}</div>
-          </div>
-          <div className="bg-gray-800/60 rounded-xl px-4 py-3 text-center">
-            <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Salary Cap</div>
-            <div className="text-white font-black text-2xl">${league.salary_cap?.toLocaleString()}</div>
-          </div>
-          <div className="bg-gray-800/60 rounded-xl px-4 py-3 text-center">
-            <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Starters</div>
-            <div className="text-white font-black text-2xl">{league.starters_count} / week</div>
-          </div>
+          {statCards.map(s => (
+            <div key={s.label} className="bg-gray-800/60 rounded-xl px-4 py-3 text-center">
+              <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">{s.label}</div>
+              <div className="text-white font-black text-2xl">{s.value}</div>
+            </div>
+          ))}
         </div>
 
         {/* Invite code */}
@@ -79,13 +113,13 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
             <span className="text-white font-black text-2xl tracking-widest flex-1">{league.invite_code}</span>
             <button
               onClick={copyInvite}
-              className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all border ${
+              className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition-all border ${
                 copied
                   ? 'bg-green-500/20 border-green-500/40 text-green-400'
                   : 'bg-gray-700 border-gray-600 text-gray-300 hover:text-white hover:border-gray-500'
               }`}
             >
-              {copied ? '✓ Copied' : 'Copy Link'}
+              {copied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy Link</>}
             </button>
           </div>
         </div>
@@ -94,7 +128,7 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
       {/* Members list */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
-          <span>👥</span>
+          <Users className="w-4 h-4 text-gray-400" />
           <h3 className="text-white font-bold">Members</h3>
         </div>
         <div className="divide-y divide-gray-800">
@@ -119,21 +153,42 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
       </div>
 
       {/* Commissioner actions */}
-      {isComm && league.draft_status !== 'completed' && (
+      {isComm && league.format_type !== 'dk' && league.draft_status !== 'completed' && (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-800">
-            <span>⚡</span>
+            <Zap className="w-4 h-4 text-green-400" />
             <h3 className="text-white font-bold text-sm">Commissioner Actions</h3>
           </div>
           <button
             onClick={() => navigate(`/golf/league/${league.id}/draft`)}
             className="w-full py-3 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl transition-all"
           >
-            Start Draft →
+            Go to Draft Room →
           </button>
           <p className="text-gray-600 text-xs mt-2 text-center">
-            Once you start the draft, all members can pick golfers.
+            {league.format_type === 'pool'
+              ? 'Snake draft — each pick is a golfer for the season.'
+              : 'Draft core players. Flex spots fill via waiver wire.'}
           </p>
+        </div>
+      )}
+
+      {/* DK mode: no draft, direct to lineup */}
+      {league.format_type === 'dk' && (
+        <div className="bg-purple-500/8 border border-purple-500/20 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className="w-4 h-4 text-purple-400" />
+            <span className="text-purple-400 font-bold text-sm">Daily Fantasy Mode</span>
+          </div>
+          <p className="text-gray-400 text-sm mb-4">
+            No draft — pick {league.starters_per_week || 6} golfers fresh each tournament with a ${(league.weekly_salary_cap || 50000).toLocaleString()} cap.
+          </p>
+          <button
+            onClick={() => navigate(`/golf/league/${league.id}?tab=lineup`)}
+            className="w-full py-3 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl transition-all"
+          >
+            Set This Week's Lineup →
+          </button>
         </div>
       )}
     </div>
@@ -143,6 +198,7 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
 // ── Tab: Roster ────────────────────────────────────────────────────────────────
 
 function RosterTab({ leagueId, league }) {
+  const fmt = league.format_type || 'tourneyrun';
   const [roster, setRoster] = useState([]);
   const [allPlayers, setAllPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -200,22 +256,94 @@ function RosterTab({ leagueId, league }) {
 
   if (loading) return <div className="py-10 text-center text-gray-500">Loading roster...</div>;
 
+  // DK mode — no persistent roster
+  if (fmt === 'dk') {
+    return (
+      <div className="py-10 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-3">
+          <Zap className="w-7 h-7 text-purple-400" />
+        </div>
+        <h3 className="text-white font-bold mb-2">Daily Fantasy Mode</h3>
+        <p className="text-gray-400 text-sm max-w-xs mx-auto">
+          No persistent roster in DFS mode. Set your {league.starters_per_week || 6} starters fresh each tournament from the Lineup tab.
+        </p>
+      </div>
+    );
+  }
+
+  const coreRoster = roster.filter(p => p.is_core);
+  const flexRoster = roster.filter(p => !p.is_core);
+  const maxRoster = league.roster_size || 8;
+  const flexMax = fmt === 'tourneyrun' ? (league.flex_spots || 4) : maxRoster;
+
+  function PlayerRow({ p, isCore = false }) {
+    return (
+      <div className={`flex items-center justify-between px-5 py-3.5 gap-3 ${isCore ? 'bg-yellow-500/3' : ''}`}>
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          {isCore && <Star className="w-4 h-4 text-yellow-400 shrink-0 fill-yellow-400" />}
+          <div className="min-w-0">
+            <div className="text-white font-semibold text-sm truncate">{p.name}</div>
+            <div className="text-gray-500 text-xs">{p.country} · Rank #{p.world_ranking}</div>
+          </div>
+        </div>
+        {fmt !== 'pool' && <div className="text-green-400 font-bold text-sm shrink-0">${p.salary}</div>}
+        {isCore ? (
+          <span className="text-[10px] font-bold text-yellow-500/80 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">CORE</span>
+        ) : (
+          <button
+            onClick={() => handleDrop(p.player_id)}
+            disabled={dropping === p.player_id}
+            className="text-xs px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors disabled:opacity-50"
+          >
+            Drop
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {error && (
         <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg p-3 text-sm">{error}</div>
       )}
 
-      <SalaryCap used={usedSalary} cap={league.salary_cap || 3000} />
+      {/* Salary bar — not for Pool mode */}
+      {fmt !== 'pool' && <SalaryCap used={usedSalary} cap={league.salary_cap || 2400} />}
 
-      {/* Roster */}
+      {/* TourneyRun: Core Players section */}
+      {fmt === 'tourneyrun' && (
+        <div className="bg-gray-900 border border-yellow-500/25 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-yellow-500/15 flex items-center gap-2 bg-yellow-500/5">
+            <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 shrink-0" />
+            <h3 className="text-yellow-400 font-bold">Core Players ({coreRoster.length}/{league.core_spots || 4})</h3>
+            <span className="ml-auto text-[10px] text-yellow-600 font-semibold uppercase tracking-wide">Season-locked</span>
+          </div>
+          {coreRoster.length === 0 ? (
+            <div className="py-6 text-center text-gray-500 text-sm">Core players are set during the draft.</div>
+          ) : (
+            <div className="divide-y divide-yellow-500/10">
+              {coreRoster.map(p => <PlayerRow key={p.player_id} p={p} isCore />)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Flex / standard roster */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span>🏌️</span>
-            <h3 className="text-white font-bold">My Roster ({roster.length}/{league.roster_size || 8})</h3>
+            <Flag className="w-4 h-4 text-gray-400" />
+            <h3 className="text-white font-bold">
+              {fmt === 'tourneyrun'
+                ? `Flex Players (${flexRoster.length}/${flexMax})`
+                : fmt === 'pool'
+                ? `My Picks (${roster.length}/${maxRoster})`
+                : `My Roster (${roster.length}/${maxRoster})`
+              }
+            </h3>
           </div>
-          {roster.length < (league.roster_size || 8) && (
+          {roster.length < maxRoster && (
             <button
               onClick={() => setAddMode(m => !m)}
               className="text-xs px-3 py-1.5 bg-green-500/15 border border-green-500/30 text-green-400 rounded-lg font-semibold hover:bg-green-500/25 transition-colors"
@@ -225,29 +353,16 @@ function RosterTab({ leagueId, league }) {
           )}
         </div>
 
-        {roster.length === 0 ? (
+        {(fmt === 'tourneyrun' ? flexRoster : roster).length === 0 ? (
           <div className="py-8 text-center text-gray-500 text-sm">
-            No players on your roster yet.{' '}
-            <button onClick={() => setAddMode(true)} className="text-green-400 hover:underline">Add players →</button>
+            {fmt === 'tourneyrun' ? 'No flex players yet. Use the waiver wire to add players.' : 'No players yet.'}
+            {fmt !== 'tourneyrun' && (
+              <button onClick={() => setAddMode(true)} className="text-green-400 hover:underline ml-1">Add players →</button>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-gray-800">
-            {roster.map(p => (
-              <div key={p.player_id} className="flex items-center justify-between px-5 py-3.5 gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="text-white font-semibold text-sm truncate">{p.name}</div>
-                  <div className="text-gray-500 text-xs">{p.country}</div>
-                </div>
-                <div className="text-green-400 font-bold text-sm shrink-0">${p.salary}</div>
-                <button
-                  onClick={() => handleDrop(p.player_id)}
-                  disabled={dropping === p.player_id}
-                  className="text-xs px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                >
-                  Drop
-                </button>
-              </div>
-            ))}
+            {(fmt === 'tourneyrun' ? flexRoster : roster).map(p => <PlayerRow key={p.player_id} p={p} />)}
           </div>
         )}
       </div>
@@ -272,7 +387,7 @@ function RosterTab({ leagueId, league }) {
                   <div className="text-white text-sm font-medium truncate">{p.name}</div>
                   <div className="text-gray-500 text-xs">{p.country} · Rank #{p.world_ranking}</div>
                 </div>
-                <div className="text-green-400 font-bold text-sm shrink-0">${p.salary}</div>
+                {fmt !== 'pool' && <div className="text-green-400 font-bold text-sm shrink-0">${p.salary}</div>}
                 <button
                   onClick={() => handleAdd(p.id)}
                   disabled={adding === p.id}
@@ -365,7 +480,7 @@ function LineupTab({ leagueId, league }) {
           >
             {tournaments.map(t => (
               <option key={t.id} value={t.id}>
-                {t.name} — {t.start_date?.slice(0, 10)}{t.is_major ? ' 🏆' : ''}
+                {t.name} — {t.start_date?.slice(0, 10)}{t.is_major ? ' ★' : ''}
               </option>
             ))}
           </select>
@@ -373,8 +488,8 @@ function LineupTab({ leagueId, league }) {
       )}
 
       {locked && (
-        <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 rounded-xl px-4 py-3 text-sm font-semibold">
-          🔒 Lineup locked — tournament has started.
+        <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 rounded-xl px-4 py-3 text-sm font-semibold">
+          <Lock className="w-4 h-4 shrink-0" /> Lineup locked — tournament has started.
         </div>
       )}
 
@@ -389,7 +504,7 @@ function LineupTab({ leagueId, league }) {
           <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span>🎯</span>
+                <Target className="w-4 h-4 text-gray-400" />
                 <h3 className="text-white font-bold">
                   Set Starters ({lineup.length}/{maxStarters})
                 </h3>
@@ -404,7 +519,7 @@ function LineupTab({ leagueId, league }) {
                       : 'bg-green-500 border-green-500 text-white hover:bg-green-400'
                   }`}
                 >
-                  {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Lineup'}
+                  {saving ? 'Saving...' : saved ? <span className="inline-flex items-center gap-1"><Check className="w-3 h-3" />Saved</span> : 'Save Lineup'}
                 </button>
               )}
             </div>
@@ -434,7 +549,7 @@ function LineupTab({ leagueId, league }) {
                         <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
                           isStarter ? 'bg-green-500 border-green-500' : 'border-gray-600'
                         }`}>
-                          {isStarter && <span className="text-white text-[10px]">✓</span>}
+                          {isStarter && <Check className="w-3 h-3 text-white" />}
                         </div>
                         <div className="min-w-0">
                           <div className="text-white text-sm font-medium truncate">{p.name}</div>
@@ -478,18 +593,20 @@ function StandingsTab({ leagueId, currentUserId }) {
   if (standings.length === 0) {
     return (
       <div className="py-10 text-center text-gray-500">
-        <div className="text-4xl mb-3">🏌️</div>
+        <div className="w-14 h-14 rounded-2xl bg-gray-800 flex items-center justify-center mx-auto mb-3">
+          <Flag className="w-7 h-7 text-gray-600" />
+        </div>
         <p>No scores yet — season hasn't started.</p>
       </div>
     );
   }
 
-  const medal = ['🥇', '🥈', '🥉'];
+  const MEDAL_COLORS = ['text-yellow-400', 'text-gray-300', 'text-orange-400'];
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
-        <span>🏆</span>
+        <Trophy className="w-4 h-4 text-yellow-400" />
         <h3 className="text-white font-bold">Season Standings</h3>
       </div>
       <div className="divide-y divide-gray-800">
@@ -501,8 +618,10 @@ function StandingsTab({ leagueId, currentUserId }) {
               className={`flex items-center justify-between px-5 py-3.5 gap-3 ${isMe ? 'bg-green-500/5' : ''}`}
             >
               <div className="flex items-center gap-3 min-w-0">
-                <span className="w-7 text-center font-black text-sm shrink-0">
-                  {i < 3 ? medal[i] : <span className="text-gray-500">{i + 1}</span>}
+                <span className="w-7 flex items-center justify-center shrink-0">
+                  {i < 3
+                    ? <Award className={`w-5 h-5 ${MEDAL_COLORS[i]}`} />
+                    : <span className="text-gray-500 text-sm font-bold">{i + 1}</span>}
                 </span>
                 <div className="min-w-0">
                   <div className={`text-sm font-semibold truncate ${isMe ? 'text-green-400' : 'text-white'}`}>
@@ -563,9 +682,13 @@ export default function GolfLeague() {
   if (notFound) {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
-        <div className="text-5xl mb-4">⛳</div>
+        <div className="w-16 h-16 rounded-2xl bg-gray-800 flex items-center justify-center mx-auto mb-4">
+          <Flag className="w-8 h-8 text-gray-600" />
+        </div>
         <h2 className="text-2xl font-black text-white mb-2">League not found</h2>
-        <Link to="/golf/dashboard" className="text-green-400 hover:underline">← Back to dashboard</Link>
+        <Link to="/golf/dashboard" className="inline-flex items-center gap-1.5 text-green-400 hover:underline">
+          <ArrowLeft className="w-4 h-4" /> Back to dashboard
+        </Link>
       </div>
     );
   }
@@ -583,8 +706,8 @@ export default function GolfLeague() {
 
       {/* ── Header ── */}
       <div className="mb-6">
-        <Link to="/golf/dashboard" className="text-gray-500 hover:text-gray-400 text-sm transition-colors">
-          ← Golf Leagues
+        <Link to="/golf/dashboard" className="inline-flex items-center gap-1.5 text-gray-500 hover:text-gray-400 text-sm transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Golf Leagues
         </Link>
         <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -601,9 +724,9 @@ export default function GolfLeague() {
           {league.draft_status !== 'completed' && (
             <Link
               to={`/golf/league/${id}/draft`}
-              className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white font-bold px-5 py-2.5 rounded-full transition-all shadow-lg shadow-green-500/20 text-sm"
+              className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white font-bold px-5 py-2.5 rounded-full transition-all shadow-lg shadow-green-500/20 text-sm shrink-0"
             >
-              {isComm ? 'Go to Draft →' : 'Join Draft →'}
+              {isComm ? 'Go to Draft' : 'Join Draft'} <ChevronRight className="w-4 h-4" />
             </Link>
           )}
         </div>

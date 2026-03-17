@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Flag, Zap, Star, Award, ArrowLeft, ChevronRight, Search } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
@@ -83,9 +84,13 @@ export default function GolfDraft() {
   if (!state) {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
-        <div className="text-5xl mb-4">⛳</div>
+        <div className="w-16 h-16 rounded-2xl bg-gray-800 flex items-center justify-center mx-auto mb-4">
+          <Flag className="w-8 h-8 text-gray-600" />
+        </div>
         <h2 className="text-2xl font-black text-white mb-2">League not found</h2>
-        <Link to="/golf/dashboard" className="text-green-400 hover:underline">← Back</Link>
+        <Link to="/golf/dashboard" className="inline-flex items-center gap-1.5 text-green-400 hover:underline">
+          <ArrowLeft className="w-4 h-4" /> Back
+        </Link>
       </div>
     );
   }
@@ -125,8 +130,8 @@ export default function GolfDraft() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="mb-5">
-        <Link to={`/golf/league/${id}`} className="text-gray-500 hover:text-gray-400 text-sm transition-colors">
-          ← Back to League
+        <Link to={`/golf/league/${id}`} className="inline-flex items-center gap-1.5 text-gray-500 hover:text-gray-400 text-sm transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to League
         </Link>
         <h1 className="text-3xl font-black text-white mt-2">{league.name} — Draft</h1>
       </div>
@@ -138,7 +143,9 @@ export default function GolfDraft() {
       {/* ── Pre-draft: commissioner starts ── */}
       {!draftStarted && (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center mb-6">
-          <div className="text-5xl mb-4">🏌️</div>
+          <div className="w-16 h-16 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto mb-4">
+            <Flag className="w-8 h-8 text-green-400" />
+          </div>
           <h2 className="text-2xl font-black text-white mb-2">Waiting for Draft to Start</h2>
           <p className="text-gray-400 mb-6">
             {members.length} of {league.max_teams} members joined.
@@ -160,7 +167,9 @@ export default function GolfDraft() {
       {/* ── Draft complete ── */}
       {draftComplete && (
         <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 text-center mb-6">
-          <div className="text-4xl mb-2">🎉</div>
+          <div className="w-14 h-14 rounded-2xl bg-green-500/15 flex items-center justify-center mx-auto mb-3">
+            <Award className="w-7 h-7 text-green-400" />
+          </div>
           <h2 className="text-xl font-black text-green-400 mb-1">Draft Complete!</h2>
           <p className="text-gray-400 text-sm mb-4">All picks have been made. Season is underway.</p>
           <Link
@@ -183,7 +192,9 @@ export default function GolfDraft() {
           }`}>
             <div>
               {isMyTurn ? (
-                <div className="text-green-400 font-black text-lg">⚡ Your Pick!</div>
+                <div className="flex items-center gap-2 text-green-400 font-black text-lg">
+                  <Zap className="w-5 h-5" /> Your Pick!
+                </div>
               ) : (
                 <div className="text-gray-300 font-bold">
                   Waiting on {members.find(m => m.user_id === currentPickerUserId)?.team_name || '...'}
@@ -207,13 +218,16 @@ export default function GolfDraft() {
             <div className="space-y-4">
               {/* Filters */}
               <div className="flex flex-wrap gap-2">
-                <input
-                  type="text"
-                  placeholder="Search players..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="flex-1 min-w-0 bg-gray-900 border border-gray-700 text-white text-sm px-3 py-2 rounded-lg focus:outline-none focus:border-green-500"
-                />
+                <div className="flex-1 min-w-0 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search players..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 text-white text-sm pl-9 pr-3 py-2 rounded-lg focus:outline-none focus:border-green-500"
+                  />
+                </div>
                 {!isPool && (
                   <select
                     value={filterSalary}
@@ -280,7 +294,7 @@ export default function GolfDraft() {
               {/* My roster */}
               <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
-                  <span>🏌️</span>
+                  <Flag className="w-4 h-4 text-gray-400" />
                   <span className="text-white font-bold text-sm">My Picks ({(myRoster || []).length})</span>
                 </div>
                 <div className="divide-y divide-gray-800 max-h-52 overflow-y-auto">
@@ -298,7 +312,7 @@ export default function GolfDraft() {
                                   ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30'
                                   : 'text-blue-400 bg-blue-500/10 border-blue-500/30'
                               }`}>
-                                {isCore ? '⭐ CORE' : 'FLEX'}
+                                {isCore ? <><Star className="w-2.5 h-2.5 fill-current" /> CORE</> : 'FLEX'}
                               </span>
                             )}
                             <span className="text-white text-xs font-medium truncate">{p.name}</span>
@@ -327,8 +341,8 @@ export default function GolfDraft() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               {isMyPick && (
-                                <span className="text-[9px] font-black uppercase text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 px-1.5 py-0.5 rounded shrink-0">
-                                  ⭐ CORE
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black uppercase text-yellow-400 bg-yellow-500/10 border border-yellow-500/30 px-1.5 py-0.5 rounded shrink-0">
+                                  <Star className="w-2.5 h-2.5 fill-current" /> CORE
                                 </span>
                               )}
                               <span className="text-white text-xs truncate">{p.player_name}</span>
