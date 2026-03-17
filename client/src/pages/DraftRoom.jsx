@@ -774,9 +774,10 @@ export default function DraftRoom() {
   const [posFilter, setPosFilter] = useState('All');
   const [regionFilter, setRegionFilter] = useState('All');
   const [sortBy, setSortBy] = useState('etp');
-  const [playerTab, setPlayerTab] = useState('available'); // 'available' | 'queue'
+  const [playerTab, setPlayerTab] = useState('available'); // 'available' | 'queue' (mobile)
   const [mobilePanel, setMobilePanel] = useState('players'); // 'board' | 'players' | 'queue' | 'myteam' | 'chat'
-  const [teamsPanelTab, setTeamsPanelTab] = useState('my'); // 'my' | 'all'
+  const [leftTab, setLeftTab] = useState('board');       // desktop left panel: 'board' | 'myteam'
+  const [rightTab, setRightTab] = useState('available'); // desktop right panel: 'available' | 'queue' | 'live'
   const [timeLeft, setTimeLeft] = useState(60);
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState(false);
@@ -1388,61 +1389,124 @@ export default function DraftRoom() {
 
       </div>{/* end shrink-0 top section */}
 
-      {/* ── Content area: flex-1 on mobile, block on desktop ── */}
-      <div className="px-3 mt-3 pb-20 lg:pb-0 lg:overflow-visible lg:px-3 lg:mt-3">
+      {/* ── Content area ── */}
+      <div className="px-3 mt-3 pb-20 lg:pb-3 lg:px-3 lg:mt-3">
 
-      {/* ── Three-panel layout (desktop) + mobile single-panel view ── */}
-      <div className="lg:h-auto lg:flex lg:gap-3 lg:min-w-[1100px]">
+      {/* ── Two-panel layout (desktop) + mobile single-panel view ── */}
+      <div className="lg:flex lg:gap-3">
 
-        {/* ── LEFT: Draft Board Grid ── */}
-        <div className={`lg:[flex:1.2] flex flex-col min-h-0 ${mobilePanel !== 'board' ? 'hidden lg:flex' : 'min-h-[65vh]'}`}>
-          <div className="card overflow-hidden flex flex-col flex-1 min-h-0">
-            <div className="px-3 py-2.5 border-b border-gray-800 flex items-center justify-between shrink-0">
+        {/* ═══════════════════════════════════════════════════════════
+            LEFT PANEL — Draft Board / My Team  (desktop: ~65%)
+            Mobile: shows when mobilePanel === 'board'
+        ═══════════════════════════════════════════════════════════ */}
+        <div className={`lg:flex-[1.7] flex flex-col min-h-0 ${mobilePanel !== 'board' ? 'hidden lg:flex' : 'min-h-[65vh]'}`}>
+          <div className="card overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 210px)', minHeight: 400 }}>
+
+            {/* Left panel tab bar (desktop only) */}
+            <div className="hidden lg:flex items-center gap-1 px-3 pt-2.5 pb-2.5 border-b border-gray-800 shrink-0">
+              {[
+                { id: 'board',  label: 'Draft Board' },
+                { id: 'myteam', label: 'My Team' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setLeftTab(t.id)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                    leftTab === t.id ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {t.label}
+                  {t.id === 'myteam' && mySmartDraft && smartDraftEnabled && (
+                    <span
+                      title="Smart Draft is ON"
+                      className="inline-flex items-center gap-0.5 bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 rounded px-1 py-px text-[9px] font-bold leading-none"
+                    >⚡</span>
+                  )}
+                </button>
+              ))}
+              <span className="ml-auto text-xs text-gray-500">{picks.length} / {totalPicks} picks</span>
+            </div>
+
+            {/* Mobile: draft board header */}
+            <div className="lg:hidden px-3 py-2.5 border-b border-gray-800 flex items-center justify-between shrink-0">
               <h2 className="font-bold text-white text-sm">Draft Board</h2>
               <span className="text-xs text-gray-500">{picks.length} / {totalPicks} picks</span>
             </div>
-            {/* Relative wrapper for scroll + right-fade overlay */}
-            <div className="relative flex-1 min-h-0">
-              <div className="p-2 overflow-x-auto overflow-y-auto h-full overscroll-contain" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin', scrollbarColor: '#374151 #111827' }}>
-              <DraftBoardGrid
-                league={league} members={members} picks={picks}
-                currentPick={currentPick} currentPicker={currentPicker}
-                numTeams={numTeams} userId={user?.id}
-                etpByPlayerId={etpByPlayerId}
-              />
+
+            {/* Left panel content */}
+            {leftTab === 'myteam' ? (
+              /* My Team tab — desktop only (mobile uses mobilePanel='myteam') */
+              <div className="flex-1 overflow-y-auto overscroll-contain py-2" style={{ WebkitOverflowScrolling: 'touch' }}>
+                <MyRoster picks={enrichedPicks} userId={user?.id} etpByPlayerId={etpByPlayerId} />
               </div>
-              {/* Right-fade gradient — hints at off-screen columns */}
-              <div className="pointer-events-none absolute inset-y-0 right-0 w-8 hidden lg:block"
-                style={{ background: 'linear-gradient(to right, transparent, rgba(17,24,39,0.92))' }} />
-            </div>
+            ) : (
+              /* Draft Board grid with horizontal scroll */
+              <div className="relative flex-1 min-h-0">
+                <div
+                  className="p-2 overflow-x-auto overflow-y-auto h-full overscroll-contain"
+                  style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin', scrollbarColor: '#374151 #111827' }}
+                >
+                  <DraftBoardGrid
+                    league={league} members={members} picks={picks}
+                    currentPick={currentPick} currentPicker={currentPicker}
+                    numTeams={numTeams} userId={user?.id}
+                    etpByPlayerId={etpByPlayerId}
+                  />
+                </div>
+                {/* Right-fade gradient — hints at off-screen columns */}
+                <div
+                  className="pointer-events-none absolute inset-y-0 right-0 w-8"
+                  style={{ background: 'linear-gradient(to right, transparent, rgba(17,24,39,0.92))' }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
-        {/* ── CENTER: Player Pool ── */}
-        <div className={`lg:[flex:1.2] flex flex-col min-h-0 ${mobilePanel !== 'players' && mobilePanel !== 'queue' ? 'hidden lg:flex' : 'min-h-[65vh]'}`}>
-          <div className="card overflow-hidden flex flex-col h-full lg:max-h-[calc(100vh-240px)]">
-            {/* Player pool tabs — desktop only (mobile uses bottom nav) */}
-            <div className="px-3 pt-3 pb-2 border-b border-gray-800 shrink-0">
-              <div className="hidden lg:flex gap-1 mb-2">
-                <button onClick={() => setPlayerTab('available')}
+        {/* ═══════════════════════════════════════════════════════════
+            RIGHT PANEL — Available / Queue / Live Feed  (desktop: ~35%)
+            Mobile: shows when mobilePanel === 'players' or 'queue'
+        ═══════════════════════════════════════════════════════════ */}
+        <div className={`lg:min-w-[280px] lg:flex-1 flex flex-col min-h-0 ${mobilePanel !== 'players' && mobilePanel !== 'queue' ? 'hidden lg:flex' : 'min-h-[65vh]'}`}>
+          <div className="card overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 210px)', minHeight: 400 }}>
+
+            {/* Right panel header */}
+            <div className="px-3 pt-2.5 border-b border-gray-800 shrink-0">
+
+              {/* Desktop tab bar */}
+              <div className="hidden lg:flex gap-1 mb-2.5">
+                <button
+                  onClick={() => setRightTab('available')}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    playerTab === 'available' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
-                  }`}>
+                    rightTab === 'available' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                  }`}
+                >
                   Available ({availablePlayers.length})
                 </button>
-                <button onClick={() => setPlayerTab('queue')}
+                <button
+                  onClick={() => setRightTab('queue')}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors relative ${
-                    playerTab === 'queue' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
-                  }`}>
-                  My Queue
+                    rightTab === 'queue' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Queue
                   {queuedPlayers.length > 0 && (
                     <span className="ml-1 bg-yellow-500 text-black text-[9px] font-bold px-1 rounded-full">
                       {queuedPlayers.length}
                     </span>
                   )}
                 </button>
+                <button
+                  onClick={() => setRightTab('live')}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    rightTab === 'live' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Live Feed
+                </button>
               </div>
-              {/* Mobile queue header */}
+
+              {/* Mobile: queue panel header */}
               {mobilePanel === 'queue' && (
                 <div className="lg:hidden flex items-center gap-2 mb-2">
                   <span className="text-white font-bold text-sm">My Queue</span>
@@ -1454,11 +1518,14 @@ export default function DraftRoom() {
                 </div>
               )}
 
-              {effectivePlayerTab === 'available' && (
+              {/* Search + filters: show when Available is active */}
+              {(rightTab === 'available' || (mobilePanel === 'players' && effectivePlayerTab !== 'queue')) && (
                 <>
-                  <input type="text" className="input text-xs mb-2 py-1.5"
+                  <input
+                    type="text" className="input text-xs mb-2 py-1.5"
                     placeholder="Search name or team..." value={search}
-                    onChange={e => setSearch(e.target.value)} />
+                    onChange={e => setSearch(e.target.value)}
+                  />
                   <div className="flex items-center gap-1 flex-wrap">
                     {uniquePositions.slice(0, 6).map(pos => (
                       <button key={pos} type="button" onClick={() => setPosFilter(pos)}
@@ -1484,7 +1551,7 @@ export default function DraftRoom() {
                     </div>
                   </div>
                   {/* Region filters */}
-                  <div className="flex items-center gap-1 flex-wrap mt-1">
+                  <div className="flex items-center gap-1 flex-wrap mt-1 pb-2.5">
                     {REGIONS.map(r => {
                       const active = regionFilter === r;
                       const style = r !== 'All' ? rs(r) : null;
@@ -1506,18 +1573,25 @@ export default function DraftRoom() {
                   </div>
                 </>
               )}
+
+              {/* Queue header padding (desktop Queue tab) */}
+              {rightTab === 'queue' && <div className="pb-2.5" />}
+              {/* Live Feed header padding (desktop Live tab) */}
+              {rightTab === 'live' && <div className="pb-2.5" />}
             </div>
 
             {/* Injury disclaimer */}
-            {availablePlayers.some(p => p.injury_flagged) && (
-              <div className="px-3 py-1.5 bg-yellow-500/5 border-b border-yellow-500/20 text-yellow-600/80 text-[10px] leading-snug">
+            {(rightTab === 'available' || (mobilePanel === 'players' && effectivePlayerTab !== 'queue')) && availablePlayers.some(p => p.injury_flagged) && (
+              <div className="px-3 py-1.5 bg-yellow-500/5 border-b border-yellow-500/20 text-yellow-600/80 text-[10px] leading-snug shrink-0">
                 ⚠️ Injury alerts sourced from news — always verify before drafting.
               </div>
             )}
 
-            {/* Player list */}
+            {/* ── Panel content ── */}
             <div className="overflow-y-auto flex-1 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {effectivePlayerTab === 'queue' ? (
+
+              {/* ── QUEUE view ── desktop Queue tab OR mobile queue panel */}
+              {(rightTab === 'queue' || effectivePlayerTab === 'queue') && (
                 queuedPlayers.length === 0 ? (
                   <div className="text-center py-10 text-gray-600 text-sm">
                     <div className="text-2xl mb-2">📋</div>
@@ -1544,17 +1618,12 @@ export default function DraftRoom() {
                             {player.espn_athlete_id ? (
                               <a
                                 href={`https://www.espn.com/mens-college-basketball/player/_/id/${player.espn_athlete_id}/${player.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                target="_blank" rel="noopener noreferrer"
                                 onClick={e => e.stopPropagation()}
                                 className={`font-semibold text-sm hover:underline ${player.injury_flagged ? 'text-gray-400 hover:text-gray-300' : 'text-white hover:text-brand-300'}`}
-                              >
-                                {player.name}
-                              </a>
+                              >{player.name}</a>
                             ) : (
-                              <span className={`font-semibold text-sm ${player.injury_flagged ? 'text-gray-400' : 'text-white'}`}>
-                                {player.name}
-                              </span>
+                              <span className={`font-semibold text-sm ${player.injury_flagged ? 'text-gray-400' : 'text-white'}`}>{player.name}</span>
                             )}
                             <PosBadge pos={player.position} small />
                             {player.seed ? <SeedBadge seed={player.seed} /> : null}
@@ -1566,7 +1635,6 @@ export default function DraftRoom() {
                             {oppName && <span className="text-gray-600 text-[10px]">vs {oppName}</span>}
                           </div>
                         </div>
-                        {/* ETP / PPG display */}
                         <div className="text-right shrink-0 min-w-[42px]">
                           {etp !== null ? (
                             <>
@@ -1585,7 +1653,6 @@ export default function DraftRoom() {
                             </>
                           )}
                         </div>
-                        {/* Queue management — always active */}
                         <div className="flex flex-col gap-0.5 shrink-0">
                           <button type="button" onClick={e => { e.stopPropagation(); moveInQueue(player.id, -1); }}
                             className="text-gray-600 hover:text-gray-300 text-[10px] leading-none px-1" title="Move up">▲</button>
@@ -1594,7 +1661,6 @@ export default function DraftRoom() {
                           <button type="button" onClick={e => { e.stopPropagation(); removeFromQueue(player.id); }}
                             className="text-red-600 hover:text-red-400 text-[10px] leading-none px-1" title="Remove from queue">✕</button>
                         </div>
-                        {/* Draft button — only active on your turn */}
                         <button
                           type="button"
                           onClick={e => { e.stopPropagation(); if (canPick) requestPick(player); }}
@@ -1604,182 +1670,131 @@ export default function DraftRoom() {
                               ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-sm shadow-brand-500/30'
                               : 'bg-gray-800/40 text-gray-700 cursor-not-allowed'
                           }`}
-                        >
-                          +
-                        </button>
+                        >+</button>
                       </div>
                     );
                   })
                 )
-              ) : filteredSorted.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">No players found</div>
-              ) : (
-                filteredSorted.map(player => {
-                  const oppSeed = r64Opp(player.seed);
-                  const oppName = oppSeed && player.region ? (regionSeedMap[player.region]?.[oppSeed] || `#${oppSeed}`) : null;
-                  const inQueue = watchlist.includes(player.id);
-                  const canPick = isMyTurn && !picking;
-                  const etp = calcETP(player.season_ppg, player.seed, !!player.is_first_four);
-                  const tColor = teamColor(player.team);
-                  return (
-                    <div key={player.id}
-                      className={`flex items-center gap-2 px-3 py-2.5 border-b border-gray-800/40 transition-all group ${
-                        canPick ? 'hover:bg-brand-500/8 cursor-pointer hover:border-brand-500/20' : 'cursor-default'
-                      }`}
-                      onClick={() => canPick && setPickConfirm(player)}>
-                      <PlayerInitialsAvatar name={player.name} team={player.team} size={30} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {player.espn_athlete_id ? (
-                            <a
-                              href={`https://www.espn.com/mens-college-basketball/player/_/id/${player.espn_athlete_id}/${player.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              className={`font-semibold text-sm hover:underline ${player.injury_flagged ? 'text-gray-400 hover:text-gray-300' : 'text-white hover:text-brand-300'}`}
-                            >
-                              {player.name}
-                            </a>
-                          ) : (
-                            <span className={`font-semibold text-sm ${player.injury_flagged ? 'text-gray-400' : 'text-white'}`}>
-                              {player.name}
-                            </span>
-                          )}
-                          <PosBadge pos={player.position} small />
-                          {player.seed ? <SeedBadge seed={player.seed} /> : null}
-                          {player.region ? <RegionBadge region={player.region} /> : null}
-                          <InjuryBadge player={player} isCommissioner={isCommissioner} onClear={clearInjuryFlag} />
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px]" style={{ color: tColor || '#6b7280' }}>{teamEmoji(player.team)} {player.team}</span>
-                          {oppName && <span className="text-gray-600 text-[10px]">vs {oppName}</span>}
-                        </div>
-                      </div>
-                      {/* Metric display — ETP primary, PPG secondary */}
-                      <div className="text-right shrink-0 min-w-[42px]">
-                        {etp !== null ? (
-                          <>
-                            <div className="text-brand-400 text-xs font-bold">{etp}</div>
-                            <Tip text="Expected Tournament Points — projected total points based on the player's PPG and how far their team is expected to go in the tournament">
-                              <div className="text-gray-600 text-[9px] leading-none cursor-help">ETP</div>
-                            </Tip>
-                            <div className="text-gray-700 text-[9px] leading-none mt-0.5">{parseFloat(player.season_ppg || 0).toFixed(1)}ppg</div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-brand-400 text-xs font-bold">{parseFloat(player.season_ppg || 0).toFixed(1)}</div>
-                            <Tip text="Points Per Game — player's scoring average this season">
-                              <div className="text-gray-600 text-[9px] cursor-help">PPG</div>
-                            </Tip>
-                          </>
-                        )}
-                      </div>
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        {/* Queue star — always active regardless of turn */}
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); inQueue ? removeFromQueue(player.id) : addToQueue(player.id); }}
-                          className={`w-7 h-7 rounded text-sm flex items-center justify-center transition-colors ${
-                            inQueue
-                              ? 'bg-yellow-500/20 text-yellow-400 hover:bg-red-500/20 hover:text-red-400'
-                              : 'bg-gray-800 text-gray-500 hover:bg-yellow-500/20 hover:text-yellow-400'
-                          }`}
-                          title={inQueue ? 'Remove from watchlist' : 'Add to watchlist'}
-                        >
-                          {inQueue ? '★' : '☆'}
-                        </button>
-                        {/* Draft button — only active on your turn */}
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); if (canPick) requestPick(player); }}
-                          title={canPick ? 'Draft this player' : "Wait for your turn to pick"}
-                          className={`w-7 h-7 rounded text-xs font-bold flex items-center justify-center transition-colors ${
-                            canPick
-                              ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-sm shadow-brand-500/30'
-                              : 'bg-gray-800/40 text-gray-700 cursor-not-allowed'
-                          }`}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
               )}
+
+              {/* ── AVAILABLE view ── desktop Available tab OR mobile players panel (not queue) */}
+              {(rightTab === 'available' || (mobilePanel === 'players' && effectivePlayerTab !== 'queue')) && (
+                filteredSorted.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 text-sm">No players found</div>
+                ) : (
+                  filteredSorted.map(player => {
+                    const oppSeed = r64Opp(player.seed);
+                    const oppName = oppSeed && player.region ? (regionSeedMap[player.region]?.[oppSeed] || `#${oppSeed}`) : null;
+                    const inQueue = watchlist.includes(player.id);
+                    const canPick = isMyTurn && !picking;
+                    const etp = calcETP(player.season_ppg, player.seed, !!player.is_first_four);
+                    const tColor = teamColor(player.team);
+                    return (
+                      <div key={player.id}
+                        className={`flex items-center gap-2 px-3 py-2.5 border-b border-gray-800/40 transition-all group ${
+                          canPick ? 'hover:bg-brand-500/8 cursor-pointer hover:border-brand-500/20' : 'cursor-default'
+                        }`}
+                        onClick={() => canPick && setPickConfirm(player)}>
+                        <PlayerInitialsAvatar name={player.name} team={player.team} size={30} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {player.espn_athlete_id ? (
+                              <a
+                                href={`https://www.espn.com/mens-college-basketball/player/_/id/${player.espn_athlete_id}/${player.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                                target="_blank" rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                className={`font-semibold text-sm hover:underline ${player.injury_flagged ? 'text-gray-400 hover:text-gray-300' : 'text-white hover:text-brand-300'}`}
+                              >{player.name}</a>
+                            ) : (
+                              <span className={`font-semibold text-sm ${player.injury_flagged ? 'text-gray-400' : 'text-white'}`}>{player.name}</span>
+                            )}
+                            <PosBadge pos={player.position} small />
+                            {player.seed ? <SeedBadge seed={player.seed} /> : null}
+                            {player.region ? <RegionBadge region={player.region} /> : null}
+                            <InjuryBadge player={player} isCommissioner={isCommissioner} onClear={clearInjuryFlag} />
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px]" style={{ color: tColor || '#6b7280' }}>{teamEmoji(player.team)} {player.team}</span>
+                            {oppName && <span className="text-gray-600 text-[10px]">vs {oppName}</span>}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 min-w-[42px]">
+                          {etp !== null ? (
+                            <>
+                              <div className="text-brand-400 text-xs font-bold">{etp}</div>
+                              <Tip text="Expected Tournament Points — projected total points based on the player's PPG and how far their team is expected to go in the tournament">
+                                <div className="text-gray-600 text-[9px] leading-none cursor-help">ETP</div>
+                              </Tip>
+                              <div className="text-gray-700 text-[9px] leading-none mt-0.5">{parseFloat(player.season_ppg || 0).toFixed(1)}ppg</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-brand-400 text-xs font-bold">{parseFloat(player.season_ppg || 0).toFixed(1)}</div>
+                              <Tip text="Points Per Game — player's scoring average this season">
+                                <div className="text-gray-600 text-[9px] cursor-help">PPG</div>
+                              </Tip>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); inQueue ? removeFromQueue(player.id) : addToQueue(player.id); }}
+                            className={`w-7 h-7 rounded text-sm flex items-center justify-center transition-colors ${
+                              inQueue
+                                ? 'bg-yellow-500/20 text-yellow-400 hover:bg-red-500/20 hover:text-red-400'
+                                : 'bg-gray-800 text-gray-500 hover:bg-yellow-500/20 hover:text-yellow-400'
+                            }`}
+                            title={inQueue ? 'Remove from watchlist' : 'Add to watchlist'}
+                          >{inQueue ? '★' : '☆'}</button>
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); if (canPick) requestPick(player); }}
+                            title={canPick ? 'Draft this player' : 'Wait for your turn to pick'}
+                            className={`w-7 h-7 rounded text-xs font-bold flex items-center justify-center transition-colors ${
+                              canPick
+                                ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-sm shadow-brand-500/30'
+                                : 'bg-gray-800/40 text-gray-700 cursor-not-allowed'
+                            }`}
+                          >+</button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )
+              )}
+
+              {/* ── LIVE FEED view ── desktop only */}
+              {rightTab === 'live' && (
+                <div className="p-3 space-y-4">
+                  <div>
+                    <h3 className="font-bold text-white text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                      Recent Picks
+                    </h3>
+                    <PickTicker picks={enrichedPicks} userId={user?.id} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-xs uppercase tracking-wider mb-2">All Teams</h3>
+                    <div className="space-y-2">
+                      {members.map(m => (
+                        <ManagerRosterCard
+                          key={m.id} member={m} picks={enrichedPicks}
+                          currentPicker={draftComplete ? null : currentPicker}
+                          userId={user?.id}
+                          hasSmartDraft={smartDraftUsers.has(m.user_id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
         </div>
 
-        {/* ── RIGHT: Ticker + Manager Cards + Chat ── */}
-        <div className={`lg:[flex:0.8] flex flex-col min-h-0 lg:h-auto lg:space-y-3 ${mobilePanel !== 'chat' ? 'hidden lg:flex' : 'min-h-[65vh]'}`}>
-          {/* Live ticker — desktop only */}
-          <div className="hidden lg:block card p-3 shrink-0">
-            <h3 className="font-bold text-white text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-              Live Feed
-            </h3>
-            <PickTicker picks={enrichedPicks} userId={user?.id} />
-          </div>
-
-          {/* My Team / All Teams panel — desktop only */}
-          <div className="hidden lg:flex flex-col card p-3 shrink-0">
-            {/* Tab row */}
-            <div className="flex gap-1 mb-2">
-              <button
-                onClick={() => setTeamsPanelTab('my')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1.5 ${
-                  teamsPanelTab === 'my' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
-                }`}
-              >
-                My Team
-                {mySmartDraft && smartDraftEnabled && (
-                  <span
-                    title="Smart Draft is ON — auto-picking using injury filters, ETP scoring, region balance, and upside targeting"
-                    className="inline-flex items-center gap-0.5 bg-yellow-400/20 text-yellow-300 border border-yellow-400/30 rounded px-1 py-px text-[9px] font-bold leading-none"
-                  >
-                    ⚡ ON
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setTeamsPanelTab('all')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                  teamsPanelTab === 'all' ? 'bg-brand-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
-                }`}
-              >
-                All Teams
-              </button>
-            </div>
-            {teamsPanelTab === 'my' ? (
-              <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: '30vh', WebkitOverflowScrolling: 'touch' }}>
-                <MyRoster picks={enrichedPicks} userId={user?.id} etpByPlayerId={etpByPlayerId} />
-              </div>
-            ) : (
-              <div className="space-y-2 overflow-y-auto overscroll-contain" style={{ maxHeight: '30vh', WebkitOverflowScrolling: 'touch' }}>
-                {members.map(m => (
-                  <ManagerRosterCard
-                    key={m.id} member={m} picks={enrichedPicks}
-                    currentPicker={draftComplete ? null : currentPicker}
-                    userId={user?.id}
-                    hasSmartDraft={smartDraftUsers.has(m.user_id)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Chat panel — full height on mobile, 400px on desktop */}
-          <DraftChat
-            leagueId={leagueId}
-            user={user}
-            token={token}
-            members={members}
-            isMobileFull={mobilePanel === 'chat'}
-          />
-        </div>
-
-        {/* ── Mobile: My Team full-screen panel (sibling to L/C/R columns) ── */}
+        {/* ── Mobile: My Team full-screen panel ── */}
         <div className={`lg:hidden flex flex-col min-h-0 ${mobilePanel !== 'myteam' ? 'hidden' : 'min-h-[65vh]'}`}>
           <div className="px-3 pt-3 pb-2 border-b border-gray-800 shrink-0 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1809,7 +1824,18 @@ export default function DraftRoom() {
           </div>
         </div>
 
-      </div>{/* end three-panel grid */}
+        {/* ── Mobile: Chat full-screen panel ── */}
+        <div className={`lg:hidden flex flex-col min-h-0 ${mobilePanel !== 'chat' ? 'hidden' : 'min-h-[65vh]'}`}>
+          <DraftChat
+            leagueId={leagueId}
+            user={user}
+            token={token}
+            members={members}
+            isMobileFull
+          />
+        </div>
+
+      </div>{/* end two-panel */}
       </div>{/* end content area */}
 
       {/* ── Mobile bottom tab bar ── */}
