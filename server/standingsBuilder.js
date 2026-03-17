@@ -129,8 +129,8 @@ function buildStandings(leagueId) {
 
   standings.sort((a, b) => b.total_points - a.total_points);
 
-  // Single-game bonus leader
-  const sgLeader = db.prepare(`
+  // Single-game bonus — top 10 for expanded leaderboard
+  const sgBoard = db.prepare(`
     SELECT
       ps.player_id,
       p.name  AS player_name,
@@ -149,17 +149,17 @@ function buildStandings(leagueId) {
     LEFT JOIN users u2 ON u2.id = dp.user_id
     WHERE g.is_completed = 1 AND ps.points > 0
     ORDER BY ps.points DESC
-    LIMIT 1
-  `).get(leagueId, leagueId) || null;
+    LIMIT 10
+  `).all(leagueId, leagueId);
 
-  if (sgLeader) {
-    const opp = sgLeader.team1 === sgLeader.player_team ? sgLeader.team2 : sgLeader.team1;
-    sgLeader.opponent = opp;
-  }
+  sgBoard.forEach(row => {
+    row.opponent = row.team1 === row.player_team ? row.team2 : row.team1;
+  });
 
+  const sgLeader = sgBoard[0] || null;
   const isLive = liveGameIds.length > 0;
 
-  return { standings, settings, sgLeader, isLive, livePlayerIds: [...livePlayerIds] };
+  return { standings, settings, sgLeader, sgBoard, isLive, livePlayerIds: [...livePlayerIds] };
 }
 
 module.exports = { buildStandings };

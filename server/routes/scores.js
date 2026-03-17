@@ -17,6 +17,7 @@ router.get('/league/:leagueId/standings', authMiddleware, (req, res) => {
       standings: result.standings,
       settings: result.settings,
       sgLeader: result.sgLeader,
+      sgBoard: result.sgBoard,
       isLive: result.isLive,
       livePlayerIds: result.livePlayerIds,
       updatedAt: new Date().toISOString(),

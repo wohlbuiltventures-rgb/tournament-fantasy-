@@ -67,59 +67,113 @@ function InfoTooltip({ text }) {
 
 // ── Single Game Bonus Card ─────────────────────────────────────────────────────
 
-function SgBonusCard({ sgLeader, bonus }) {
+function SgBonusCard({ sgLeader, sgBoard, bonus }) {
+  const [expanded, setExpanded] = useState(false);
   if (!bonus || bonus <= 0) return null;
 
   return (
-    <div className="card p-5 mb-6 bg-gradient-to-br from-purple-900/20 via-gray-900 to-gray-900 border-purple-500/25">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-lg">👑</span>
-        <h3 className="text-white font-bold text-base">Single Game Bonus Leader</h3>
+    <div className="card mb-6 bg-gradient-to-br from-purple-900/20 via-gray-900 to-gray-900 border-purple-500/25 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-5 pt-5 pb-3">
+        <span className="text-lg">🎯</span>
+        <h3 className="text-white font-bold text-base">Single Game Bonus</h3>
         <span className="text-purple-400 font-bold">{fmt(bonus)}</span>
         <InfoTooltip text="Paid to the owner of the player with the highest single game point total during the tournament. Example: John Tonje scored 37 points vs BYU last March — his owner won the bonus." />
       </div>
 
       {!sgLeader ? (
-        <div className="text-gray-500 text-sm">
+        <div className="px-5 pb-5 text-gray-500 text-sm">
           No games played yet — check back once the tournament tips off.
         </div>
       ) : (
-        <div className="space-y-2">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl mt-0.5">👑</span>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-white font-bold text-lg">{sgLeader.player_name}</span>
-                <span className="text-purple-400 font-black text-lg">— {sgLeader.points} pts</span>
-                <span className="text-gray-400 text-sm">vs {sgLeader.opponent}</span>
-                {sgLeader.round_name && (
-                  <span className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded-full">{sgLeader.round_name}</span>
-                )}
-              </div>
-              <div className="mt-1.5">
-                {sgLeader.owner_user_id ? (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-gray-400 text-sm">Owned by:</span>
-                    <span className="text-green-400 font-semibold text-sm">{sgLeader.owner_team_name}</span>
-                    {sgLeader.owner_venmo && (
-                      <span className="inline-flex items-center gap-1 text-xs bg-blue-900/40 border border-blue-500/30 text-blue-300 px-2 py-0.5 rounded-full font-medium">
-                        <VenmoIcon />
-                        {sgLeader.owner_venmo}
-                      </span>
-                    )}
-                    <span className="text-gray-600 text-xs">← send {fmt(bonus)} here</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
+        <>
+          {/* Leader hero */}
+          <div className="px-5 pb-4 border-b border-purple-500/15">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                {/* Player name — hero */}
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span className="text-white font-black text-2xl leading-tight">{sgLeader.player_name}</span>
+                  <span className="text-purple-400 font-black text-2xl">{sgLeader.points} pts</span>
+                </div>
+                {/* School · round · opponent */}
+                <div className="text-gray-400 text-sm mt-1 flex flex-wrap items-center gap-1.5">
+                  {sgLeader.player_team && <span className="font-medium text-gray-300">{sgLeader.player_team}</span>}
+                  {sgLeader.player_team && <span className="text-gray-600">·</span>}
+                  {sgLeader.round_name && <span>{sgLeader.round_name}</span>}
+                  {sgLeader.round_name && sgLeader.opponent && <span className="text-gray-600">·</span>}
+                  {sgLeader.opponent && <span>vs {sgLeader.opponent}</span>}
+                </div>
+                {/* Owner line */}
+                <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                  {sgLeader.owner_user_id ? (
+                    <>
+                      <span className="text-gray-500 text-xs">Owner:</span>
+                      <span className="text-green-400 font-semibold text-sm">{sgLeader.owner_team_name}</span>
+                      <span className="text-gray-600 text-xs">@{sgLeader.owner_username}</span>
+                      {sgLeader.owner_venmo && (
+                        <span className="inline-flex items-center gap-1 text-xs bg-blue-900/40 border border-blue-500/30 text-blue-300 px-2 py-0.5 rounded-full font-medium">
+                          <VenmoIcon />
+                          {sgLeader.owner_venmo}
+                        </span>
+                      )}
+                      <span className="text-gray-600 text-xs">← send {fmt(bonus)} here</span>
+                    </>
+                  ) : (
                     <span className="text-xs bg-gray-800 border border-gray-700 text-gray-400 px-2 py-0.5 rounded-full">
                       Not drafted — no bonus awarded yet
                     </span>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
+              <span className="text-4xl select-none shrink-0">👑</span>
             </div>
           </div>
-        </div>
+
+          {/* Expandable full leaderboard */}
+          {sgBoard && sgBoard.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setExpanded(v => !v)}
+                className="w-full flex items-center justify-between px-5 py-2.5 text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800/40 transition-colors"
+              >
+                <span>{expanded ? 'Hide' : 'Show all top scores'}</span>
+                <svg className="w-3.5 h-3.5 transition-transform duration-200" style={{ transform: expanded ? 'rotate(180deg)' : 'none' }}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {expanded && (
+                <div className="divide-y divide-gray-800/60 border-t border-gray-800/60">
+                  {sgBoard.map((row, i) => (
+                    <div key={`${row.player_id}-${i}`} className="flex items-center gap-3 px-5 py-2.5">
+                      <span className="text-gray-600 text-xs font-bold w-5 shrink-0 text-right">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className={`font-bold text-sm ${i === 0 ? 'text-white' : 'text-gray-300'}`}>{row.player_name}</span>
+                          <span className="text-gray-500 text-xs">{row.player_team}</span>
+                          {row.round_name && <span className="text-gray-600 text-xs">· {row.round_name}</span>}
+                        </div>
+                        {row.owner_user_id ? (
+                          <div className="text-gray-500 text-xs mt-0.5">
+                            {row.owner_team_name} <span className="text-gray-700">@{row.owner_username}</span>
+                          </div>
+                        ) : (
+                          <div className="text-gray-700 text-xs mt-0.5">Undrafted</div>
+                        )}
+                      </div>
+                      <span className={`font-black text-sm shrink-0 ${i === 0 ? 'text-purple-400' : 'text-gray-400'}`}>
+                        {row.points} pts
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </>
       )}
     </div>
   );
@@ -189,6 +243,7 @@ export default function Leaderboard() {
   const [league, setLeague] = useState(null);
   const [members, setMembers] = useState([]);
   const [sgLeader, setSgLeader] = useState(null);
+  const [sgBoard, setSgBoard] = useState([]);
   const [isLive, setIsLive] = useState(false);
   const [livePlayerIds, setLivePlayerIds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -215,6 +270,7 @@ export default function Leaderboard() {
     setStandings(rows);
     setSettings(data.settings || null);
     setSgLeader(data.sgLeader || null);
+    setSgBoard(data.sgBoard || []);
     setIsLive(!!data.isLive);
     setLivePlayerIds(data.livePlayerIds || []);
     setLastRefresh(new Date());
@@ -374,7 +430,7 @@ export default function Leaderboard() {
       )}
 
       {/* Single Game Bonus tracker */}
-      <SgBonusCard sgLeader={sgLeader} bonus={bonus} />
+      <SgBonusCard sgLeader={sgLeader} sgBoard={sgBoard} bonus={bonus} />
 
       {standings.length === 0 ? (
         <div className="card p-12 text-center text-gray-400">
