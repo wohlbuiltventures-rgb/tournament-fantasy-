@@ -206,20 +206,26 @@ router.delete('/users/:id', superadmin, (req, res) => {
       return res.status(403).json({ error: 'Cannot delete admin accounts' });
     }
 
-    // Delete in FK-safe order (children before parent)
-    db.prepare('DELETE FROM wall_replies    WHERE user_id = ?').run(target.id);
-    db.prepare('DELETE FROM wall_reactions  WHERE user_id = ?').run(target.id);
-    db.prepare('DELETE FROM wall_posts      WHERE user_id = ?').run(target.id);
-    db.prepare('DELETE FROM smart_draft_purchases WHERE user_id = ?').run(target.id);
-    db.prepare('DELETE FROM member_payments WHERE user_id = ?').run(target.id);
-    db.prepare('DELETE FROM draft_picks     WHERE user_id = ?').run(target.id);
-    db.prepare('DELETE FROM league_members  WHERE user_id = ?').run(target.id);
-    db.prepare('DELETE FROM users           WHERE id = ?').run(target.id);
+    // Delete in FK-safe order (children before parent), wrapped in a transaction
+    db.transaction(() => {
+      db.prepare('DELETE FROM wall_replies         WHERE user_id = ?').run(target.id);
+      db.prepare('DELETE FROM wall_reactions       WHERE user_id = ?').run(target.id);
+      db.prepare('DELETE FROM wall_posts           WHERE user_id = ?').run(target.id);
+      db.prepare('DELETE FROM league_chat_messages WHERE user_id = ?').run(target.id);
+      db.prepare('DELETE FROM smart_draft_upgrades WHERE user_id = ?').run(target.id);
+      db.prepare('DELETE FROM smart_draft_credits  WHERE user_id = ?').run(target.id);
+      db.prepare('DELETE FROM payouts              WHERE user_id = ?').run(target.id);
+      db.prepare('DELETE FROM member_payments      WHERE user_id = ?').run(target.id);
+      db.prepare('DELETE FROM referrals            WHERE referrer_id = ? OR referred_id = ?').run(target.id, target.id);
+      db.prepare('DELETE FROM draft_picks          WHERE user_id = ?').run(target.id);
+      db.prepare('DELETE FROM league_members       WHERE user_id = ?').run(target.id);
+      db.prepare('DELETE FROM users                WHERE id = ?').run(target.id);
+    })();
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('[superadmin] delete user error:', err);
+    res.status(500).json({ error: err.message || 'Server error' });
   }
 });
 
