@@ -119,7 +119,94 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (player_id) REFERENCES golf_players(id)
   );
+
+  CREATE TABLE IF NOT EXISTS golf_faab_bids (
+    id TEXT PRIMARY KEY,
+    golf_league_id TEXT NOT NULL,
+    member_id TEXT NOT NULL,
+    player_id TEXT NOT NULL,
+    drop_player_id TEXT,
+    bid_amount INTEGER NOT NULL DEFAULT 0,
+    tournament_id TEXT,
+    status TEXT DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (golf_league_id) REFERENCES golf_leagues(id),
+    FOREIGN KEY (member_id) REFERENCES golf_league_members(id),
+    FOREIGN KEY (player_id) REFERENCES golf_players(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS golf_core_players (
+    id TEXT PRIMARY KEY,
+    member_id TEXT NOT NULL,
+    player_id TEXT NOT NULL,
+    locked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(member_id, player_id),
+    FOREIGN KEY (member_id) REFERENCES golf_league_members(id),
+    FOREIGN KEY (player_id) REFERENCES golf_players(id)
+  );
 `);
+
+// ── Auction tables ─────────────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS golf_auction_sessions (
+    id TEXT PRIMARY KEY,
+    league_id TEXT NOT NULL UNIQUE,
+    status TEXT DEFAULT 'waiting',
+    current_nomination_member_id TEXT,
+    current_player_id TEXT,
+    current_high_bid INTEGER DEFAULT 1,
+    current_high_bidder_id TEXT,
+    nomination_ends_at TEXT,
+    nomination_order TEXT DEFAULT '[]',
+    nomination_index INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (league_id) REFERENCES golf_leagues(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS golf_auction_bids (
+    id TEXT PRIMARY KEY,
+    league_id TEXT NOT NULL,
+    player_id TEXT NOT NULL,
+    member_id TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    bid_type TEXT DEFAULT 'auction',
+    tournament_id TEXT,
+    status TEXT DEFAULT 'active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (league_id) REFERENCES golf_leagues(id),
+    FOREIGN KEY (member_id) REFERENCES golf_league_members(id),
+    FOREIGN KEY (player_id) REFERENCES golf_players(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS golf_auction_budgets (
+    id TEXT PRIMARY KEY,
+    league_id TEXT NOT NULL,
+    member_id TEXT NOT NULL,
+    auction_credits_remaining INTEGER DEFAULT 1000,
+    faab_credits_remaining INTEGER DEFAULT 100,
+    faab_last_reset TEXT,
+    UNIQUE(league_id, member_id),
+    FOREIGN KEY (league_id) REFERENCES golf_leagues(id),
+    FOREIGN KEY (member_id) REFERENCES golf_league_members(id)
+  );
+`);
+
+// ── Schema migrations (idempotent ALTER TABLE) ─────────────────────────────────
+const _golfColMigrations = [
+  `ALTER TABLE golf_leagues ADD COLUMN format_type TEXT DEFAULT 'tourneyrun'`,
+  `ALTER TABLE golf_leagues ADD COLUMN salary_cap INTEGER DEFAULT 2400`,
+  `ALTER TABLE golf_leagues ADD COLUMN weekly_salary_cap INTEGER DEFAULT 50000`,
+  `ALTER TABLE golf_leagues ADD COLUMN core_spots INTEGER DEFAULT 4`,
+  `ALTER TABLE golf_leagues ADD COLUMN flex_spots INTEGER DEFAULT 4`,
+  `ALTER TABLE golf_leagues ADD COLUMN faab_budget INTEGER DEFAULT 500`,
+  `ALTER TABLE golf_leagues ADD COLUMN use_faab INTEGER DEFAULT 1`,
+  `ALTER TABLE golf_leagues ADD COLUMN picks_per_team INTEGER DEFAULT 8`,
+  `ALTER TABLE golf_leagues ADD COLUMN auction_budget INTEGER DEFAULT 1000`,
+  `ALTER TABLE golf_leagues ADD COLUMN faab_weekly_budget INTEGER DEFAULT 100`,
+  `ALTER TABLE golf_leagues ADD COLUMN draft_type TEXT DEFAULT 'snake'`,
+  `ALTER TABLE golf_leagues ADD COLUMN bid_timer_seconds INTEGER DEFAULT 30`,
+];
+for (const sql of _golfColMigrations) { try { db.exec(sql); } catch (_) {} }
 
 // ── Seed golf_players ──────────────────────────────────────────────────────────
 const GOLF_PLAYERS = [

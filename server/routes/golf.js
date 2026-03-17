@@ -153,23 +153,77 @@ router.get('/leagues', authMiddleware, (req, res) => {
 
 router.post('/leagues', authMiddleware, (req, res) => {
   try {
-    const { name, team_name, max_teams = 10, roster_size = 8, starters_per_week = 6, buy_in_amount = 0, payment_instructions = '', payout_first = 70, payout_second = 20, payout_third = 10, pick_time_limit = 60 } = req.body;
+    const {
+      name, team_name, max_teams = 8, buy_in_amount = 0, payment_instructions = '',
+      payout_first = 70, payout_second = 20, payout_third = 10, pick_time_limit = 60,
+      format_type = 'tourneyrun',
+      // TourneyRun
+      salary_cap = 2400, core_spots = 4, flex_spots = 4, faab_budget = 500, use_faab = 1,
+      auction_budget = 1000, faab_weekly_budget = 100, draft_type = 'snake', bid_timer_seconds = 30,
+      // Pool
+      picks_per_team = 8,
+      // DK
+      weekly_salary_cap = 50000, starters_count = 6,
+    } = req.body;
+
     if (!name || !team_name) return res.status(400).json({ error: 'League name and team name required' });
     const p1 = Math.max(0, parseInt(payout_first) || 0);
     const p2 = Math.max(0, parseInt(payout_second) || 0);
     const p3 = Math.max(0, parseInt(payout_third) || 0);
     if (p1 + p2 + p3 > 100) return res.status(400).json({ error: 'Payouts exceed 100%' });
 
+    const fmt = ['pool', 'dk', 'tourneyrun'].includes(format_type) ? format_type : 'tourneyrun';
+
+    // Derive roster_size and starters_per_week from format
+    let roster_size, starters_per_week;
+    if (fmt === 'pool') {
+      roster_size = Math.min(16, Math.max(4, parseInt(picks_per_team) || 8));
+      starters_per_week = roster_size;
+    } else if (fmt === 'dk') {
+      roster_size = Math.min(10, Math.max(4, parseInt(starters_count) || 6));
+      starters_per_week = roster_size;
+    } else {
+      const cs = Math.max(1, parseInt(core_spots) || 4);
+      const fs = Math.max(0, parseInt(flex_spots) || 4);
+      roster_size = cs + fs;
+      starters_per_week = Math.min(roster_size, parseInt(starters_count) || 6);
+    }
+
     const id = uuidv4();
     const invite_code = Math.random().toString(36).substring(2, 10).toUpperCase();
-    const rs = Math.min(12, Math.max(4, parseInt(roster_size) || 8));
+
+    const dtFinal = ['snake', 'auction'].includes(draft_type) ? draft_type : 'snake';
 
     db.prepare(`
-      INSERT INTO golf_leagues (id, name, commissioner_id, invite_code, status, max_teams, buy_in_amount, payment_instructions, payout_first, payout_second, payout_third, roster_size, starters_per_week, pick_time_limit, season_year)
-      VALUES (?, ?, ?, ?, 'lobby', ?, ?, ?, ?, ?, ?, ?, ?, ?, 2025)
-    `).run(id, name, req.user.id, invite_code, parseInt(max_teams) || 10, parseFloat(buy_in_amount) || 0, payment_instructions, p1, p2, p3, rs, Math.min(rs, parseInt(starters_per_week) || 6), parseInt(pick_time_limit) || 60);
+      INSERT INTO golf_leagues (
+        id, name, commissioner_id, invite_code, status, max_teams,
+        buy_in_amount, payment_instructions, payout_first, payout_second, payout_third,
+        roster_size, starters_per_week, pick_time_limit, season_year,
+        format_type, salary_cap, weekly_salary_cap, core_spots, flex_spots,
+        faab_budget, use_faab, picks_per_team,
+        auction_budget, faab_weekly_budget, draft_type, bid_timer_seconds
+      ) VALUES (?, ?, ?, ?, 'lobby', ?, ?, ?, ?, ?, ?, ?, ?, ?, 2026, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, name, req.user.id, invite_code, parseInt(max_teams) || 8,
+      parseFloat(buy_in_amount) || 0, payment_instructions, p1, p2, p3,
+      roster_size, starters_per_week, parseInt(pick_time_limit) || 60,
+      fmt, parseInt(salary_cap) || 2400, parseInt(weekly_salary_cap) || 50000,
+      parseInt(core_spots) || 4, parseInt(flex_spots) || 4,
+      parseInt(faab_budget) || 500, use_faab ? 1 : 0,
+      parseInt(picks_per_team) || 8,
+      parseInt(auction_budget) || 1000, parseInt(faab_weekly_budget) || 100,
+      dtFinal, parseInt(bid_timer_seconds) || 30
+    );
 
-    db.prepare(`INSERT INTO golf_league_members (id, golf_league_id, user_id, team_name, season_budget) VALUES (?, ?, ?, ?, 2400)`).run(uuidv4(), id, req.user.id, team_name);
+    const memberId = uuidv4();
+    db.prepare(`INSERT INTO golf_league_members (id, golf_league_id, user_id, team_name, season_budget) VALUES (?, ?, ?, ?, ?)`).run(memberId, id, req.user.id, team_name, parseInt(salary_cap) || 2400);
+
+    // Initialize auction budget for commissioner if TourneyRun
+    if (fmt === 'tourneyrun') {
+      try {
+        db.prepare(`INSERT OR IGNORE INTO golf_auction_budgets (id, league_id, member_id, auction_credits_remaining, faab_credits_remaining) VALUES (?, ?, ?, ?, ?)`).run(uuidv4(), id, memberId, parseInt(auction_budget) || 1000, parseInt(faab_weekly_budget) || 100);
+      } catch (_) {}
+    }
 
     res.status(201).json({ league: db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
@@ -184,8 +238,17 @@ router.post('/leagues/join', authMiddleware, (req, res) => {
     const count = db.prepare('SELECT COUNT(*) as c FROM golf_league_members WHERE golf_league_id = ?').get(league.id).c;
     if (count >= league.max_teams) return res.status(400).json({ error: 'League is full' });
     if (getMember(league.id, req.user.id)) return res.status(400).json({ error: 'Already in this league' });
-    db.prepare(`INSERT INTO golf_league_members (id, golf_league_id, user_id, team_name, season_budget) VALUES (?, ?, ?, ?, 2400)`).run(uuidv4(), league.id, req.user.id, team_name);
-    res.json({ league });
+    const newMemberId = uuidv4();
+    db.prepare(`INSERT INTO golf_league_members (id, golf_league_id, user_id, team_name, season_budget) VALUES (?, ?, ?, ?, ?)`).run(newMemberId, league.id, req.user.id, team_name, league.salary_cap || 2400);
+
+    // Initialize auction budget if TourneyRun
+    if (league.format_type === 'tourneyrun') {
+      try {
+        db.prepare(`INSERT OR IGNORE INTO golf_auction_budgets (id, league_id, member_id, auction_credits_remaining, faab_credits_remaining) VALUES (?, ?, ?, ?, ?)`).run(uuidv4(), league.id, newMemberId, league.auction_budget || 1000, league.faab_weekly_budget || 100);
+      } catch (_) {}
+    }
+
+    res.json({ league_id: league.id, league });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
@@ -225,11 +288,14 @@ router.get('/leagues/:id/roster', authMiddleware, (req, res) => {
   try {
     const member = getMember(req.params.id, req.user.id);
     if (!member) return res.status(403).json({ error: 'Not a member' });
+    const coreIds = new Set(
+      db.prepare('SELECT player_id FROM golf_core_players WHERE member_id = ?').all(member.id).map(r => r.player_id)
+    );
     const roster = db.prepare(`
       SELECT gr.*, gp.name, gp.country, gp.world_ranking, gp.salary
       FROM golf_rosters gr JOIN golf_players gp ON gr.player_id = gp.id
       WHERE gr.member_id = ? AND gr.dropped_at IS NULL ORDER BY gp.world_ranking ASC
-    `).all(member.id);
+    `).all(member.id).map(p => ({ ...p, is_core: coreIds.has(p.player_id) ? 1 : 0 }));
     const totalSalary = roster.reduce((s, p) => s + p.salary, 0);
     res.json({ roster, totalSalary, budget: member.season_budget, remaining: member.season_budget - totalSalary });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
@@ -267,6 +333,12 @@ router.post('/leagues/:id/roster/drop', authMiddleware, (req, res) => {
     if (!player_id) return res.status(400).json({ error: 'player_id required' });
     const member = getMember(req.params.id, req.user.id);
     if (!member) return res.status(403).json({ error: 'Not a member' });
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    // Core players cannot be dropped in TourneyRun mode
+    if (league.format_type === 'tourneyrun') {
+      const isCore = db.prepare('SELECT id FROM golf_core_players WHERE member_id=? AND player_id=?').get(member.id, player_id);
+      if (isCore) return res.status(400).json({ error: 'Core players cannot be dropped. Core spots are locked for the season.' });
+    }
     const entry = db.prepare('SELECT * FROM golf_rosters WHERE member_id=? AND player_id=? AND dropped_at IS NULL').get(member.id, player_id);
     if (!entry) return res.status(404).json({ error: 'Not on your roster' });
     db.prepare('UPDATE golf_rosters SET dropped_at=CURRENT_TIMESTAMP WHERE id=?').run(entry.id);
@@ -343,18 +415,32 @@ router.get('/leagues/:id/draft', authMiddleware, (req, res) => {
     if (!member && league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Not a member' });
 
     const members = db.prepare(`SELECT glm.*, u.username FROM golf_league_members glm JOIN users u ON glm.user_id=u.id WHERE glm.golf_league_id=? ORDER BY glm.draft_order ASC`).all(req.params.id);
-    const picks = db.prepare(`SELECT gdp.*, gp.name, gp.country, gp.world_ranking, gp.salary, u.username FROM golf_draft_picks gdp JOIN golf_players gp ON gdp.player_id=gp.id JOIN users u ON gdp.user_id=u.id WHERE gdp.golf_league_id=? ORDER BY gdp.pick_number ASC`).all(req.params.id);
+    const picks = db.prepare(`SELECT gdp.*, gp.name as player_name, gp.country, gp.world_ranking, gp.salary, u.username, glm.team_name FROM golf_draft_picks gdp JOIN golf_players gp ON gdp.player_id=gp.id JOIN users u ON gdp.user_id=u.id JOIN golf_league_members glm ON glm.golf_league_id=gdp.golf_league_id AND glm.user_id=gdp.user_id WHERE gdp.golf_league_id=? ORDER BY gdp.pick_number ASC`).all(req.params.id);
     const allPlayers = db.prepare('SELECT * FROM golf_players WHERE is_active=1 ORDER BY world_ranking ASC').all();
     const draftedIds = new Set(picks.map(p => p.player_id));
     const numTeams = members.length;
     const totalPicks = numTeams * league.roster_size;
     const currentPicker = league.current_pick <= totalPicks ? snakePicker(league.current_pick, numTeams, members) : null;
+    const draftComplete = league.current_pick > totalPicks;
+
+    // My current roster (drafted players)
+    const myRoster = member ? db.prepare(`
+      SELECT gr.player_id, gp.name, gp.country, gp.world_ranking, gp.salary
+      FROM golf_rosters gr JOIN golf_players gp ON gr.player_id = gp.id
+      WHERE gr.member_id = ? AND gr.dropped_at IS NULL ORDER BY gp.world_ranking ASC
+    `).all(member.id) : [];
+
+    // Core player IDs for TourneyRun mode
+    const corePlayerIds = (league.format_type === 'tourneyrun' && member)
+      ? db.prepare('SELECT player_id FROM golf_core_players WHERE member_id = ?').all(member.id).map(r => r.player_id)
+      : [];
 
     res.json({
       league, members, picks,
-      availablePlayers: allPlayers.filter(p => !draftedIds.has(p.id)),
-      currentPicker, draftComplete: league.current_pick > totalPicks,
-      myPicks: picks.filter(p => p.user_id === req.user.id),
+      available: allPlayers.filter(p => !draftedIds.has(p.id)),
+      myRoster, currentPick: league.current_pick,
+      currentPicker, draftComplete,
+      corePlayerIds,
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
@@ -397,8 +483,12 @@ router.post('/leagues/:id/draft/pick', authMiddleware, (req, res) => {
     if (db.prepare('SELECT id FROM golf_draft_picks WHERE golf_league_id=? AND player_id=?').get(req.params.id, player_id)) return res.status(400).json({ error: 'Already drafted' });
 
     const member = getMember(req.params.id, req.user.id);
-    const myDraftSalary = db.prepare(`SELECT COALESCE(SUM(gp.salary),0) as s FROM golf_draft_picks gdp JOIN golf_players gp ON gdp.player_id=gp.id WHERE gdp.golf_league_id=? AND gdp.user_id=?`).get(req.params.id, req.user.id).s;
-    if (myDraftSalary + player.salary > member.season_budget) return res.status(400).json({ error: `Over cap. Budget: $${member.season_budget}, Used: $${myDraftSalary}, Player: $${player.salary}` });
+
+    // Salary cap enforcement — skip for Pool mode (no salary in pool drafts)
+    if (league.format_type !== 'pool') {
+      const myDraftSalary = db.prepare(`SELECT COALESCE(SUM(gp.salary),0) as s FROM golf_draft_picks gdp JOIN golf_players gp ON gdp.player_id=gp.id WHERE gdp.golf_league_id=? AND gdp.user_id=?`).get(req.params.id, req.user.id).s;
+      if (myDraftSalary + player.salary > member.season_budget) return res.status(400).json({ error: `Over cap. Budget: $${member.season_budget}, Used: $${myDraftSalary}, Player: $${player.salary}` });
+    }
 
     const round = Math.ceil(league.current_pick / numTeams);
     const nextPick = league.current_pick + 1;
@@ -409,6 +499,14 @@ router.post('/leagues/:id/draft/pick', authMiddleware, (req, res) => {
       db.prepare('INSERT INTO golf_rosters (id, member_id, player_id) VALUES (?, ?, ?)').run(uuidv4(), member.id, player_id);
       db.prepare(`UPDATE golf_leagues SET current_pick=?, draft_status=?, status=? WHERE id=?`).run(nextPick, draftComplete ? 'completed' : 'active', draftComplete ? 'active' : 'drafting', req.params.id);
     })();
+
+    // Flag as core player for TourneyRun (first core_spots picks per manager)
+    if (league.format_type === 'tourneyrun') {
+      const myPickCount = db.prepare('SELECT COUNT(*) as c FROM golf_draft_picks WHERE golf_league_id=? AND user_id=?').get(req.params.id, req.user.id).c;
+      if (myPickCount <= (league.core_spots || 4)) {
+        try { db.prepare('INSERT OR IGNORE INTO golf_core_players (id, member_id, player_id) VALUES (?, ?, ?)').run(uuidv4(), member.id, player_id); } catch (_) {}
+      }
+    }
 
     const nextPicker = draftComplete ? null : snakePicker(nextPick, numTeams, members);
     res.json({ ok: true, pick: { player_id, player_name: player.name, pick_number: league.current_pick, round }, draftComplete, nextPickUserId: nextPicker?.user_id || null });

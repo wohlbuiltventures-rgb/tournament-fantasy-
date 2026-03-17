@@ -113,6 +113,10 @@ export default function CreateGolfLeague() {
     flex_spots: 4,
     faab_budget: 500,
     use_faab: true,
+    draft_type: 'auction',
+    auction_budget: 1000,
+    faab_weekly_budget: 100,
+    bid_timer_seconds: 30,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -283,20 +287,67 @@ export default function CreateGolfLeague() {
             {/* TourneyRun settings */}
             {format === 'tourneyrun' && (
               <>
+                {/* Draft Type */}
                 <div>
-                  <label className="label mb-2.5">Draft Salary Cap</label>
-                  <PillSelector
-                    options={[
-                      { value: 2000, label: '$2,000' },
-                      { value: 2400, label: '$2,400' },
-                      { value: 2800, label: '$2,800' },
-                      { value: 3200, label: '$3,200' },
-                    ]}
-                    value={form.salary_cap}
-                    onChange={v => set('salary_cap', v)}
-                  />
-                  <p className="text-gray-600 text-xs mt-2">Applied during the initial draft of core players.</p>
+                  <label className="label mb-2.5">Draft Type</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { val: 'auction', label: 'Auction', desc: 'Nominate & bid — highest wins' },
+                      { val: 'snake',   label: 'Snake',   desc: 'Classic serpentine draft'       },
+                    ].map(opt => (
+                      <button
+                        key={opt.val}
+                        type="button"
+                        onClick={() => set('draft_type', opt.val)}
+                        className={`p-3 rounded-xl border-2 text-left transition-all ${
+                          form.draft_type === opt.val
+                            ? 'border-green-500/60 bg-green-500/8'
+                            : 'border-gray-700 hover:border-gray-600'
+                        }`}
+                      >
+                        <div className={`font-bold text-sm ${form.draft_type === opt.val ? 'text-green-400' : 'text-gray-300'}`}>
+                          {opt.label}
+                        </div>
+                        <div className="text-gray-500 text-xs mt-0.5">{opt.desc}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Auction Budget (only when auction) */}
+                {form.draft_type === 'auction' && (
+                  <div>
+                    <label className="label mb-2.5">Auction Budget Per Team</label>
+                    <PillSelector
+                      options={[
+                        { value: 500,  label: '$500'  },
+                        { value: 1000, label: '$1,000' },
+                        { value: 2000, label: '$2,000' },
+                      ]}
+                      value={form.auction_budget}
+                      onChange={v => set('auction_budget', v)}
+                    />
+                    <p className="text-gray-600 text-xs mt-2">Credits used during the live auction to win players.</p>
+                  </div>
+                )}
+
+                {/* Snake salary cap (only when snake) */}
+                {form.draft_type === 'snake' && (
+                  <div>
+                    <label className="label mb-2.5">Draft Salary Cap</label>
+                    <PillSelector
+                      options={[
+                        { value: 2000, label: '$2,000' },
+                        { value: 2400, label: '$2,400' },
+                        { value: 2800, label: '$2,800' },
+                        { value: 3200, label: '$3,200' },
+                      ]}
+                      value={form.salary_cap}
+                      onChange={v => set('salary_cap', v)}
+                    />
+                    <p className="text-gray-600 text-xs mt-2">Applied during the initial draft of core players.</p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -321,17 +372,35 @@ export default function CreateGolfLeague() {
                   Total roster: {form.core_spots + form.flex_spots} players.
                 </p>
 
+                {/* Bid Timer (only when auction) */}
+                {form.draft_type === 'auction' && (
+                  <div>
+                    <label className="label mb-2.5">Bid Timer</label>
+                    <PillSelector
+                      options={[
+                        { value: 20, label: '20s' },
+                        { value: 30, label: '30s' },
+                        { value: 60, label: '60s' },
+                      ]}
+                      value={form.bid_timer_seconds}
+                      onChange={v => set('bid_timer_seconds', v)}
+                    />
+                    <p className="text-gray-600 text-xs mt-2">Countdown resets after each new bid.</p>
+                  </div>
+                )}
+
                 <div>
-                  <label className="label mb-2.5">FAAB Budget Per Team</label>
+                  <label className="label mb-2.5">Weekly FAAB Budget</label>
                   <PillSelector
                     options={[
-                      { value: 250,  label: '$250'   },
-                      { value: 500,  label: '$500'   },
-                      { value: 1000, label: '$1,000' },
+                      { value: 50,  label: '$50'  },
+                      { value: 100, label: '$100' },
+                      { value: 200, label: '$200' },
                     ]}
-                    value={form.faab_budget}
-                    onChange={v => set('faab_budget', v)}
+                    value={form.faab_weekly_budget}
+                    onChange={v => set('faab_weekly_budget', v)}
                   />
+                  <p className="text-gray-600 text-xs mt-2">Resets every Monday for waiver wire bidding.</p>
                 </div>
 
                 <div>

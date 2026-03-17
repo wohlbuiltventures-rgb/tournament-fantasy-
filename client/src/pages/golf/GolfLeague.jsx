@@ -433,9 +433,9 @@ function LineupTab({ leagueId, league }) {
     setLoading(true);
     api.get(`/golf/leagues/${leagueId}/lineup/${selectedTournId}`)
       .then(r => {
-        setLineup(r.data.lineup_player_ids || []);
+        setLineup((r.data.lineup || []).filter(l => l.is_started).map(l => l.player_id));
         setRoster(r.data.roster || []);
-        setLocked(r.data.locked || false);
+        setLocked(r.data.isLocked || false);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -443,7 +443,7 @@ function LineupTab({ leagueId, league }) {
 
   function toggleStarter(playerId) {
     if (locked) return;
-    const maxStarters = league.starters_count || 6;
+    const maxStarters = league.starters_per_week || 6;
     setLineup(prev => {
       if (prev.includes(playerId)) return prev.filter(id => id !== playerId);
       if (prev.length >= maxStarters) return prev;
@@ -465,7 +465,7 @@ function LineupTab({ leagueId, league }) {
     setSaving(false);
   }
 
-  const maxStarters = league.starters_count || 6;
+  const maxStarters = league.starters_per_week || 6;
 
   return (
     <div className="space-y-4">
@@ -575,6 +575,193 @@ function LineupTab({ leagueId, league }) {
   );
 }
 
+// ── Tab: Free Agency ───────────────────────────────────────────────────────────
+
+function FreeAgencyTab({ leagueId, league }) {
+  const [budget, setBudget] = useState(null);
+  const [players, setPlayers] = useState([]);
+  const [roster, setRoster] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [bidTarget, setBidTarget] = useState(null);
+  const [bidAmount, setBidAmount] = useState('');
+  const [bidding, setBidding] = useState(false);
+  const [bidError, setBidError] = useState('');
+  const [bidSuccess, setBidSuccess] = useState('');
+
+  async function load() {
+    try {
+      const [pRes, rRes, bRes] = await Promise.all([
+        api.get('/golf/players'),
+        api.get(`/golf/leagues/${leagueId}/roster`),
+        api.get(`/golf/leagues/${leagueId}/faab/bids`),
+      ]);
+      setPlayers(pRes.data.players || []);
+      setRoster(rRes.data.roster || []);
+      setBudget(bRes.data);
+    } catch {}
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, [leagueId]);
+
+  const rosterIds = new Set(roster.map(r => r.player_id));
+
+  // Available = not on my roster (and not on any roster if pool)
+  const available = players.filter(p =>
+    !rosterIds.has(p.id) &&
+    (!search || p.name.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  async function placeBid(e) {
+    e.preventDefault();
+    setBidding(true);
+    setBidError('');
+    setBidSuccess('');
+    try {
+      await api.post(`/golf/leagues/${leagueId}/faab/bid`, {
+        player_id: bidTarget.id,
+        bid_amount: parseInt(bidAmount) || 0,
+      });
+      setBidSuccess(`Bid of $${bidAmount} placed on ${bidTarget.name}`);
+      setBidTarget(null);
+      setBidAmount('');
+      await load();
+    } catch (err) {
+      setBidError(err.response?.data?.error || 'Failed to place bid');
+    }
+    setBidding(false);
+  }
+
+  if (loading) return <div className="py-10 text-center text-gray-500">Loading...</div>;
+
+  return (
+    <div className="space-y-4">
+      {/* Budget card */}
+      {budget && (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-800">
+            <Trophy className="w-4 h-4 text-green-400" />
+            <h3 className="text-white font-bold">My FAAB Budget</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-800/60 rounded-xl px-4 py-3 text-center">
+              <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Weekly Remaining</div>
+              <div className="text-green-400 font-black text-2xl">${budget.faab_remaining ?? '—'}</div>
+            </div>
+            <div className="bg-gray-800/60 rounded-xl px-4 py-3 text-center">
+              <div className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Pending Bids</div>
+              <div className="text-white font-black text-2xl">{budget.pending_bids?.length ?? 0}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success message */}
+      {bidSuccess && (
+        <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg p-3 text-sm flex items-center gap-2">
+          <Check className="w-4 h-4 shrink-0" /> {bidSuccess}
+        </div>
+      )}
+
+      {/* Bid modal */}
+      {bidTarget && (
+        <div className="bg-gray-900 border border-green-500/40 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-white font-bold">Place FAAB Bid</h3>
+            <button onClick={() => setBidTarget(null)} className="text-gray-500 hover:text-gray-300 text-sm">Cancel</button>
+          </div>
+          <div className="mb-4">
+            <div className="text-white font-semibold">{bidTarget.name}</div>
+            <div className="text-gray-500 text-xs">{bidTarget.country} · Rank #{bidTarget.world_ranking}</div>
+          </div>
+          {bidError && (
+            <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg p-3 text-sm mb-3">{bidError}</div>
+          )}
+          <form onSubmit={placeBid} className="flex gap-2">
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+              <input
+                type="number"
+                min="0"
+                className="input pl-7"
+                placeholder="0"
+                value={bidAmount}
+                onChange={e => setBidAmount(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={bidding}
+              className="px-5 py-2.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-bold rounded-xl transition-all"
+            >
+              {bidding ? '...' : 'Bid'}
+            </button>
+          </form>
+          <p className="text-gray-600 text-xs mt-2">Blind bids process at the waiver wire deadline.</p>
+        </div>
+      )}
+
+      {/* Available players */}
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-800">
+          <div className="flex items-center gap-2 mb-3">
+            <Flag className="w-4 h-4 text-gray-400" />
+            <h3 className="text-white font-bold">Available Players</h3>
+          </div>
+          <input
+            type="text"
+            placeholder="Search players..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none focus:border-green-500"
+          />
+        </div>
+        <div className="max-h-96 overflow-y-auto divide-y divide-gray-800">
+          {available.slice(0, 50).map(p => (
+            <div key={p.id} className="flex items-center justify-between px-5 py-3.5 gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-white text-sm font-medium truncate">{p.name}</div>
+                <div className="text-gray-500 text-xs">{p.country} · Rank #{p.world_ranking}</div>
+              </div>
+              <div className="text-green-400 font-bold text-sm shrink-0">${p.salary}</div>
+              <button
+                onClick={() => { setBidTarget(p); setBidAmount(''); setBidError(''); setBidSuccess(''); }}
+                className="text-xs px-2.5 py-1.5 bg-green-500/15 border border-green-500/30 text-green-400 rounded-lg hover:bg-green-500/25 transition-colors font-semibold shrink-0"
+              >
+                Bid
+              </button>
+            </div>
+          ))}
+          {available.length === 0 && (
+            <div className="py-8 text-center text-gray-500 text-sm">No players found.</div>
+          )}
+        </div>
+      </div>
+
+      {/* Pending bids */}
+      {budget?.pending_bids?.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+            <ArrowRight className="w-4 h-4 text-yellow-400" />
+            <h3 className="text-white font-bold">My Pending Bids</h3>
+          </div>
+          <div className="divide-y divide-gray-800">
+            {budget.pending_bids.map(b => (
+              <div key={b.id} className="flex items-center justify-between px-5 py-3.5">
+                <div className="text-white text-sm font-medium">{b.player_name || b.player_id}</div>
+                <Chip color="yellow">${b.bid_amount}</Chip>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Tab: Standings ─────────────────────────────────────────────────────────────
 
 function StandingsTab({ leagueId, currentUserId }) {
@@ -644,12 +831,20 @@ function StandingsTab({ leagueId, currentUserId }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-const TABS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'roster',   label: 'Roster'   },
-  { key: 'lineup',   label: 'Lineup'   },
-  { key: 'standings',label: 'Standings'},
-];
+function getTabs(league) {
+  const base = [
+    { key: 'overview',  label: 'Overview'  },
+    { key: 'roster',    label: 'Roster'    },
+  ];
+  if (league?.format_type === 'tourneyrun') {
+    base.push({ key: 'freeagency', label: 'Free Agency' });
+  }
+  base.push(
+    { key: 'lineup',    label: 'Lineup'    },
+    { key: 'standings', label: 'Standings' },
+  );
+  return base;
+}
 
 export default function GolfLeague() {
   const { id } = useParams();
@@ -734,7 +929,7 @@ export default function GolfLeague() {
 
       {/* ── Tab bar ── */}
       <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 mb-6 overflow-x-auto">
-        {TABS.map(t => (
+        {getTabs(league).map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -755,6 +950,9 @@ export default function GolfLeague() {
       )}
       {tab === 'roster' && (
         <RosterTab leagueId={id} league={league} />
+      )}
+      {tab === 'freeagency' && league.format_type === 'tourneyrun' && (
+        <FreeAgencyTab leagueId={id} league={league} />
       )}
       {tab === 'lineup' && (
         <LineupTab leagueId={id} league={league} />

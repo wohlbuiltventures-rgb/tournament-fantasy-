@@ -46,6 +46,10 @@ export default function GolfDraft() {
       if (r.data?.league?.format_type === 'dk') {
         navigate(`/golf/league/${id}?tab=lineup`, { replace: true });
       }
+      // Auction draft type — redirect to auction page
+      if (r.data?.league?.draft_type === 'auction') {
+        navigate(`/golf/league/${id}/auction`, { replace: true });
+      }
     } catch {}
     setLoading(false);
   }

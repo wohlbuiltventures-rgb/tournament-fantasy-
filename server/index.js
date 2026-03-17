@@ -75,6 +75,8 @@ app.use('/api/wall', require('./routes/wall').router);
 app.use('/api/games', require('./routes/games'));
 app.use('/api/sindarius', require('./routes/sindarius'));
 app.use('/api/golf', require('./routes/golf'));
+app.use('/api/golf', require('./routes/golf-waivers'));
+app.use('/api/golf', require('./routes/golf-auction'));
 
 // Serve uploaded avatars
 const path = require('path');
