@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
@@ -60,6 +60,81 @@ function StatusBadge({ status }) {
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot} animate-pulse`} />
       {s.label}
     </span>
+  );
+}
+
+// ── Draft countdown widget ─────────────────────────────────────────────────────
+function DraftCountdown({ draftStartTime }) {
+  const target = new Date(draftStartTime).getTime();
+
+  function calc() {
+    const diff = target - Date.now();
+    if (diff <= 0) return null;
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    return { h, m, s };
+  }
+
+  const [remaining, setRemaining] = useState(calc);
+  const intervalRef = useRef(null);
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      const next = calc();
+      setRemaining(next);
+      if (!next) clearInterval(intervalRef.current);
+    }, 1000);
+    return () => clearInterval(intervalRef.current);
+  }, [draftStartTime]); // eslint-disable-line
+
+  const dateLabel = new Date(draftStartTime).toLocaleString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+    timeZoneName: 'short',
+  });
+
+  const pad = n => String(n).padStart(2, '0');
+
+  return (
+    <div style={{
+      background: '#1a2535',
+      borderRadius: 8,
+      padding: '12px 16px',
+      borderLeft: '3px solid #f97316',
+      marginBottom: 16,
+    }}>
+      {remaining === null ? (
+        <div style={{ color: '#22c55e', fontWeight: 700, fontSize: 13 }}>🏀 Draft is live!</div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{
+              width: 6, height: 6, borderRadius: '50%', background: '#f97316', flexShrink: 0,
+              animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite',
+            }} />
+            <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              Draft Starts
+            </span>
+          </div>
+          <div style={{ color: '#fff', fontSize: 12, fontWeight: 500, marginBottom: 10 }}>
+            {dateLabel}
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            {[['h', 'HRS'], ['m', 'MIN'], ['s', 'SEC']].map(([key, label]) => (
+              <div key={key} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', lineHeight: 1 }}>
+                  {pad(remaining[key])}
+                </div>
+                <div style={{ fontSize: 10, color: '#64748b', letterSpacing: '0.05em', marginTop: 3 }}>
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -350,6 +425,11 @@ export default function Dashboard() {
                       />
                     </div>
                   </div>
+
+                  {/* ── Draft countdown (lobby + draft_start_time set) ── */}
+                  {league.draft_status !== 'completed' && league.draft_start_time && (
+                    <DraftCountdown draftStartTime={league.draft_start_time} />
+                  )}
 
                   {/* ── Standings / payout card (active + draft complete) ── */}
                   {league.status === 'active' && league.draft_status === 'completed' && (() => {
