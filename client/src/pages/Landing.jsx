@@ -502,23 +502,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Stats bar ── */}
-      <section className="py-8 px-4 bg-gray-900/60 border-y border-gray-800">
-        <div className="max-w-3xl mx-auto grid grid-cols-3 gap-4">
-          {[
-            { num: 'Since 2016', label: 'and counting'           },
-            { num: '100%', label: 'prize pool to winners'  },
-            { num: '$0',   label: 'platform cut'           },
-          ].map(stat => (
-            <div key={stat.label} className="bg-gray-900 border border-gray-800 rounded-2xl p-5 text-center">
-              <div className="text-2xl sm:text-3xl font-black text-brand-400 mb-1">{stat.num}</div>
-              <div className="text-gray-400 text-xs sm:text-sm font-medium leading-tight">{stat.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Grab Your Crew ── */}
+{/* ── Grab Your Crew ── */}
       <section className="py-16 sm:py-20 px-4 bg-gray-900/40">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-10">
