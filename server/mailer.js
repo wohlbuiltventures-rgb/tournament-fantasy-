@@ -1,15 +1,23 @@
 const nodemailer = require('nodemailer');
 
+// Warn on startup if SMTP is not configured — emails will fail silently otherwise
+if (!process.env.MAIL_HOST || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
+  console.warn('[mailer] WARNING: MAIL_HOST, MAIL_USER, or MAIL_PASS is not set — password reset emails will fail');
+}
+
 function getTransport() {
   const { MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASS } = process.env;
   if (!MAIL_HOST || !MAIL_USER || !MAIL_PASS) {
-    throw new Error('MAIL_HOST, MAIL_USER, and MAIL_PASS env vars are required to send email');
+    throw new Error('Email is not configured on this server (MAIL_HOST, MAIL_USER, MAIL_PASS required)');
   }
   return nodemailer.createTransport({
     host: MAIL_HOST,
     port: parseInt(MAIL_PORT || '587', 10),
     secure: parseInt(MAIL_PORT || '587', 10) === 465,
     auth: { user: MAIL_USER, pass: MAIL_PASS },
+    connectionTimeout: 8000,  // abort if SMTP server doesn't respond in 8s
+    greetingTimeout: 8000,
+    socketTimeout: 8000,
   });
 }
 

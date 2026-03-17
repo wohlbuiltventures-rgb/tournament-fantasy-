@@ -16,10 +16,14 @@ export default function ForgotPassword() {
     setError('');
     setLoading(true);
     try {
-      await api.post('/auth/forgot-password', { email });
+      await api.post('/auth/forgot-password', { email }, { timeout: 10000 });
       setSubmitted(true);
     } catch (err) {
-      setError(err.response?.data?.error || 'Something went wrong');
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setError('Something went wrong sending the email. Please try again or contact support.');
+      } else {
+        setError(err.response?.data?.error || 'Something went wrong. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
