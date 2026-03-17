@@ -671,10 +671,11 @@ function findOrCreateGhostUser(ownerName) {
 }
 
 // POST /api/admin/import-draft
-// Body: { leagueId, teams: [{ ownerName, players: [{ name, school, seed, region }] }] }
+// Body: { leagueId, teams: [...], force?: true }
+// force=true deletes all existing draft_picks for the league before importing.
 router.post('/import-draft', authMiddleware, (req, res) => {
   try {
-    const { leagueId, teams } = req.body;
+    const { leagueId, teams, force } = req.body;
     if (!leagueId || !Array.isArray(teams) || !teams.length) {
       return res.status(400).json({ error: 'leagueId and teams[] are required' });
     }
@@ -682,6 +683,10 @@ router.post('/import-draft', authMiddleware, (req, res) => {
     if (!league) return res.status(404).json({ error: 'League not found' });
     if (league.commissioner_id !== req.user.id) {
       return res.status(403).json({ error: 'Only the commissioner can import a draft' });
+    }
+
+    if (force) {
+      db.prepare('DELETE FROM draft_picks WHERE league_id = ?').run(leagueId);
     }
 
     const numTeams  = teams.length;
@@ -823,6 +828,85 @@ router.get('/import-draft/unmatched/:leagueId', authMiddleware, (req, res) => {
     res.json({ unmatched });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/import-draft/seed-missing-players
+// Adds the 8 NC State / Texas (First Four, seed 11 West) players that ESPN
+// stores under different names, then inserts their draft picks.
+// Idempotent — safe to call multiple times.
+router.post('/import-draft/seed-missing-players', authMiddleware, (req, res) => {
+  try {
+    const { leagueId } = req.body;
+    if (!leagueId) return res.status(400).json({ error: 'leagueId is required' });
+    const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(leagueId);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the commissioner can do this' });
+    }
+
+    // Each entry: player data + ownerName (from IMPORT_OWNER_MAP or TBD) + pick coords
+    const MISSING = [
+      // NC State — seed 11 West (First Four)
+      { name: 'Paul McNeil Jr.',   team: 'NC State', seed: 11, region: 'West', is_first_four: 1, season_ppg: 10.2, position: 'G', ownerName: 'Collin Wohlfert', round: 9,  pickNumber: 97  },
+      { name: 'Darrion Williams',  team: 'NC State', seed: 11, region: 'West', is_first_four: 1, season_ppg: 8.4,  position: 'G', ownerName: 'Tate Small',      round: 8,  pickNumber: 90  },
+      { name: 'Ven-Allen Lubin',   team: 'NC State', seed: 11, region: 'West', is_first_four: 1, season_ppg: 9.1,  position: 'G', ownerName: 'Patrick Taylor',  round: 10, pickNumber: 113 },
+      { name: 'Quadir Copeland',   team: 'NC State', seed: 11, region: 'West', is_first_four: 1, season_ppg: 11.5, position: 'G', ownerName: 'Preston Trout',   round: 8,  pickNumber: 87  },
+      // Texas — seed 11 West (First Four)
+      { name: 'Tramon Mark',       team: 'Texas',    seed: 11, region: 'West', is_first_four: 1, season_ppg: 12.3, position: 'G', ownerName: 'Sean Meekins',    round: 11, pickNumber: 124 },
+      { name: 'Dailyn Swain',      team: 'Texas',    seed: 11, region: 'West', is_first_four: 1, season_ppg: 9.8,  position: 'G', ownerName: 'Alex Manton',     round: 5,  pickNumber: 57  },
+      { name: 'Matas Vokietaitis', team: 'Texas',    seed: 11, region: 'West', is_first_four: 1, season_ppg: 7.6,  position: 'F', ownerName: 'Brian Sowinski',  round: 8,  pickNumber: 85  },
+      { name: 'Jordan Pope',       team: 'Texas',    seed: 11, region: 'West', is_first_four: 1, season_ppg: 13.1, position: 'G', ownerName: 'Brian Sowinski',  round: 11, pickNumber: 132 },
+    ];
+
+    const added = [], pickInserted = [], errors = [];
+
+    db.transaction(() => {
+      for (const p of MISSING) {
+        // Upsert player
+        let player = db.prepare('SELECT id FROM players WHERE LOWER(name) = LOWER(?)').get(p.name);
+        if (!player) {
+          const pid = uuidv4();
+          db.prepare(`
+            INSERT INTO players (id, name, team, position, seed, region, season_ppg, is_first_four, is_eliminated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+          `).run(pid, p.name, p.team, p.position, p.seed, p.region, p.season_ppg, p.is_first_four);
+          player = { id: pid };
+          added.push(p.name);
+        }
+
+        // Resolve ownerName → user_id
+        const knownUsername = IMPORT_OWNER_MAP[p.ownerName];
+        let userId;
+        if (knownUsername !== undefined) {
+          const u = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?')
+            .get(knownUsername, knownUsername);
+          if (!u) { errors.push(`User not found for "${p.ownerName}"`); continue; }
+          userId = u.id;
+        } else {
+          userId = findOrCreateGhostUser(p.ownerName).id;
+        }
+
+        // Ensure member row exists for this user
+        const existMember = db.prepare(
+          'SELECT id FROM league_members WHERE league_id = ? AND user_id = ?'
+        ).get(leagueId, userId);
+        if (!existMember) { errors.push(`${p.ownerName} is not a member of this league`); continue; }
+
+        // Insert pick (idempotent)
+        const info = db.prepare(`
+          INSERT OR IGNORE INTO draft_picks (id, league_id, user_id, player_id, pick_number, round)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(uuidv4(), leagueId, userId, player.id, p.pickNumber, p.round);
+
+        if (info.changes > 0) pickInserted.push(`${p.name} → ${p.ownerName} (pick #${p.pickNumber})`);
+      }
+    })();
+
+    res.json({ success: true, playersAdded: added, picksInserted: pickInserted, errors });
+  } catch (err) {
+    console.error('[seed-missing-players]', err);
     res.status(500).json({ error: err.message });
   }
 });

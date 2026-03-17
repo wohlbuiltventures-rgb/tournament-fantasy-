@@ -1021,6 +1021,8 @@ function FinancialsTab() {
 function DraftImportTab() {
   const [importing, setImporting]   = useState(false);
   const [result, setResult]         = useState(null);
+  const [seeding, setSeeding]       = useState(false);
+  const [seedResult, setSeedResult] = useState(null);
   const [unmatched, setUnmatched]   = useState([]);
   const [mapForm, setMapForm]       = useState({}); // ghostUserId → realUsername
   const [mapBusy, setMapBusy]       = useState('');
@@ -1041,18 +1043,35 @@ function DraftImportTab() {
 
   useEffect(() => { loadUnmatched(); }, []);
 
-  const runImport = async () => {
-    if (!confirm('Run the draft import for the Wohlfert league? This is idempotent — safe to re-run.')) return;
+  const runImport = async (force = false) => {
+    const msg = force
+      ? 'FORCE re-import: this deletes ALL existing draft picks for this league and re-inserts them. Continue?'
+      : 'Run the draft import for the Wohlfert league? This is idempotent — safe to re-run.';
+    if (!confirm(msg)) return;
     setImporting(true);
     setResult(null);
     try {
-      const res = await api.post('/admin/import-draft', DRAFT_DATA);
+      const res = await api.post('/admin/import-draft', { ...DRAFT_DATA, force });
       setResult(res.data);
       await loadUnmatched();
     } catch (e) {
       alert(e.response?.data?.error || 'Import failed');
     } finally {
       setImporting(false);
+    }
+  };
+
+  const seedMissingPlayers = async () => {
+    if (!confirm('Add the 8 missing NC State / Texas players to the DB and insert their picks?')) return;
+    setSeeding(true);
+    setSeedResult(null);
+    try {
+      const res = await api.post('/admin/import-draft/seed-missing-players', { leagueId: LEAGUE_ID });
+      setSeedResult(res.data);
+    } catch (e) {
+      alert(e.response?.data?.error || 'Seed failed');
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -1085,13 +1104,29 @@ function DraftImportTab() {
           League ID: <span className="font-mono text-gray-300">{LEAGUE_ID}</span><br />
           12 teams · 12 rounds · 144 total picks · 4 TBD owners (ghost placeholders)
         </p>
-        <button
-          onClick={runImport}
-          disabled={importing}
-          className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded disabled:opacity-50"
-        >
-          {importing ? 'Importing…' : 'Run Import'}
-        </button>
+        <div className="flex gap-3 flex-wrap">
+          <button
+            onClick={() => runImport(false)}
+            disabled={importing}
+            className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded disabled:opacity-50"
+          >
+            {importing ? 'Importing…' : 'Run Import'}
+          </button>
+          <button
+            onClick={() => runImport(true)}
+            disabled={importing}
+            className="px-5 py-2 bg-red-700 hover:bg-red-600 text-white text-sm font-semibold rounded disabled:opacity-50"
+          >
+            {importing ? 'Importing…' : '⚠ Force Clear & Re-Import'}
+          </button>
+          <button
+            onClick={seedMissingPlayers}
+            disabled={seeding}
+            className="px-5 py-2 bg-amber-700 hover:bg-amber-600 text-white text-sm font-semibold rounded disabled:opacity-50"
+          >
+            {seeding ? 'Seeding…' : 'Seed Missing NC State / Texas Players'}
+          </button>
+        </div>
 
         {result && (
           <div className="mt-4 space-y-2 text-sm">
@@ -1105,13 +1140,27 @@ function DraftImportTab() {
             )}
             {result.playerNotFound?.length > 0 && (
               <div className="bg-red-900/40 border border-red-700 rounded p-3">
-                <p className="text-red-300 font-medium mb-1">Players not found ({result.playerNotFound.length}):</p>
+                <p className="text-red-300 font-medium mb-1">Players not found ({result.playerNotFound.length}) — use "Seed Missing" button:</p>
                 <ul className="text-red-400 text-xs space-y-0.5">
                   {result.playerNotFound.map((p, i) => (
                     <li key={i}>{p.name} ({p.school}) — for {p.ownerName}, pick #{p.pickNumber}</li>
                   ))}
                 </ul>
               </div>
+            )}
+          </div>
+        )}
+
+        {seedResult && (
+          <div className="mt-4 space-y-1 text-sm">
+            <div className="text-green-400 font-medium">
+              ✓ Seed complete — {seedResult.playersAdded?.length} players added, {seedResult.picksInserted?.length} picks inserted
+            </div>
+            {seedResult.picksInserted?.map((p, i) => (
+              <div key={i} className="text-gray-400 text-xs pl-2">{p}</div>
+            ))}
+            {seedResult.errors?.length > 0 && (
+              <div className="text-red-400 text-xs">{seedResult.errors.join(', ')}</div>
             )}
           </div>
         )}
