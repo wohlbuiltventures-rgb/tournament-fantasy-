@@ -15,6 +15,17 @@ function fmt(n) {
     .replace(/\.00$/, '');
 }
 
+const ETP_GAMES = {
+  1: 3.8, 2: 3.0, 3: 2.5, 4: 2.2, 5: 1.8, 6: 1.7, 7: 1.6,
+  8: 1.3, 9: 1.2, 10: 1.1, 11: 1.0, 12: 1.0, 13: 1.0, 14: 1.0, 15: 1.0, 16: 1.0,
+};
+function calcETP(ppg, seed, isFirstFour = false) {
+  if (!ppg || !seed) return null;
+  const base = ETP_GAMES[parseInt(seed)] ?? 1.0;
+  const games = isFirstFour ? base + 0.5 : base;
+  return ppg * games;
+}
+
 function secondsAgo(date) {
   if (!date) return null;
   const s = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -184,6 +195,7 @@ export default function Leaderboard() {
   const [expanded, setExpanded] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [secondsSince, setSecondsSince] = useState(null);
+  const [sortBy, setSortBy] = useState('points');
   useDocTitle(league ? `${league.name} Standings | TourneyRun` : 'Standings | TourneyRun');
 
   // ── "X seconds ago" ticker ────────────────────────────────────────────────
@@ -369,11 +381,48 @@ export default function Leaderboard() {
           <div className="text-4xl mb-3">📊</div>
           <p>No standings yet. Stats will appear here once games are played.</p>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {standings.map((team, i) => {
+      ) : (() => {
+        const sortedStandings = [...standings].sort((a, b) => {
+          if (sortBy === 'points') return b.total_points - a.total_points;
+          if (sortBy === 'etp') {
+            const etpA = a.players?.filter(p => !p.is_eliminated).reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0) ?? 0;
+            const etpB = b.players?.filter(p => !p.is_eliminated).reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0) ?? 0;
+            return etpB - etpA;
+          }
+          if (sortBy === 'name') return a.team_name.localeCompare(b.team_name);
+          if (sortBy === 'alive') {
+            const aliveA = a.players?.filter(p => !p.is_eliminated).length ?? 0;
+            const aliveB = b.players?.filter(p => !p.is_eliminated).length ?? 0;
+            return aliveB - aliveA;
+          }
+          return 0;
+        });
+        return (
+        <>
+          <div className="flex gap-2 mb-3 flex-wrap">
+            {[
+              { key: 'points', label: 'Points' },
+              { key: 'etp',    label: 'Proj. ETP' },
+              { key: 'alive',  label: 'Players Alive' },
+              { key: 'name',   label: 'Team Name' },
+            ].map(s => (
+              <button
+                key={s.key}
+                onClick={() => setSortBy(s.key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  sortBy === s.key
+                    ? 'bg-brand-500 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                }`}
+              >
+                {s.label}{sortBy === s.key ? (s.key === 'name' ? ' ↑' : ' ↓') : ''}
+              </button>
+            ))}
+          </div>
+          <div className="space-y-3">
+          {sortedStandings.map((team, i) => {
             const isMe = team.user_id === user?.id;
-            const isLast = i === standings.length - 1 && standings.length > 1;
+            const isLast = i === sortedStandings.length - 1 && sortedStandings.length > 1;
             const ptsColor = isMe ? '#378ADD'
               : i === 0 ? '#facc15'
               : i === 1 ? '#d1d5db'
@@ -382,6 +431,10 @@ export default function Leaderboard() {
             // Use server-computed counts (reliable even pre-tournament / no scoring settings)
             const totalPlayers = team.totalPlayers ?? (team.players ? team.players.length : 0);
             const aliveCount = team.aliveCount ?? (team.players ? team.players.filter(p => !p.is_eliminated).length : 0);
+            const alivePlayers = team.players?.filter(p => !p.is_eliminated) ?? [];
+            const projETP = team.players
+              ? alivePlayers.reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0)
+              : null;
             const isExpanded = expanded === team.user_id;
 
             return (
@@ -428,8 +481,14 @@ export default function Leaderboard() {
                       </div>
                     </div>
 
-                    {/* Right: alive pill + points + chevron */}
+                    {/* Right: proj etp + alive pill + points + chevron */}
                     <div className="flex items-center gap-2.5 flex-shrink-0">
+                      {projETP !== null && projETP > 0 && (
+                        <div className="text-right hidden sm:block">
+                          <div className="text-amber-400 font-bold text-sm">{projETP.toFixed(1)}</div>
+                          <div className="text-gray-600 text-[9px]">Proj. ETP</div>
+                        </div>
+                      )}
                       {totalPlayers > 0 && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
                           style={aliveCount === 0
@@ -555,8 +614,10 @@ export default function Leaderboard() {
               </div>
             );
           })}
-        </div>
-      )}
+          </div>
+        </>
+        );
+      })()}
 
       {settings && (
         <div className="card p-4 mt-6 flex items-center gap-3 text-sm">

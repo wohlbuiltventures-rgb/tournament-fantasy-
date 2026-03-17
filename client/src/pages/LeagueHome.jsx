@@ -178,6 +178,8 @@ export default function LeagueHome() {
   const [settings, setSettings]   = useState(null);
   const [myPicks, setMyPicks]     = useState([]);
   const [myStandingsPlayers, setMyStandingsPlayers] = useState([]);
+  const [allStandings, setAllStandings] = useState([]);
+  const [standingsSort, setStandingsSort] = useState('points');
   const [tab, setTab]             = useState('overview');
   const [loading, setLoading]     = useState(true);
   const [copied, setCopied]       = useState(false);
@@ -249,8 +251,10 @@ export default function LeagueHome() {
       if (['active', 'completed'].includes(leagueRes.data.league.status)) {
         const standingsRes = await api.get(`/scores/league/${id}/standings`).catch(() => null);
         if (standingsRes) {
-          const myTeam = standingsRes.data.standings?.find(t => t.user_id === user.id);
+          const allRows = standingsRes.data.standings || [];
+          const myTeam = allRows.find(t => t.user_id === user.id);
           setMyStandingsPlayers(myTeam?.players || []);
+          setAllStandings(allRows);
         }
       }
     } catch (err) {
@@ -1040,37 +1044,104 @@ export default function LeagueHome() {
       {/* ════════════════════════════════════════════════════════════════════ */}
       {/* STANDINGS TAB                                                        */}
       {/* ════════════════════════════════════════════════════════════════════ */}
-      {tab === 'standings' && (
-        <div>
-          <div className="flex justify-end mb-4">
-            <Link to={`/league/${id}/leaderboard`} className="text-brand-400 hover:text-brand-300 text-sm font-medium">
-              Full Leaderboard →
-            </Link>
-          </div>
-          <div className="card overflow-hidden">
-            <div className="divide-y divide-gray-800">
-              {[...members].sort((a, b) => b.total_points - a.total_points).map((member, i) => (
-                <div key={member.id} className="flex items-center justify-between px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                      i === 0 ? 'bg-yellow-500/20 text-yellow-400' :
-                      i === 1 ? 'bg-gray-400/20 text-gray-300'   :
-                      i === 2 ? 'bg-amber-900/30 text-amber-600'  :
-                                'bg-gray-800 text-gray-500'
-                    }`}>{i + 1}</span>
-                    <TeamAvatar avatarUrl={member.avatar_url} teamName={member.team_name} size="sm" />
-                    <div>
-                      <div className="text-white font-medium">{member.team_name}</div>
-                      <div className="text-gray-500 text-xs">@{member.username}</div>
-                    </div>
-                  </div>
-                  <div className="text-brand-400 font-bold">{member.total_points} pts</div>
+      {tab === 'standings' && (() => {
+        const hasStandingsData = allStandings.length > 0;
+        const sortedRows = hasStandingsData
+          ? [...allStandings].sort((a, b) => {
+              if (standingsSort === 'points') return b.total_points - a.total_points;
+              if (standingsSort === 'etp') {
+                const etpA = a.players?.filter(p => !p.is_eliminated).reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0) ?? 0;
+                const etpB = b.players?.filter(p => !p.is_eliminated).reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0) ?? 0;
+                return etpB - etpA;
+              }
+              if (standingsSort === 'name') return a.team_name.localeCompare(b.team_name);
+              if (standingsSort === 'alive') {
+                const aliveA = a.players?.filter(p => !p.is_eliminated).length ?? 0;
+                const aliveB = b.players?.filter(p => !p.is_eliminated).length ?? 0;
+                return aliveB - aliveA;
+              }
+              return 0;
+            })
+          : [...members].sort((a, b) => b.total_points - a.total_points);
+
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              {hasStandingsData && (
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { key: 'points', label: 'Points' },
+                    { key: 'etp',    label: 'Proj. ETP' },
+                    { key: 'alive',  label: 'Alive' },
+                    { key: 'name',   label: 'Name' },
+                  ].map(s => (
+                    <button
+                      key={s.key}
+                      onClick={() => setStandingsSort(s.key)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                        standingsSort === s.key
+                          ? 'bg-brand-500 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                      }`}
+                    >
+                      {s.label}{standingsSort === s.key ? (s.key === 'name' ? ' ↑' : ' ↓') : ''}
+                    </button>
+                  ))}
                 </div>
-              ))}
+              )}
+              <Link to={`/league/${id}/leaderboard`} className="text-brand-400 hover:text-brand-300 text-sm font-medium ml-auto">
+                Full Leaderboard →
+              </Link>
+            </div>
+            <div className="card overflow-hidden">
+              <div className="divide-y divide-gray-800">
+                {sortedRows.map((row, i) => {
+                  const alivePlayers = row.players?.filter(p => !p.is_eliminated) ?? [];
+                  const aliveCount = row.players ? alivePlayers.length : null;
+                  const projETP = row.players
+                    ? alivePlayers.reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0)
+                    : null;
+                  return (
+                    <div key={row.id || row.user_id} className="flex items-center justify-between px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                          i === 0 ? 'bg-yellow-500/20 text-yellow-400' :
+                          i === 1 ? 'bg-gray-400/20 text-gray-300'   :
+                          i === 2 ? 'bg-amber-900/30 text-amber-600'  :
+                                    'bg-gray-800 text-gray-500'
+                        }`}>{i + 1}</span>
+                        <TeamAvatar avatarUrl={row.avatar_url} teamName={row.team_name} size="sm" />
+                        <div>
+                          <div className="text-white font-medium">{row.team_name}</div>
+                          <div className="text-gray-500 text-xs">@{row.username}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {projETP !== null && projETP > 0 && (
+                          <div className="text-right">
+                            <div className="text-amber-400 font-bold text-sm">{projETP.toFixed(1)}</div>
+                            <div className="text-gray-600 text-[10px]">Proj. ETP</div>
+                          </div>
+                        )}
+                        {aliveCount !== null && (
+                          <div className="text-right">
+                            <div className={`font-bold text-sm ${aliveCount === 0 ? 'text-red-400' : 'text-green-400'}`}>{aliveCount}</div>
+                            <div className="text-gray-600 text-[10px]">alive</div>
+                          </div>
+                        )}
+                        <div className="text-right">
+                          <div className="text-brand-400 font-bold">{row.total_points}</div>
+                          <div className="text-gray-600 text-[10px]">pts</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ════════════════════════════════════════════════════════════════════ */}
       {/* TRASH TALK TAB                                                       */}
