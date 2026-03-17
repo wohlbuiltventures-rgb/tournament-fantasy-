@@ -229,9 +229,13 @@ export default function Dashboard() {
                   {/* League name + status */}
                   <div className="flex items-start justify-between gap-2 mb-4">
                     <div className="min-w-0">
-                      <h2 className="text-lg font-black text-white group-hover:text-brand-400 transition-colors truncate leading-tight">
+                      <Link
+                        to={`/league/${league.id}`}
+                        className="text-lg font-black text-white hover:text-brand-400 hover:underline transition-colors truncate leading-tight block cursor-pointer"
+                        onClick={e => e.stopPropagation()}
+                      >
                         {league.name}
-                      </h2>
+                      </Link>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         <StatusBadge status={league.status} />
                         {isComm && (
@@ -296,17 +300,27 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* CTA button */}
-                  <Link
-                    to={actionTo}
-                    className={`mt-auto block w-full text-center font-bold py-2.5 rounded-xl text-sm transition-all duration-200 ${
-                      league.status === 'drafting'
-                        ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/25'
-                        : 'bg-gray-800 hover:bg-brand-500 border border-gray-700 hover:border-brand-500 text-gray-300 hover:text-white'
-                    }`}
-                  >
-                    {actionLabel}
-                  </Link>
+                  {/* CTA buttons */}
+                  <div className="mt-auto flex flex-col gap-2">
+                    <Link
+                      to={actionTo}
+                      className={`block w-full text-center font-bold py-2.5 rounded-xl text-sm transition-all duration-200 ${
+                        league.status === 'drafting'
+                          ? 'bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/25'
+                          : 'bg-gray-800 hover:bg-brand-500 border border-gray-700 hover:border-brand-500 text-gray-300 hover:text-white'
+                      }`}
+                    >
+                      {actionLabel}
+                    </Link>
+                    {(league.status === 'active' || league.status === 'completed') && (
+                      <Link
+                        to={`/league/${league.id}`}
+                        className="block w-full text-center font-bold py-2.5 rounded-xl text-sm border border-gray-600 hover:border-gray-400 bg-gray-900 hover:bg-gray-800 text-white transition-all duration-200"
+                      >
+                        Go to League →
+                      </Link>
+                    )}
+                  </div>
                 </div>
               </div>
             );
