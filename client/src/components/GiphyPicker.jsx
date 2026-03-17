@@ -52,7 +52,7 @@ export default function GiphyPicker({ onSelect, onClose }) {
   return (
     <div
       ref={containerRef}
-      className="absolute z-50 bottom-full mb-2 left-0 w-80 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden"
+      className="absolute z-50 bottom-full mb-2 right-0 w-72 sm:w-80 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden"
     >
       {/* Search bar */}
       <div className="p-2 border-b border-gray-800">
