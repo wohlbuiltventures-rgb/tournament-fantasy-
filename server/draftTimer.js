@@ -8,7 +8,9 @@ const timers = {};
 
 // ── Bot users — testuser01-testuser09 auto-pick fast ─────────────────────────
 function isBotUsername(username) {
-  return /^testuser0[1-9]$/i.test(username || '');
+  if (/^testuser0[1-9]$/i.test(username || '')) return true;
+  if (/^bot_(alpha|beta|gamma|delta|epsilon|zeta|eta|theta)$/i.test(username || '')) return true;
+  return false;
 }
 
 // ETP calculation (mirrors client-side calcETP)

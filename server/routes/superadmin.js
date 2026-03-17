@@ -473,4 +473,137 @@ router.post('/setup-test-league', superadmin, async (req, res) => {
   }
 });
 
+// ── Sandbox / Dev Tools ───────────────────────────────────────────────────────
+
+// GET /api/superadmin/sandboxes — list all sandbox leagues
+router.get('/sandboxes', superadmin, (req, res) => {
+  try {
+    const sandboxes = db.prepare(`
+      SELECT l.*, COUNT(DISTINCT lm.id) AS member_count
+      FROM leagues l
+      LEFT JOIN league_members lm ON lm.league_id = l.id
+      WHERE l.is_sandbox = 1
+      GROUP BY l.id
+      ORDER BY l.created_at DESC
+    `).all();
+    res.json({ sandboxes });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/superadmin/create-sandbox — create an isolated sandbox draft league
+router.post('/create-sandbox', superadmin, async (req, res) => {
+  try {
+    // 1. Run migration to add is_sandbox column if it doesn't exist
+    try { db.prepare('ALTER TABLE leagues ADD COLUMN is_sandbox INTEGER DEFAULT 0').run(); } catch {}
+
+    const BOT_NAMES = [
+      { username: 'bot_alpha',   teamName: 'Bot Alpha'   },
+      { username: 'bot_beta',    teamName: 'Bot Beta'    },
+      { username: 'bot_gamma',   teamName: 'Bot Gamma'   },
+      { username: 'bot_delta',   teamName: 'Bot Delta'   },
+      { username: 'bot_epsilon', teamName: 'Bot Epsilon' },
+      { username: 'bot_zeta',    teamName: 'Bot Zeta'    },
+      { username: 'bot_eta',     teamName: 'Bot Eta'     },
+      { username: 'bot_theta',   teamName: 'Bot Theta'   },
+    ];
+
+    // 2. Create the league
+    const leagueId   = uuidv4();
+    const leagueName = 'Test Draft Sandbox ' + Date.now();
+    const inviteCode = 'SANDBOX' + Date.now().toString().slice(-6);
+
+    db.prepare(`
+      INSERT INTO leagues (id, name, commissioner_id, invite_code, status,
+        is_sandbox, max_teams, total_rounds, pick_time_limit, draft_status,
+        current_pick, auto_start_on_full, draft_order_randomized,
+        entry_fee, buy_in_amount, stripe_payment_status)
+      VALUES (?, ?, ?, ?, 'lobby',
+        1, 9, 12, 30, 'pending',
+        1, 0, 0,
+        0, 0, 'unpaid')
+    `).run(leagueId, leagueName, req.user.id, inviteCode);
+
+    // 3. Insert scoring_settings row
+    db.prepare('INSERT INTO scoring_settings (id, league_id, pts_per_point) VALUES (?, ?, 1.0)')
+      .run(uuidv4(), leagueId);
+
+    // 4. Ensure 8 bot users exist (upsert by username)
+    const botUsers = [];
+    for (const bot of BOT_NAMES) {
+      let u = db.prepare('SELECT * FROM users WHERE username = ?').get(bot.username);
+      if (!u) {
+        const uid = uuidv4();
+        const passwordHash = await bcrypt.hash('botpass', 4);
+        db.prepare('INSERT INTO users (id, email, username, password_hash, role) VALUES (?, ?, ?, ?, ?)')
+          .run(uid, `${bot.username}@sandbox.local`, bot.username, passwordHash, 'bot');
+        u = db.prepare('SELECT * FROM users WHERE id = ?').get(uid);
+      }
+      botUsers.push(u);
+    }
+
+    // 5. Add commissioner + all 8 bots as league members (in a transaction)
+    const commUser = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+    db.transaction(() => {
+      // Commissioner
+      db.prepare(`INSERT INTO league_members (id, league_id, user_id, team_name, draft_order) VALUES (?, ?, ?, ?, NULL)`)
+        .run(uuidv4(), leagueId, req.user.id, `${commUser?.username || 'Commissioner'}'s Team`);
+      db.prepare(`INSERT INTO member_payments (id, league_id, user_id, amount, status, paid_at) VALUES (?, ?, ?, 0, 'paid', CURRENT_TIMESTAMP)`)
+        .run(uuidv4(), leagueId, req.user.id);
+
+      // Bots
+      for (let i = 0; i < botUsers.length; i++) {
+        const u = botUsers[i];
+        db.prepare(`INSERT INTO league_members (id, league_id, user_id, team_name) VALUES (?, ?, ?, ?)`)
+          .run(uuidv4(), leagueId, u.id, BOT_NAMES[i].teamName);
+        db.prepare(`INSERT INTO member_payments (id, league_id, user_id, amount, status, paid_at) VALUES (?, ?, ?, 0, 'paid', CURRENT_TIMESTAMP)`)
+          .run(uuidv4(), leagueId, u.id);
+      }
+    })();
+
+    // 6. Start the draft
+    const io = req.app.get('io');
+    const result = performStartDraft(leagueId, io);
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'Failed to start draft' });
+    }
+
+    // 7. Return leagueId and leagueName
+    res.json({ leagueId, leagueName });
+  } catch (err) {
+    console.error('create-sandbox error:', err);
+    res.status(500).json({ error: 'Server error: ' + err.message });
+  }
+});
+
+// DELETE /api/superadmin/sandbox/:id — delete a sandbox league and all its data
+router.delete('/sandbox/:id', superadmin, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.is_sandbox !== 1) return res.status(403).json({ error: 'Not a sandbox league' });
+
+    db.transaction(() => {
+      db.prepare('DELETE FROM wall_replies WHERE post_id IN (SELECT id FROM wall_posts WHERE league_id = ?)').run(req.params.id);
+      db.prepare('DELETE FROM wall_reactions WHERE post_id IN (SELECT id FROM wall_posts WHERE league_id = ?)').run(req.params.id);
+      db.prepare('DELETE FROM wall_posts WHERE league_id = ?').run(req.params.id);
+      db.prepare('DELETE FROM league_chat_messages WHERE league_id = ?').run(req.params.id);
+      db.prepare('DELETE FROM draft_picks WHERE league_id = ?').run(req.params.id);
+      db.prepare('DELETE FROM smart_draft_upgrades WHERE league_id = ?').run(req.params.id);
+      db.prepare('DELETE FROM member_payments WHERE league_id = ?').run(req.params.id);
+      db.prepare('DELETE FROM scoring_settings WHERE league_id = ?').run(req.params.id);
+      db.prepare('DELETE FROM league_members WHERE league_id = ?').run(req.params.id);
+      db.prepare('DELETE FROM payouts WHERE league_id = ?').run(req.params.id);
+      db.prepare('DELETE FROM leagues WHERE id = ?').run(req.params.id);
+    })();
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('delete-sandbox error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

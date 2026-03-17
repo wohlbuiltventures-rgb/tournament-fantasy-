@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
 import BallLoader from '../components/BallLoader';
 
-const TABS = ['Leagues', 'Users', 'Players', 'Financials', 'Draft Import'];
+const TABS = ['Leagues', 'Users', 'Players', 'Financials', 'Draft Import', 'Dev Tools'];
 
 const LEAGUE_ID = '6ce9da4a-89b1-4d13-ad70-f21e9c0bfe93';
 
@@ -1248,6 +1248,131 @@ function DraftImportTab() {
   );
 }
 
+// ── Dev Tools Tab ─────────────────────────────────────────────────────────────
+
+function DevToolsTab() {
+  const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
+  const [sandboxes, setSandboxes] = useState([]);
+  const [deleting, setDeleting] = useState(null);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => { fetchSandboxes(); }, []);
+
+  const fetchSandboxes = async () => {
+    try {
+      const res = await api.get('/superadmin/sandboxes');
+      setSandboxes(res.data.sandboxes || []);
+    } catch {}
+  };
+
+  const createSandbox = async () => {
+    setCreating(true);
+    setMsg('');
+    try {
+      const res = await api.post('/superadmin/create-sandbox');
+      setMsg(`✓ Sandbox created: ${res.data.leagueName}`);
+      fetchSandboxes();
+      navigate(`/league/${res.data.leagueId}/draft`);
+    } catch (e) {
+      setMsg(e.response?.data?.error || 'Failed to create sandbox');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const deleteSandbox = async (id, name) => {
+    if (!window.confirm(`Delete sandbox "${name}"? This cannot be undone.`)) return;
+    setDeleting(id);
+    try {
+      await api.delete(`/superadmin/sandbox/${id}`);
+      setSandboxes(prev => prev.filter(s => s.id !== id));
+    } catch (e) {
+      alert(e.response?.data?.error || 'Delete failed');
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Developer Tools header */}
+      <div>
+        <h2 className="text-white font-bold text-base mb-1">Developer Tools</h2>
+        <p className="text-gray-500 text-xs">Sandbox environments are fully isolated from real leagues.</p>
+      </div>
+
+      {/* Create sandbox */}
+      <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-white font-semibold text-sm mb-1">🧪 Test Draft Sandbox</div>
+            <div className="text-gray-400 text-xs leading-relaxed">
+              Creates an isolated draft with 8 bots (auto-pick by ETP) + your account.<br />
+              12 rounds · 30s timer · starts immediately · no real data affected.
+            </div>
+          </div>
+          <button
+            onClick={createSandbox}
+            disabled={creating}
+            className="shrink-0 px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white font-bold rounded-lg text-sm transition-colors disabled:opacity-50"
+          >
+            {creating ? 'Creating…' : '+ Test Draft'}
+          </button>
+        </div>
+        {msg && (
+          <div className={`mt-3 text-xs font-medium ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>
+            {msg}
+          </div>
+        )}
+      </div>
+
+      {/* Existing sandboxes */}
+      {sandboxes.length > 0 && (
+        <div>
+          <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Active Sandboxes</h3>
+          <div className="space-y-2">
+            {sandboxes.map(s => (
+              <div key={s.id} className="flex items-center justify-between gap-3 bg-gray-800/40 border border-gray-700/50 rounded-lg px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded">🧪 TEST</span>
+                    <span className="text-white text-sm font-medium truncate">{s.name}</span>
+                  </div>
+                  <div className="text-gray-500 text-[11px] mt-0.5">
+                    {s.member_count} teams · status: {s.status} · {new Date(s.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={`/league/${s.id}/draft`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    Open →
+                  </a>
+                  <button
+                    onClick={() => deleteSandbox(s.id, s.name)}
+                    disabled={deleting === s.id}
+                    className="px-2.5 py-1 bg-red-900/50 hover:bg-red-800 text-red-400 hover:text-red-200 border border-red-800/50 rounded text-xs font-medium transition-colors disabled:opacity-50"
+                  >
+                    {deleting === s.id ? '…' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {sandboxes.length === 0 && (
+        <p className="text-gray-600 text-sm text-center py-4">No active sandboxes</p>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function SuperAdmin() {
@@ -1296,6 +1421,7 @@ export default function SuperAdmin() {
         {tab === 'Players'      && <PlayersTab />}
         {tab === 'Financials'   && <FinancialsTab />}
         {tab === 'Draft Import' && <DraftImportTab />}
+        {tab === 'Dev Tools'    && <DevToolsTab />}
       </div>
     </div>
   );
