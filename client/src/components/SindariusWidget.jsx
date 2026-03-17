@@ -20,20 +20,17 @@ export default function SindariusWidget() {
 
   const leagueId = location.pathname.match(/^\/league\/([^/]+)/)?.[1] ?? null;
 
-  const [open, setOpen]       = useState(false);
-  const [messages, setMessages] = useState([
+  const [open, setOpen]           = useState(false);
+  const [messages, setMessages]   = useState([
     { role: 'assistant', content: "What's good? I'm Sindarius — ask me anything about the tournament. 🏀", ts: Date.now() },
   ]);
-  const [input, setInput]     = useState('');
-  const [loading, setLoading] = useState(false);
+  const [input, setInput]         = useState('');
+  const [loading, setLoading]     = useState(false);
   const [chipsUsed, setChipsUsed] = useState(false);
 
   const bottomRef  = useRef(null);
   const inputRef   = useRef(null);
-  const historyRef = useRef([]); // conversation history for API (role/content pairs)
-
-  // Only render on /league/* pages
-  if (!user || !leagueId) return null;
+  const historyRef = useRef([]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -44,6 +41,9 @@ export default function SindariusWidget() {
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 100);
   }, [open]);
+
+  // Only render on /league/* pages — early return AFTER all hooks
+  if (!user || !leagueId) return null;
 
   const send = async (text) => {
     const trimmed = (text ?? input).trim();
