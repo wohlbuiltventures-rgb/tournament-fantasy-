@@ -686,16 +686,19 @@ export default function Landing() {
             ))}
 
             {[
-              { icon: '🏀', num: '01', title: 'Commissioner creates a league', desc: 'Free to create. Name it, set the draft rules, and invite your crew.' },
+              { svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>, num: '01', title: 'Commissioner creates a league', desc: 'Free to create. Name it, set the draft rules, and invite your crew.' },
               { icon: '📨', num: '02', title: '$5 per team to join — everyone\'s in, no free riders', desc: 'Secure entry for every team. No free riders, no ghosting.' },
               { icon: '⏱',  num: '03', title: 'Snake draft your player pool', desc: 'Live real-time draft with countdown timer and auto-pick fallback.' },
-              { icon: '🏆', num: '04', title: 'Watch your players ball out', desc: '3 weeks of live scoring. Every bucket, every upset, every hero.' },
+              { svg: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>, num: '04', title: 'Watch your players ball out', desc: '3 weeks of live scoring. Every bucket, every upset, every hero.' },
             ].map(step => (
               <div
                 key={step.num}
                 className="group bg-gray-900 border border-gray-800 hover:border-brand-500/50 rounded-2xl p-6 flex flex-col items-start transition-all duration-300 hover:-translate-y-1.5 hover:shadow-lg hover:shadow-brand-500/10 cursor-default"
               >
-                <div className="text-3xl mb-3 group-hover:scale-110 transition-transform">{step.icon}</div>
+                {step.svg
+                  ? <div style={{ background: '#1e3a5f22', borderRadius: 10, padding: 10, marginBottom: 14, display: 'inline-flex' }}>{step.svg}</div>
+                  : <div className="text-3xl mb-3 group-hover:scale-110 transition-transform">{step.icon}</div>
+                }
                 <div className="text-brand-500 text-xs font-black uppercase tracking-widest mb-1">{step.num}</div>
                 <h3 className="font-black text-white text-base mb-2 leading-tight">{step.title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{step.desc}</p>
