@@ -240,6 +240,186 @@ function ScoringStyleSelector({ value, onChange }) {
   );
 }
 
+// ── Pick sheet format selector ────────────────────────────────────────────────
+
+const PICK_SHEET_FORMATS = [
+  {
+    value: 'tiered',
+    icon: '🏆',
+    title: 'Tiered Draft',
+    description: 'Players grouped into tiers by betting odds. Members pick a set number from each tier. Classic office pool format — like the Masters.',
+    example: 'e.g. Tier 1 (favorites) pick 2 · Tier 2 pick 3 · Tier 3 pick 2',
+    recommended: true,
+  },
+  {
+    value: 'salary_cap',
+    icon: '💰',
+    title: 'Salary Cap',
+    description: 'Each player assigned a price based on odds and recent performance. Members build a roster under the cap. Similar to DraftKings.',
+    example: 'e.g. $50,000 cap · Top players cost more',
+    recommended: false,
+  },
+];
+
+function PickSheetFormatSelector({ value, onChange }) {
+  return (
+    <div className="space-y-2.5">
+      {PICK_SHEET_FORMATS.map(f => {
+        const selected = value === f.value;
+        return (
+          <button
+            key={f.value}
+            type="button"
+            onClick={() => onChange(f.value)}
+            className={`w-full text-left rounded-xl border-2 p-4 transition-all relative ${
+              selected ? 'border-green-500/60 bg-green-500/8' : 'border-gray-700 bg-gray-800/30 hover:border-gray-600'
+            }`}
+          >
+            {selected && (
+              <div className="absolute top-3.5 right-3.5 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                <Check className="w-3 h-3 text-white" />
+              </div>
+            )}
+            <div className="flex items-start gap-3 pr-7">
+              <span className="text-xl leading-none mt-0.5 shrink-0">{f.icon}</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className={`font-bold text-sm ${selected ? 'text-white' : 'text-gray-300'}`}>{f.title}</span>
+                  {f.recommended && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-green-500/20 border border-green-500/30 text-green-400">
+                      Recommended
+                    </span>
+                  )}
+                </div>
+                <p className="text-gray-500 text-xs leading-relaxed mb-1">{f.description}</p>
+                <p className={`text-[11px] font-medium ${selected ? 'text-green-400/70' : 'text-gray-600'}`}>{f.example}</p>
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Tier config editor ────────────────────────────────────────────────────────
+
+function TierConfigEditor({ tiers, onChange }) {
+  const totalPicks = tiers.reduce((s, t) => s + (parseInt(t.picks) || 0), 0);
+
+  function updateTier(i, field, val) {
+    onChange(tiers.map((t, j) => j === i ? { ...t, [field]: val } : t));
+  }
+
+  function addTier() {
+    onChange([...tiers, { tier: tiers.length + 1, odds_min: '', odds_max: '', picks: 1 }]);
+  }
+
+  function removeTier(i) {
+    onChange(tiers.filter((_, j) => j !== i).map((t, j) => ({ ...t, tier: j + 1 })));
+  }
+
+  return (
+    <div>
+      <div className="space-y-2">
+        {tiers.map((t, i) => (
+          <div key={i} className="flex items-center gap-2 bg-gray-800/40 rounded-xl px-3 py-2.5">
+            <span className="text-gray-500 text-xs font-bold w-10 shrink-0">T{t.tier}</span>
+            <input
+              type="text"
+              className="input py-1 text-xs w-20 shrink-0"
+              placeholder="8:1"
+              value={t.odds_min}
+              onChange={e => updateTier(i, 'odds_min', e.target.value)}
+            />
+            <span className="text-gray-600 text-xs shrink-0">–</span>
+            <input
+              type="text"
+              className="input py-1 text-xs w-24 shrink-0"
+              placeholder="33:1"
+              value={t.odds_max}
+              onChange={e => updateTier(i, 'odds_max', e.target.value)}
+            />
+            <span className="text-gray-500 text-xs shrink-0 ml-auto">Picks</span>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => updateTier(i, 'picks', Math.max(1, (parseInt(t.picks) || 1) - 1))}
+                className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-bold flex items-center justify-center transition-colors"
+              >−</button>
+              <span className="w-6 text-center text-sm font-bold text-white">{t.picks}</span>
+              <button
+                type="button"
+                onClick={() => updateTier(i, 'picks', Math.min(10, (parseInt(t.picks) || 1) + 1))}
+                className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-bold flex items-center justify-center transition-colors"
+              >+</button>
+            </div>
+            {tiers.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removeTier(i)}
+                className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-red-400 text-lg leading-none transition-colors shrink-0"
+              >×</button>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between mt-3">
+        <button
+          type="button"
+          onClick={addTier}
+          className="text-sm font-semibold text-gray-500 hover:text-green-400 transition-colors"
+        >
+          + Add Tier
+        </button>
+        <span className="text-gray-500 text-xs">Total picks per team: <span className="text-white font-bold">{totalPicks}</span></span>
+      </div>
+    </div>
+  );
+}
+
+// ── Salary cap config (pool) ──────────────────────────────────────────────────
+
+function SalaryCapConfig({ cap, capUnit, onCapChange, onUnitChange }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="label mb-1.5">Total Cap per Team</label>
+        <div className="relative w-40">
+          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">$</span>
+          <input
+            type="number"
+            min="1000"
+            step="1000"
+            className="input pl-8 text-sm"
+            value={cap}
+            onChange={e => onCapChange(parseInt(e.target.value) || 50000)}
+          />
+        </div>
+        <p className="text-gray-600 text-xs mt-1.5">Each team must stay under this amount.</p>
+      </div>
+      <div>
+        <label className="label mb-2.5">Cap Unit</label>
+        <PillSelector
+          options={[
+            { value: 1000,  label: '$1,000s'  },
+            { value: 10000, label: '$10,000s' },
+            { value: 50000, label: '$50,000s' },
+          ]}
+          value={capUnit}
+          onChange={onUnitChange}
+        />
+        <p className="text-gray-600 text-xs mt-1.5">Sets the scale for individual player prices.</p>
+      </div>
+      <div className="flex items-start gap-2 bg-blue-500/8 border border-blue-500/20 rounded-xl px-4 py-3">
+        <p className="text-blue-300/80 text-xs leading-relaxed">
+          Player salaries are auto-generated from betting odds, world ranking, and recent finishes. You can adjust individual salaries after the league is created in Commissioner Settings.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ── Ordinal helper ────────────────────────────────────────────────────────────
 function ordinal(n) {
   if (n === 1) return '1st Place';
@@ -267,6 +447,15 @@ const DEFAULT_FORM = {
   scoring_style: 'tourneyrun',
   pool_tier: 'standard',
   comm_pro_price: 19.99,
+  pick_sheet_format: 'tiered',
+  pool_tiers: [
+    { tier: 1, odds_min: '8:1',   odds_max: '33:1',   picks: 2 },
+    { tier: 2, odds_min: '35:1',  odds_max: '125:1',  picks: 3 },
+    { tier: 3, odds_min: '150:1', odds_max: '400:1',  picks: 2 },
+    { tier: 4, odds_min: '500:1', odds_max: '2000:1', picks: 2 },
+  ],
+  pool_salary_cap: 50000,
+  pool_cap_unit: 50000,
   // DK
   weekly_salary_cap: 50000,
   starters_count: 6,
@@ -326,6 +515,7 @@ export default function CreateGolfLeague() {
         // JSON fields
         payout_places:    JSON.stringify(form.payout_places),
         payment_methods:  JSON.stringify(form.payment_methods),
+        pool_tiers:       JSON.stringify(form.pool_tiers),
       };
       const res = await api.post('/golf/leagues', payload);
       navigate(`/golf/league/${res.data.league.id}`);
@@ -454,6 +644,41 @@ export default function CreateGolfLeague() {
               <div>
                 <label className="label mb-3">Scoring Style</label>
                 <ScoringStyleSelector value={form.scoring_style} onChange={v => set('scoring_style', v)} />
+              </div>
+
+              {/* Pick Sheet Format */}
+              <div>
+                <label className="label mb-1">Pick Sheet Format</label>
+                <p className="text-gray-600 text-xs mb-3">How will members make their picks each tournament?</p>
+                <PickSheetFormatSelector
+                  value={form.pick_sheet_format}
+                  onChange={v => set('pick_sheet_format', v)}
+                />
+
+                {/* Tier config */}
+                {form.pick_sheet_format === 'tiered' && (
+                  <div className="mt-4">
+                    <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2.5">Tier Setup</p>
+                    <p className="text-gray-600 text-xs mb-3">Customize your tiers. Members will pick from each.</p>
+                    <TierConfigEditor
+                      tiers={form.pool_tiers}
+                      onChange={v => set('pool_tiers', v)}
+                    />
+                  </div>
+                )}
+
+                {/* Salary cap config */}
+                {form.pick_sheet_format === 'salary_cap' && (
+                  <div className="mt-4">
+                    <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-3">Salary Cap Settings</p>
+                    <SalaryCapConfig
+                      cap={form.pool_salary_cap}
+                      capUnit={form.pool_cap_unit}
+                      onCapChange={v => set('pool_salary_cap', v)}
+                      onUnitChange={v => set('pool_cap_unit', v)}
+                    />
+                  </div>
+                )}
               </div>
 
             </div>

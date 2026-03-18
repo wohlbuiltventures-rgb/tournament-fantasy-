@@ -235,6 +235,11 @@ router.post('/leagues', authMiddleware, (req, res) => {
       // Buy-in
       payment_methods = '[]',
       payout_places = '[]',
+      // Pool pick sheet
+      pick_sheet_format = 'tiered',
+      pool_tiers = '[]',
+      pool_salary_cap = 50000,
+      pool_cap_unit = 50000,
       // DK
       weekly_salary_cap = 50000, starters_count = 6,
     } = req.body;
@@ -275,6 +280,8 @@ router.post('/leagues', authMiddleware, (req, res) => {
 
     const paymentMethodsFinal = typeof payment_methods === 'string' ? payment_methods : JSON.stringify(payment_methods);
     const payoutPlacesFinal   = typeof payout_places   === 'string' ? payout_places   : JSON.stringify(payout_places);
+    const poolTiersJson       = typeof pool_tiers      === 'string' ? pool_tiers      : JSON.stringify(pool_tiers);
+    const pickSheetFmt        = ['tiered', 'salary_cap'].includes(pick_sheet_format) ? pick_sheet_format : 'tiered';
 
     db.prepare(`
       INSERT INTO golf_leagues (
@@ -285,8 +292,9 @@ router.post('/leagues', authMiddleware, (req, res) => {
         faab_budget, use_faab, picks_per_team, scoring_style,
         pool_tier, comm_pro_price,
         payment_methods, payout_places,
+        pick_sheet_format, pool_tiers, pool_salary_cap, pool_cap_unit,
         auction_budget, faab_weekly_budget, draft_type, bid_timer_seconds
-      ) VALUES (?, ?, ?, ?, 'lobby', ?, ?, ?, ?, ?, ?, ?, ?, ?, 2026, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, 'lobby', ?, ?, ?, ?, ?, ?, ?, ?, ?, 2026, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, name, req.user.id, invite_code, parseInt(max_teams) || 8,
       parseFloat(buy_in_amount) || 0, payment_instructions, p1, p2, p3,
@@ -297,9 +305,23 @@ router.post('/leagues', authMiddleware, (req, res) => {
       parseInt(picks_per_team) || 8, scoringStyleFinal,
       poolTierFinal, commProPriceFinal,
       paymentMethodsFinal, payoutPlacesFinal,
+      pickSheetFmt, poolTiersJson, parseInt(pool_salary_cap) || 50000, parseInt(pool_cap_unit) || 50000,
       parseInt(auction_budget) || 1000, parseInt(faab_weekly_budget) || 100,
       dtFinal, parseInt(bid_timer_seconds) || 30
     );
+
+    // Persist pool_tiers to normalized table when Pool format
+    if (fmt === 'pool' && pickSheetFmt === 'tiered') {
+      try {
+        const tiersArr = typeof pool_tiers === 'string' ? JSON.parse(pool_tiers) : (pool_tiers || []);
+        const insTier = db.prepare(`INSERT INTO pool_tiers (id, league_id, tier_number, odds_min, odds_max, picks_allowed) VALUES (?, ?, ?, ?, ?, ?)`);
+        db.transaction(() => {
+          for (const t of tiersArr) {
+            insTier.run(uuidv4(), id, t.tier, t.odds_min || '', t.odds_max || '', Math.max(1, parseInt(t.picks) || 1));
+          }
+        })();
+      } catch (_) {}
+    }
 
     const memberId = uuidv4();
     db.prepare(`INSERT INTO golf_league_members (id, golf_league_id, user_id, team_name, season_budget) VALUES (?, ?, ?, ?, ?)`).run(memberId, id, req.user.id, team_name, parseInt(salary_cap) || 2400);
