@@ -160,7 +160,7 @@ function AnimatedStat({ value, label, color }) {
 // ── Ticker ────────────────────────────────────────────────────────────────────
 
 const TICKER_EVENTS = [
-  '🏆 CollinW just created Masters Pool 2026',
+  '🏆 FairwayFred just created Masters Pool 2026',
   '⛳ BogeyBoys joined Golf Degens 2026',
   '🏀 ThreeAndOut joined CBB Fantasy League',
   '💰 BigDrive just won $340 in the Augusta Pool',
