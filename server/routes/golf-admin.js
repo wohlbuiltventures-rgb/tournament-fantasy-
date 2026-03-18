@@ -7,6 +7,91 @@ const db = require('../db');
 
 const router = express.Router();
 
+// ── Sandbox bot runner ─────────────────────────────────────────────────────────
+
+const activeBotRunners = new Map(); // leagueId → intervalId
+
+function botMaxBid(salary) {
+  if (salary >= 800) return 400;
+  if (salary >= 700) return 300;
+  if (salary >= 500) return 200;
+  return 150;
+}
+
+function botAutoNominate(leagueId, session, league) {
+  const wonIds = new Set(
+    db.prepare("SELECT player_id FROM golf_auction_bids WHERE league_id = ? AND status='won' AND bid_type='auction'")
+      .all(leagueId).map(r => r.player_id)
+  );
+  const player = db.prepare('SELECT * FROM golf_players WHERE is_active = 1 ORDER BY world_ranking ASC NULLS LAST').all()
+    .find(p => !wonIds.has(p.id));
+  if (!player) return;
+  const timerSecs = league.bid_timer_seconds || 10;
+  const endsAt = new Date(Date.now() + timerSecs * 1000).toISOString();
+  db.prepare('UPDATE golf_auction_sessions SET current_player_id=?, current_high_bid=1, current_high_bidder_id=NULL, nomination_ends_at=? WHERE id=?')
+    .run(player.id, endsAt, session.id);
+}
+
+function sandboxBotTick(leagueId, botMemberIds) {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(leagueId);
+    if (!league || league.draft_status === 'completed') {
+      const iv = activeBotRunners.get(leagueId);
+      if (iv) { clearInterval(iv); activeBotRunners.delete(leagueId); }
+      return;
+    }
+    const session = db.prepare('SELECT * FROM golf_auction_sessions WHERE league_id = ?').get(leagueId);
+    if (!session || session.status !== 'active') return;
+    const now = new Date();
+
+    // Timer expired → finalize
+    if (session.current_player_id && session.nomination_ends_at && now > new Date(session.nomination_ends_at)) {
+      try {
+        require('./golf-auction').finalizeNomination(session, league);
+      } catch (e) { console.error('[golf-bot] finalize error:', e.message); return; }
+      const freshLeague = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(leagueId);
+      if (!freshLeague || freshLeague.draft_status === 'completed') return;
+      const freshSession = db.prepare('SELECT * FROM golf_auction_sessions WHERE league_id = ?').get(leagueId);
+      if (!freshSession) return;
+      if (!freshSession.current_player_id && botMemberIds.has(freshSession.current_nomination_member_id)) {
+        botAutoNominate(leagueId, freshSession, freshLeague);
+      }
+      return;
+    }
+
+    // Active nomination: eligible bots may bid
+    if (session.current_player_id) {
+      const player = db.prepare('SELECT salary FROM golf_players WHERE id = ?').get(session.current_player_id);
+      if (!player) return;
+      const maxBid = botMaxBid(player.salary);
+      const currentBid = session.current_high_bid || 1;
+      if (currentBid < maxBid && Math.random() < 0.5) {
+        const candidates = [...botMemberIds].filter(id => id !== session.current_high_bidder_id);
+        if (!candidates.length) return;
+        const botId = candidates[Math.floor(Math.random() * candidates.length)];
+        const budget = db.prepare('SELECT auction_credits_remaining FROM golf_auction_budgets WHERE league_id = ? AND member_id = ?').get(leagueId, botId);
+        const remaining = budget?.auction_credits_remaining ?? (league.auction_budget || 1000);
+        const raise = Math.floor(Math.random() * 21) + 5; // $5–$25
+        const newBid = Math.min(currentBid + raise, maxBid, remaining);
+        if (newBid > currentBid) {
+          const timerSecs = league.bid_timer_seconds || 10;
+          const newEndsAt = new Date(Date.now() + timerSecs * 1000).toISOString();
+          db.prepare('UPDATE golf_auction_sessions SET current_high_bid=?, current_high_bidder_id=?, nomination_ends_at=? WHERE id=?')
+            .run(newBid, botId, newEndsAt, session.id);
+        }
+      }
+      return;
+    }
+
+    // No active nomination: bot auto-nominates if it's their turn
+    if (!session.current_player_id && session.current_nomination_member_id && botMemberIds.has(session.current_nomination_member_id)) {
+      botAutoNominate(leagueId, session, league);
+    }
+  } catch (e) { console.error('[golf-bot] tick error:', e.message); }
+}
+
+const BOT_NAMES = ['Bot Birdie', 'Bot Eagle', 'Bot Par', 'Bot Bogey', 'Bot Albatross', 'Bot Condor', 'Bot Ace'];
+
 // All routes require superadmin (auth + role check bundled in middleware)
 
 // ── Leagues ───────────────────────────────────────────────────────────────────
@@ -70,10 +155,25 @@ router.post('/admin/leagues/:id/archive', superadmin, (req, res) => {
 router.delete('/admin/leagues/:id', superadmin, (req, res) => {
   try {
     const id = req.params.id;
-    db.prepare('DELETE FROM golf_rosters WHERE member_id IN (SELECT id FROM golf_league_members WHERE golf_league_id = ?)').run(id);
-    db.prepare('DELETE FROM golf_league_members WHERE golf_league_id = ?').run(id);
-    db.prepare('DELETE FROM golf_comm_pro WHERE league_id = ?').run(id);
-    db.prepare('DELETE FROM golf_leagues WHERE id = ?').run(id);
+    const deleteCascade = db.transaction(() => {
+      const childDeletes = [
+        'DELETE FROM golf_draft_picks WHERE league_id = ?',
+        'DELETE FROM golf_auction_bids WHERE league_id = ?',
+        'DELETE FROM golf_auction_sessions WHERE league_id = ?',
+        'DELETE FROM golf_auction_budgets WHERE league_id = ?',
+        'DELETE FROM golf_faab_bids WHERE golf_league_id = ?',
+        'DELETE FROM golf_weekly_lineups WHERE member_id IN (SELECT id FROM golf_league_members WHERE golf_league_id = ?)',
+        'DELETE FROM golf_rosters WHERE member_id IN (SELECT id FROM golf_league_members WHERE golf_league_id = ?)',
+        'DELETE FROM golf_core_players WHERE member_id IN (SELECT id FROM golf_league_members WHERE golf_league_id = ?)',
+        'DELETE FROM golf_comm_pro WHERE league_id = ?',
+        'DELETE FROM golf_league_members WHERE golf_league_id = ?',
+        'DELETE FROM golf_leagues WHERE id = ?',
+      ];
+      for (const sql of childDeletes) {
+        try { db.prepare(sql).run(id); } catch (_) {} // skip missing tables
+      }
+    });
+    deleteCascade();
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -471,6 +571,82 @@ router.get('/admin/dev/db-health', superadmin, (req, res) => {
     ).get()?.t || null;
     res.json({ counts, lastSync, uptime: process.uptime() });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/admin/sandbox/auction-draft', superadmin, (req, res) => {
+  try {
+    const admin = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+
+    // Ensure bot users exist
+    const BOT_HASH = bcrypt.hashSync('botpass_sandbox', 4);
+    const botUserIds = BOT_NAMES.map(botName => {
+      let row = db.prepare('SELECT id FROM users WHERE username = ?').get(botName);
+      if (!row) {
+        const botId = uuidv4();
+        const botEmail = botName.toLowerCase().replace(/\s+/g, '.') + '@sandbox.internal';
+        db.prepare('INSERT OR IGNORE INTO users (id, username, email, password_hash, role) VALUES (?, ?, ?, ?, ?)').run(botId, botName, botEmail, BOT_HASH, 'user');
+        row = { id: botId };
+      }
+      return row.id;
+    });
+
+    const leagueId = uuidv4();
+    const inviteCode = Math.random().toString(36).slice(2, 10).toUpperCase();
+    const leagueName = `[SANDBOX] Auction ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+
+    db.prepare(`
+      INSERT INTO golf_leagues
+        (id, name, commissioner_id, invite_code, status, format_type, draft_status, is_sandbox, bid_timer_seconds, auction_budget, roster_size, core_spots)
+      VALUES (?, ?, ?, ?, 'lobby', 'tourneyrun', 'pending', 1, 10, 1000, 8, 4)
+    `).run(leagueId, leagueName, admin.id, inviteCode);
+
+    // Add admin + 7 bots as members
+    db.prepare('INSERT INTO golf_league_members (id, golf_league_id, user_id, team_name, season_budget) VALUES (?, ?, ?, ?, 2400)')
+      .run(uuidv4(), leagueId, admin.id, admin.username || 'Admin');
+
+    for (let i = 0; i < BOT_NAMES.length; i++) {
+      db.prepare('INSERT OR IGNORE INTO golf_league_members (id, golf_league_id, user_id, team_name, season_budget) VALUES (?, ?, ?, ?, 2400)')
+        .run(uuidv4(), leagueId, botUserIds[i], BOT_NAMES[i]);
+    }
+
+    // Start the auction immediately
+    const allMembers = db.prepare('SELECT * FROM golf_league_members WHERE golf_league_id = ?').all(leagueId);
+    const shuffled = [...allMembers].sort(() => Math.random() - 0.5);
+
+    db.transaction(() => {
+      shuffled.forEach((m, i) => {
+        db.prepare('UPDATE golf_league_members SET draft_order = ? WHERE id = ?').run(i + 1, m.id);
+        db.prepare('INSERT OR IGNORE INTO golf_auction_budgets (id, league_id, member_id, auction_credits_remaining, faab_credits_remaining) VALUES (?, ?, ?, 1000, 100)')
+          .run(uuidv4(), leagueId, m.id);
+      });
+      const nominationOrder = JSON.stringify(shuffled.map(m => m.id));
+      db.prepare("INSERT INTO golf_auction_sessions (id, league_id, status, current_nomination_member_id, nomination_order, nomination_index) VALUES (?, ?, 'active', ?, ?, 0)")
+        .run(uuidv4(), leagueId, shuffled[0].id, nominationOrder);
+      db.prepare("UPDATE golf_leagues SET draft_status='active', status='drafting' WHERE id=?").run(leagueId);
+    })();
+
+    // Identify bot member IDs and start bot runner
+    const botUserIdSet = new Set(botUserIds);
+    const botMemberIds = new Set(allMembers.filter(m => botUserIdSet.has(m.user_id)).map(m => m.id));
+
+    // Start the bot runner
+    if (!activeBotRunners.has(leagueId)) {
+      const iv = setInterval(() => sandboxBotTick(leagueId, botMemberIds), 3000);
+      activeBotRunners.set(leagueId, iv);
+    }
+
+    // If the first nominator is a bot, nominate immediately
+    const firstSession = db.prepare('SELECT * FROM golf_auction_sessions WHERE league_id = ?').get(leagueId);
+    const firstLeague  = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(leagueId);
+    if (firstSession && botMemberIds.has(firstSession.current_nomination_member_id)) {
+      botAutoNominate(leagueId, firstSession, firstLeague);
+    }
+
+    res.json({ success: true, leagueId, url: `/golf/league/${leagueId}/auction` });
+  } catch (err) {
+    console.error('[golf-admin] sandbox auction-draft error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.post('/admin/dev/sandbox', superadmin, async (req, res) => {

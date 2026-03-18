@@ -211,6 +211,7 @@ router.get('/leagues', authMiddleware, (req, res) => {
              (SELECT COUNT(*) FROM golf_league_members WHERE golf_league_id = gl.id) as member_count
       FROM golf_leagues gl
       JOIN golf_league_members glm ON glm.golf_league_id = gl.id AND glm.user_id = ?
+      WHERE (gl.is_sandbox = 0 OR gl.is_sandbox IS NULL)
       ORDER BY gl.created_at DESC
     `).all(req.user.id);
     res.json({ leagues });

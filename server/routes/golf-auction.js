@@ -355,3 +355,4 @@ router.get('/leagues/:id/faab/bids', authMiddleware, (req, res) => {
 });
 
 module.exports = router;
+module.exports.finalizeNomination = finalizeNomination;

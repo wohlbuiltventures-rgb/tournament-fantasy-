@@ -644,7 +644,7 @@ function DevToolsTab() {
       let res;
       if (action === 'sync')     res = await api.post(`/golf/admin/dev/sync/${selectedT}`);
       if (action === 'email')    res = await api.post('/golf/admin/dev/test-email');
-      if (action === 'sandbox')  res = await api.post('/golf/admin/dev/sandbox');
+      if (action === 'sandbox')  res = await api.post('/golf/admin/sandbox/auction-draft');
       setResults(r => ({ ...r, [action]: res?.data }));
       if (action === 'sandbox' && res?.data?.url) navigate(res.data.url);
     } catch (e) {
@@ -673,7 +673,7 @@ function DevToolsTab() {
   return (
     <div style={{ display: 'grid', sm: 'grid-cols-2', gap: 16 }} className="sm:grid-cols-2">
       {toolCard('🏌️', 'Test Auction Draft Sandbox',
-        'Creates an isolated auction draft with bot bidders + your account. $2,400 cap, all 150 players, starts immediately.',
+        '8 teams: you + 7 bots (Birdie, Eagle, Par…). $1,000 auction budget, 10s timers. Bots auto-nominate and bid. Redirects straight to the draft room.',
         'sandbox',
         <button onClick={() => run('sandbox')} disabled={loading.sandbox}
           style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>

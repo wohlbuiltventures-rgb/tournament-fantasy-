@@ -207,6 +207,7 @@ const _golfColMigrations = [
   `ALTER TABLE golf_leagues ADD COLUMN faab_weekly_budget INTEGER DEFAULT 100`,
   `ALTER TABLE golf_leagues ADD COLUMN draft_type TEXT DEFAULT 'snake'`,
   `ALTER TABLE golf_leagues ADD COLUMN bid_timer_seconds INTEGER DEFAULT 30`,
+  `ALTER TABLE golf_leagues ADD COLUMN is_sandbox INTEGER DEFAULT 0`,
   `ALTER TABLE golf_tournaments ADD COLUMN is_signature INTEGER DEFAULT 0`,
   `ALTER TABLE golf_tournaments ADD COLUMN prize_money INTEGER DEFAULT 0`,
   `ALTER TABLE golf_tournaments ADD COLUMN espn_event_id TEXT`,
