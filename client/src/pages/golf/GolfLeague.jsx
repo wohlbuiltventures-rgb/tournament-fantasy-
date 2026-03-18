@@ -620,6 +620,7 @@ function TierBadge({ salary }) {
 }
 
 function FreeAgencyTab({ leagueId, league }) {
+  console.log('[FreeAgency] render', { leagueId, league: !!league });
   const [waivers, setWaivers] = useState(null);  // { available, myBids, faabBudget, faabRemaining, useFaab }
   const [roster, setRoster] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -652,8 +653,8 @@ function FreeAgencyTab({ leagueId, league }) {
   useEffect(() => { load(); }, [leagueId]);
 
   const available = (waivers?.available || []).filter(p =>
-    p.owner_count === 0 &&
-    (!search || p.name.toLowerCase().includes(search.toLowerCase()))
+    !p.on_roster &&
+    (!search || (p.name || '').toLowerCase().includes(search.toLowerCase()))
   );
 
   const rosterFull = roster.length >= (league.roster_size || 8);
@@ -847,8 +848,8 @@ function FreeAgencyTab({ leagueId, league }) {
                     <div className="text-white text-sm font-semibold truncate">{p.name}</div>
                     <div className="flex items-center gap-1.5 text-[11px]">
                       <span className="text-gray-500">{p.country}</span>
-                      {p.season_points > 0 && (
-                        <span className="text-green-400 font-bold tabular-nums">· {p.season_points > 0 ? '+' : ''}{p.season_points} pts</span>
+                      {Number(p.season_points) > 0 && (
+                        <span className="text-green-400 font-bold tabular-nums">· +{Number(p.season_points).toFixed(1)} pts</span>
                       )}
                     </div>
                   </div>
