@@ -313,29 +313,49 @@ router.get('/:id/live-games', authMiddleware, (req, res) => {
       return res.json({ liveGames: [], hasLeaguePlayers: false });
     }
 
-    // All drafted players in this league with owner info
-    const picks = db.prepare(`
-      SELECT dp.player_id, dp.user_id, p.name AS player_name, p.team, p.is_eliminated,
-             lm.team_name AS owner_team_name, u.username AS owner_username
+    // Match drafted players to live games via player_id → player_stats → games.
+    // This avoids team-name string matching (e.g. "NC State Wolfpack" vs "NC State").
+    const draftedInLiveGames = db.prepare(`
+      SELECT
+        dp.player_id, dp.user_id,
+        p.name AS player_name, p.team,
+        lm.team_name AS owner_team_name,
+        u.username AS owner_username,
+        COALESCE(ps.points, 0) AS points,
+        ps.game_id
       FROM draft_picks dp
       JOIN players p ON p.id = dp.player_id
       JOIN league_members lm ON lm.league_id = dp.league_id AND lm.user_id = dp.user_id
       JOIN users u ON u.id = dp.user_id
+      JOIN player_stats ps ON ps.player_id = dp.player_id
+      JOIN games g ON g.id = ps.game_id AND g.is_live = 1
       WHERE dp.league_id = ?
     `).all(leagueId);
 
-    const picksByTeam = {};
-    for (const pick of picks) {
-      if (!picksByTeam[pick.team]) picksByTeam[pick.team] = [];
-      picksByTeam[pick.team].push(pick);
+    console.log(`[live-games] league=${leagueId} liveGames=${liveGames.length} draftedInLive=${draftedInLiveGames.length}`);
+
+    // Group matched players by game_id + which team they're on
+    const playersByGame = {};
+    for (const row of draftedInLiveGames) {
+      if (!playersByGame[row.game_id]) playersByGame[row.game_id] = [];
+      playersByGame[row.game_id].push(row);
     }
 
     let hasLeaguePlayers = false;
     const gamesWithPlayers = liveGames.map(game => {
-      const t1p = picksByTeam[game.team1] || [];
-      const t2p = picksByTeam[game.team2] || [];
-      if (t1p.length || t2p.length) hasLeaguePlayers = true;
-      return { ...game, team1_players: t1p, team2_players: t2p };
+      const gamePlayers = playersByGame[game.id] || [];
+      const t1p = gamePlayers.filter(p => p.team === game.team1);
+      const t2p = gamePlayers.filter(p => p.team === game.team2);
+      // If team name still doesn't match (edge case), bucket by game_id only
+      const allPlayers = t1p.length + t2p.length < gamePlayers.length
+        ? gamePlayers  // fallback: unmatched players still appear
+        : null;
+      if (gamePlayers.length) hasLeaguePlayers = true;
+      return {
+        ...game,
+        team1_players: t1p.length ? t1p : (allPlayers ? allPlayers.slice(0, Math.ceil(allPlayers.length / 2)) : []),
+        team2_players: t2p.length ? t2p : (allPlayers ? allPlayers.slice(Math.ceil(allPlayers.length / 2)) : []),
+      };
     });
 
     res.json({ liveGames: gamesWithPlayers, hasLeaguePlayers });
