@@ -174,6 +174,15 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
             <Zap className="w-4 h-4 text-green-400" />
             <h3 className="text-white font-bold text-sm">Commissioner Actions</h3>
           </div>
+          {/* Pick Sheet settings — Pool format only */}
+          {league.format_type === 'pool' && (
+            <button
+              onClick={() => navigate(`/golf/league/${league.id}/settings`)}
+              className="w-full py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 font-semibold rounded-xl transition-all mb-2 text-sm"
+            >
+              ⚙ Pick Sheet Settings →
+            </button>
+          )}
           {league.format_type !== 'dk' && league.draft_status !== 'completed' && (
             <>
               <button
