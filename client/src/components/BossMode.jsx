@@ -343,6 +343,7 @@ export default function BossMode() {
   const { pathname } = useLocation();
   const isDraft  = pathname.includes('/draft');
   const isGolf   = pathname.startsWith('/golf');
+  const isHub    = pathname === '/';
 
   const dismiss = useCallback(() => setMode(null), []);
 
@@ -362,8 +363,8 @@ export default function BossMode() {
 
   return (
     <>
-      {/* The button — subtle, fixed bottom-right — hidden in draft room + all golf pages */}
-      {mode === null && !isDraft && !isGolf && (
+      {/* The button — subtle, fixed bottom-right — hidden in draft room, golf, and hub */}
+      {mode === null && !isDraft && !isGolf && !isHub && (
         <button
           onClick={() => setMode('excel')}
           title="Boss is coming… (B = Excel, G = Gmail)"
