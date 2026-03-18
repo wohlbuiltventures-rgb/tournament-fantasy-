@@ -20,14 +20,16 @@ router.get('/leagues/:id/waivers', authMiddleware, (req, res) => {
 
     const totalMembers = db.prepare('SELECT COUNT(*) as c FROM golf_league_members WHERE golf_league_id = ?').get(req.params.id).c;
 
-    // Players NOT on any roster in this league
+    // Players NOT on any roster in this league, with season fantasy points
     const available = db.prepare(`
       SELECT gp.*,
+        COALESCE(SUM(gs.fantasy_points), 0) as season_points,
         (SELECT COUNT(*) FROM golf_rosters gr2
           JOIN golf_league_members glm2 ON gr2.member_id = glm2.id
           WHERE glm2.golf_league_id = ? AND gr2.player_id = gp.id AND gr2.dropped_at IS NULL
         ) as owner_count
       FROM golf_players gp
+      LEFT JOIN golf_scores gs ON gs.player_id = gp.id
       WHERE gp.is_active = 1
         AND gp.id NOT IN (
           SELECT gr.player_id FROM golf_rosters gr
@@ -35,7 +37,8 @@ router.get('/leagues/:id/waivers', authMiddleware, (req, res) => {
           WHERE glm.golf_league_id = ? AND gr.dropped_at IS NULL
             AND glm.user_id = ?
         )
-      ORDER BY owner_count DESC, gp.world_ranking ASC
+      GROUP BY gp.id
+      ORDER BY season_points DESC, gp.world_ranking ASC
     `).all(req.params.id, req.params.id, req.user.id).map(p => ({
       ...p,
       ownership_pct: totalMembers > 0 ? Math.round((p.owner_count / totalMembers) * 100) : 0,

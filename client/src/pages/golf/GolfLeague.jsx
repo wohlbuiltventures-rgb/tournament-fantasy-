@@ -603,10 +603,10 @@ function LineupTab({ leagueId, league }) {
 
 const getTier = (salary) => {
   if (salary >= 800) return { label: 'Elite', color: '#f59e0b' };
-  if (salary >= 700) return { label: 'Prem', color: '#8b5cf6' };
-  if (salary >= 550) return { label: 'Mid',  color: '#3b82f6' };
-  if (salary >= 400) return { label: 'Val',  color: '#22c55e' };
-  return                     { label: 'Slpr', color: '#6b7280' };
+  if (salary >= 700) return { label: 'Prem',  color: '#8b5cf6' };
+  if (salary >= 550) return { label: 'Mid',   color: '#3b82f6' };
+  if (salary >= 400) return { label: 'Val',   color: '#22c55e' };
+  return                     { label: 'Slpr',  color: '#6b7280' };
 };
 
 function TierBadge({ salary }) {
@@ -845,7 +845,12 @@ function FreeAgencyTab({ leagueId, league }) {
                   <span className="text-gray-600 text-[11px] font-bold tabular-nums w-6 text-center shrink-0">#{p.world_ranking}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm font-semibold truncate">{p.name}</div>
-                    <div className="text-gray-500 text-[11px]">{p.country}</div>
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span className="text-gray-500">{p.country}</span>
+                      {p.season_points > 0 && (
+                        <span className="text-green-400 font-bold tabular-nums">· {p.season_points > 0 ? '+' : ''}{p.season_points} pts</span>
+                      )}
+                    </div>
                   </div>
                   <TierBadge salary={p.salary} />
                   <span className="text-green-400 font-bold text-sm shrink-0 tabular-nums">${p.salary}</span>
