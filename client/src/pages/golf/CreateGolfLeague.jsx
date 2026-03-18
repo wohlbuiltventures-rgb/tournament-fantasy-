@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Flag, DollarSign, Trophy, Settings, Check, Award, Target, Zap } from 'lucide-react';
+import { Flag, DollarSign, Trophy, Settings, Check, Zap } from 'lucide-react';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
 
@@ -233,6 +233,14 @@ function ScoringStyleSelector({ value, onChange }) {
   );
 }
 
+// ── Ordinal helper ────────────────────────────────────────────────────────────
+function ordinal(n) {
+  if (n === 1) return '1st Place';
+  if (n === 2) return '2nd Place';
+  if (n === 3) return '3rd Place';
+  return `${n}th Place`;
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 const DEFAULT_FORM = {
@@ -241,9 +249,12 @@ const DEFAULT_FORM = {
   max_teams: 8,
   buy_in_amount: '',
   payment_instructions: '',
-  payout_first: 70,
-  payout_second: 20,
-  payout_third: 10,
+  payment_methods: [],
+  payout_places: [
+    { place: 1, pct: 70 },
+    { place: 2, pct: 20 },
+    { place: 3, pct: 10 },
+  ],
   // Pool
   picks_per_team: 8,
   scoring_style: 'tourneyrun',
@@ -284,9 +295,16 @@ export default function CreateGolfLeague() {
     }));
   }
 
+  const payoutTotal = form.payout_places.reduce((s, r) => s + (parseInt(r.pct) || 0), 0);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    const hasBuyIn = parseFloat(form.buy_in_amount) > 0;
+    if (hasBuyIn && payoutTotal !== 100) {
+      setError('Payout percentages must add up to 100%');
+      return;
+    }
     setLoading(true);
     try {
       const payload = {
@@ -294,6 +312,13 @@ export default function CreateGolfLeague() {
         format_type: format,
         buy_in_amount: parseFloat(form.buy_in_amount) || 0,
         use_faab: form.use_faab ? 1 : 0,
+        // backward-compat scalar fields derived from payout_places
+        payout_first:  parseInt(form.payout_places[0]?.pct) || 0,
+        payout_second: parseInt(form.payout_places[1]?.pct) || 0,
+        payout_third:  parseInt(form.payout_places[2]?.pct) || 0,
+        // JSON fields
+        payout_places:    JSON.stringify(form.payout_places),
+        payment_methods:  JSON.stringify(form.payment_methods),
       };
       const res = await api.post('/golf/leagues', payload);
       navigate(`/golf/league/${res.data.league.id}`);
@@ -656,7 +681,9 @@ export default function CreateGolfLeague() {
         {/* ── 4. Buy-in (optional) ── */}
         <Card>
           <CardHeader icon={DollarSign} title="Buy-in (Optional)" />
-          <div className="space-y-4">
+          <div className="space-y-5">
+
+            {/* Amount */}
             <div>
               <label className="label">Buy-in Per Team</label>
               <div className="relative">
@@ -671,36 +698,111 @@ export default function CreateGolfLeague() {
                   onChange={e => set('buy_in_amount', e.target.value)}
                 />
               </div>
+              <p className="text-gray-600 text-xs mt-2 leading-relaxed">
+                💡 TourneyRun does not collect or handle buy-in money. Payments are managed directly between league members outside the platform.
+              </p>
             </div>
+
             {parseFloat(form.buy_in_amount) > 0 && (
-              <div>
-                <label className="label mb-2.5">Payout Split (%)</label>
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                  {[
-                    { label: '1st', key: 'payout_first',  color: 'text-yellow-400' },
-                    { label: '2nd', key: 'payout_second', color: 'text-gray-300'   },
-                    { label: '3rd', key: 'payout_third',  color: 'text-orange-400' },
-                  ].map(({ label, key, color }) => (
-                    <div key={key} className="bg-gray-800/50 border border-gray-700/60 rounded-xl p-3">
-                      <div className={`text-xs font-semibold mb-2 flex items-center gap-1 ${color}`}>
-                        <Award className="w-3 h-3 shrink-0" /> {label}
-                      </div>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          className="input pr-6 text-right font-bold py-1.5 text-sm"
-                          value={form[key]}
-                          onChange={e => set(key, e.target.value)}
-                        />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs">%</span>
-                      </div>
-                    </div>
-                  ))}
+              <>
+                {/* Payment Instructions */}
+                <div>
+                  <label className="label">Payment Instructions (optional)</label>
+                  <p className="text-gray-600 text-xs mb-3">Tell members how to pay you — shown on the league invite page.</p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {['Venmo', 'PayPal', 'Zelle'].map(m => {
+                      const key = m.toLowerCase();
+                      const active = form.payment_methods.includes(key);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => set('payment_methods', active
+                            ? form.payment_methods.filter(x => x !== key)
+                            : [...form.payment_methods, key]
+                          )}
+                          className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold border transition-all ${
+                            active
+                              ? 'bg-green-500/20 border-green-500/60 text-green-400'
+                              : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
+                          }`}
+                        >
+                          {m}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder='e.g. "@CollinW on Venmo — send before draft day"'
+                    value={form.payment_instructions}
+                    onChange={e => set('payment_instructions', e.target.value)}
+                  />
                 </div>
-              </div>
+
+                {/* Payout Split */}
+                <div>
+                  <label className="label">Payout Split</label>
+                  <p className="text-gray-600 text-xs mb-3">Set how the prize pool is divided. Must total 100%.</p>
+
+                  <div className="space-y-2">
+                    {form.payout_places.map((row, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-gray-400 text-sm font-medium w-20 shrink-0">{ordinal(row.place)}</span>
+                        <div className="relative flex-1">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            className="input pr-7 text-right font-bold py-1.5 text-sm"
+                            value={row.pct}
+                            onChange={e => {
+                              const val = e.target.value === '' ? '' : Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                              set('payout_places', form.payout_places.map((r, j) => j === i ? { ...r, pct: val } : r));
+                            }}
+                          />
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs">%</span>
+                        </div>
+                        {form.payout_places.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => set('payout_places',
+                              form.payout_places.filter((_, j) => j !== i).map((r, j) => ({ ...r, place: j + 1 }))
+                            )}
+                            className="w-7 h-7 flex items-center justify-center rounded text-gray-600 hover:text-red-400 text-lg leading-none transition-colors"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const n = form.payout_places.length + 1;
+                      const even = Math.floor(100 / n);
+                      set('payout_places', Array.from({ length: n }, (_, i) => ({
+                        place: i + 1,
+                        pct: i < n - 1 ? even : 100 - even * (n - 1),
+                      })));
+                    }}
+                    className="mt-3 text-sm font-semibold text-gray-500 hover:text-green-400 transition-colors"
+                  >
+                    + Add Payout Place
+                  </button>
+
+                  <div className={`mt-2 text-xs font-semibold ${payoutTotal === 100 ? 'text-green-400' : 'text-amber-400'}`}>
+                    {payoutTotal === 100
+                      ? '✓ 100% — looks good'
+                      : `Total: ${payoutTotal}% — percentages must add up to 100%`}
+                  </div>
+                </div>
+              </>
             )}
+
           </div>
         </Card>
 
