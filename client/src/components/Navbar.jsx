@@ -78,7 +78,7 @@ export default function Navbar() {
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', height: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 
         {/* ── LEFT: Logo ── */}
-        <Link to="/" className="flex items-center gap-2.5 select-none" style={{ textDecoration: 'none' }}>
+        <Link to={isGolf ? '/golf' : '/'} className="flex items-center gap-2.5 select-none" style={{ textDecoration: 'none' }}>
           {isGolf ? (
             <svg viewBox="0 0 32 32" fill="none" style={{ width: 26, height: 26, lineHeight: 1, flexShrink: 0 }}>
               <circle cx="16" cy="16" r="15" fill="white" stroke="#d1d5db" strokeWidth="0.8"/>
@@ -104,56 +104,39 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {/* ── Golf: How to Play link (desktop, always visible on /golf) ── */}
-        {isGolf && (
-          <div className="hidden md:flex items-center" style={{ gap: 2 }}>
-            <a
-              href="/golf#how-it-works"
-              style={navLink('/golf#how-it-works')}
-              onMouseEnter={e => { e.currentTarget.style.color = '#e5e7eb'; e.currentTarget.style.background = '#1f2937'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = '#6b7280'; e.currentTarget.style.background = 'transparent'; }}
-            >
-              How to Play
-            </a>
-          </div>
-        )}
-
         {/* ── CENTER: Nav links (desktop) ── */}
-        {user && (
+        {(user || isGolf) && (
           <div className="hidden md:flex items-center" style={{ gap: 2 }}>
-            {[
+            {(isGolf ? [
+              { to: '/golf/dashboard', label: 'My Leagues' },
+              { to: '/golf/strategy',  label: 'Strategy'   },
+              { to: '/golf/faq',       label: 'FAQ'        },
+              { to: '/golf#how-it-works', label: 'How to Play', isAnchor: true },
+            ] : [
               { to: '/dashboard', label: 'Dashboard' },
-              { to: '/games',     label: 'Games',     live: true },
-              { to: '/strategy',  label: 'Strategy'  },
-              { to: '/faq',       label: 'FAQ'        },
-            ].map(({ to, label, live }) => (
-              <Link
-                key={to}
-                to={to}
-                style={navLink(to)}
-                onMouseEnter={e => {
-                  if (!isActive(to)) {
-                    e.currentTarget.style.color = '#e5e7eb';
-                    e.currentTarget.style.background = '#1f2937';
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (!isActive(to)) {
-                    e.currentTarget.style.color = '#6b7280';
-                    e.currentTarget.style.background = 'transparent';
-                  }
-                }}
-              >
-                {live && hasLiveGames && (
-                  <span style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: '#f97316', flexShrink: 0,
-                    animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite',
-                  }} />
-                )}
-                {label}
-              </Link>
-            ))}
+              { to: '/games',     label: 'Games', live: true },
+              { to: '/strategy',  label: 'Strategy' },
+              { to: '/faq',       label: 'FAQ'      },
+            ]).map(({ to, label, live, isAnchor }) => {
+              const style = navLink(to);
+              const hoverIn  = e => { if (!isActive(to)) { e.currentTarget.style.color = '#e5e7eb'; e.currentTarget.style.background = '#1f2937'; } };
+              const hoverOut = e => { if (!isActive(to)) { e.currentTarget.style.color = '#6b7280'; e.currentTarget.style.background = 'transparent'; } };
+              if (isAnchor) {
+                return (
+                  <a key={to} href={to} style={style} onMouseEnter={hoverIn} onMouseLeave={hoverOut}>
+                    {label}
+                  </a>
+                );
+              }
+              return (
+                <Link key={to} to={to} style={style} onMouseEnter={hoverIn} onMouseLeave={hoverOut}>
+                  {live && hasLiveGames && (
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f97316', flexShrink: 0, animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite' }} />
+                  )}
+                  {label}
+                </Link>
+              );
+            })}
           </div>
         )}
 
@@ -260,50 +243,58 @@ export default function Navbar() {
       {/* ── Mobile menu ── */}
       {menuOpen && (
         <div className="md:hidden border-t border-gray-800 py-3 space-y-1" style={{ padding: '12px 24px' }}>
-          {isGolf && (
-            <a
-              href="/golf#how-it-works"
-              className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-sm"
-              onClick={() => setMenuOpen(false)}
-            >
-              How to Play
-            </a>
-          )}
-          {user ? (
+          {isGolf ? (
             <>
-              <Link
-                to="/profile"
-                className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-sm"
-                onClick={() => setMenuOpen(false)}
-              >
-                <span style={{
-                  width: 24, height: 24, borderRadius: '50%',
-                  background: '#7c3aed22', border: '1px solid #7c3aed55',
-                  color: '#a78bfa', fontSize: 10, fontWeight: 600,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                }}>
-                  {initials}
-                </span>
-                <span>{user.display_name || user.username}</span>
-              </Link>
-              <Link to="/dashboard" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Dashboard</Link>
-              <Link to="/games" className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>
-                {hasLiveGames && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f97316', flexShrink: 0, animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite' }} />}
-                Games
-              </Link>
-              <Link to="/strategy" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Strategy</Link>
-              <Link to="/faq" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>FAQ</Link>
-              {user.role === 'superadmin' && (
-                <Link to="/admin" className="block px-3 py-2 text-yellow-400 hover:text-yellow-300 hover:bg-gray-800 rounded-lg transition-colors font-medium" onClick={() => setMenuOpen(false)}>Admin</Link>
+              {user && (
+                <>
+                  <Link to="/profile" className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-sm" onClick={() => setMenuOpen(false)}>
+                    <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#7c3aed22', border: '1px solid #7c3aed55', color: '#a78bfa', fontSize: 10, fontWeight: 600, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials}</span>
+                    <span>{user.display_name || user.username}</span>
+                  </Link>
+                  <Link to="/golf/dashboard" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>My Leagues</Link>
+                  <Link to="/golf/strategy" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Strategy</Link>
+                  <Link to="/golf/faq" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>FAQ</Link>
+                  <a href="/golf#how-it-works" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-sm" onClick={() => setMenuOpen(false)}>How to Play</a>
+                  {user.role === 'superadmin' && (
+                    <Link to="/admin" className="block px-3 py-2 text-yellow-400 hover:text-yellow-300 hover:bg-gray-800 rounded-lg transition-colors font-medium" onClick={() => setMenuOpen(false)}>Admin</Link>
+                  )}
+                  <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-sm">Logout</button>
+                </>
               )}
-              <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-sm">
-                Logout
-              </button>
+              {!user && (
+                <>
+                  <a href="/golf#how-it-works" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-sm" onClick={() => setMenuOpen(false)}>How to Play</a>
+                  <Link to="/login" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Login</Link>
+                  <Link to="/register" className="block px-3 py-2 text-green-400 hover:text-green-300 hover:bg-gray-800 rounded-lg transition-colors font-medium" onClick={() => setMenuOpen(false)}>Register</Link>
+                </>
+              )}
             </>
           ) : (
             <>
-              <Link to="/login" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Login</Link>
-              <Link to="/register" className="block px-3 py-2 text-brand-400 hover:text-brand-300 hover:bg-gray-800 rounded-lg transition-colors font-medium" onClick={() => setMenuOpen(false)}>Register</Link>
+              {user ? (
+                <>
+                  <Link to="/profile" className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-sm" onClick={() => setMenuOpen(false)}>
+                    <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#7c3aed22', border: '1px solid #7c3aed55', color: '#a78bfa', fontSize: 10, fontWeight: 600, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials}</span>
+                    <span>{user.display_name || user.username}</span>
+                  </Link>
+                  <Link to="/dashboard" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Dashboard</Link>
+                  <Link to="/games" className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>
+                    {hasLiveGames && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f97316', flexShrink: 0, animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite' }} />}
+                    Games
+                  </Link>
+                  <Link to="/strategy" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Strategy</Link>
+                  <Link to="/faq" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>FAQ</Link>
+                  {user.role === 'superadmin' && (
+                    <Link to="/admin" className="block px-3 py-2 text-yellow-400 hover:text-yellow-300 hover:bg-gray-800 rounded-lg transition-colors font-medium" onClick={() => setMenuOpen(false)}>Admin</Link>
+                  )}
+                  <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-sm">Logout</button>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Login</Link>
+                  <Link to="/register" className="block px-3 py-2 text-brand-400 hover:text-brand-300 hover:bg-gray-800 rounded-lg transition-colors font-medium" onClick={() => setMenuOpen(false)}>Register</Link>
+                </>
+              )}
             </>
           )}
         </div>
