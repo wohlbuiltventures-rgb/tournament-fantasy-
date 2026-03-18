@@ -112,12 +112,12 @@ export default function GolfNavbar() {
             <>
               {user.role === 'superadmin' && (
                 <Link
-                  to="/admin"
-                  style={{ ...navLink('/admin'), color: isActive('/admin') ? '#fff' : '#f59e0b', fontWeight: 500 }}
-                  onMouseEnter={e => { if (!isActive('/admin')) { e.currentTarget.style.color = '#fcd34d'; e.currentTarget.style.background = '#14532d33'; } }}
-                  onMouseLeave={e => { if (!isActive('/admin')) { e.currentTarget.style.color = '#f59e0b'; e.currentTarget.style.background = 'transparent'; } }}
+                  to="/golf/admin"
+                  style={{ ...navLink('/golf/admin'), color: isActive('/golf/admin') ? '#fff' : '#4ade80', fontWeight: 600 }}
+                  onMouseEnter={e => { if (!isActive('/golf/admin')) { e.currentTarget.style.color = '#86efac'; e.currentTarget.style.background = '#14532d33'; } }}
+                  onMouseLeave={e => { if (!isActive('/golf/admin')) { e.currentTarget.style.color = '#4ade80'; e.currentTarget.style.background = 'transparent'; } }}
                 >
-                  Admin
+                  Golf Admin
                 </Link>
               )}
               <div style={{ width: '0.5px', height: 18, background: '#1a3a1a', flexShrink: 0 }} />
@@ -225,10 +225,10 @@ export default function GolfNavbar() {
                 How to Play
               </a>
               {user.role === 'superadmin' && (
-                <Link to="/admin" onClick={() => setMenuOpen(false)}
-                  style={{ display: 'block', padding: '8px 12px', borderRadius: 8, color: '#f59e0b', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}
+                <Link to="/golf/admin" onClick={() => setMenuOpen(false)}
+                  style={{ display: 'block', padding: '8px 12px', borderRadius: 8, color: '#4ade80', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}
                 >
-                  Admin
+                  Golf Admin
                 </Link>
               )}
               <button onClick={handleLogout}

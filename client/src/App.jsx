@@ -60,6 +60,7 @@ import GolfScoreEntry from './pages/golf/GolfScoreEntry';
 import GolfStrategy from './pages/golf/GolfStrategy';
 import GolfFaq from './pages/golf/GolfFaq';
 import GolfPaymentSuccess from './pages/golf/GolfPaymentSuccess';
+import GolfSuperAdmin from './pages/golf/GolfSuperAdmin';
 import GolfLayout from './components/GolfLayout';
 
 const GOLF_FAVICON = `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='white' stroke='%23d1d5db' stroke-width='2'/><circle cx='38' cy='34' r='5' fill='%239ca3af'/><circle cx='55' cy='28' r='5' fill='%239ca3af'/><circle cx='68' cy='42' r='5' fill='%239ca3af'/><circle cx='32' cy='50' r='5' fill='%239ca3af'/><circle cx='50' cy='47' r='5' fill='%239ca3af'/><circle cx='65' cy='58' r='5' fill='%239ca3af'/><circle cx='40' cy='63' r='5' fill='%239ca3af'/><circle cx='60' cy='70' r='5' fill='%239ca3af'/></svg>`;
@@ -124,6 +125,7 @@ export default function App() {
               <Route path="/golf/strategy" element={<GolfStrategy />} />
               <Route path="/golf/faq" element={<GolfFaq />} />
               <Route path="/golf/payment/success" element={<GolfPaymentSuccess />} />
+              <Route path="/golf/admin" element={<ProtectedRoute><GolfSuperAdmin /></ProtectedRoute>} />
             </Route>
           </Routes>
         </div>

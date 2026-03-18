@@ -442,6 +442,22 @@ if (hasPebble === 0) {
   console.log('[golf-db] Seeded', TOURNAMENTS_2026.length, '2026 signature/major tournaments');
 }
 
+// ── Golf user profile fields ───────────────────────────────────────────────────
+try { db.exec("ALTER TABLE users ADD COLUMN gender TEXT DEFAULT NULL"); }         catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN dob TEXT DEFAULT NULL"); }            catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN dob_verified INTEGER DEFAULT 0"); }   catch (e) {}
+
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS golf_user_profiles (
+      user_id TEXT PRIMARY KEY,
+      profile_complete INTEGER DEFAULT 0,
+      completed_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+} catch (e) { console.error('[golf-db] golf_user_profiles error:', e.message); }
+
 // ── Golf Payment Tables ────────────────────────────────────────────────────────
 try {
   db.exec(`

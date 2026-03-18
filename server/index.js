@@ -78,6 +78,7 @@ app.use('/api/golf', require('./routes/golf'));
 app.use('/api/golf', require('./routes/golf-waivers'));
 app.use('/api/golf', require('./routes/golf-auction'));
 app.use('/api/golf', require('./routes/golf-payments'));
+app.use('/api/golf', require('./routes/golf-admin'));
 
 // Serve uploaded avatars
 const path = require('path');
