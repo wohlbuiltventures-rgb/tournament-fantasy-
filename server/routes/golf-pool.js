@@ -296,4 +296,193 @@ router.post('/leagues/:id/tier-players/:playerId/move', authMiddleware, (req, re
   }
 });
 
+// ── Lock-time helper (Thursday 12:00 UTC of tournament week) ─────────────────
+
+function computeLockTime(startDate) {
+  const d = new Date(startDate);
+  const dow = d.getDay();
+  const daysBack = (dow + 3) % 7;
+  d.setDate(d.getDate() - daysBack);
+  d.setUTCHours(12, 0, 0, 0);
+  return d.toISOString();
+}
+
+// ── GET /leagues/:id/picks/my ─────────────────────────────────────────────────
+
+router.get('/leagues/:id/picks/my', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+
+    const member = db.prepare('SELECT * FROM golf_league_members WHERE golf_league_id = ? AND user_id = ?').get(req.params.id, req.user.id);
+    if (!member && league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Not a member' });
+
+    const tid = req.query.tournament_id || league.pool_tournament_id;
+    if (!tid) return res.json({ picks: [], submitted: false });
+
+    const picks = db.prepare(
+      'SELECT * FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ? ORDER BY tier_number ASC'
+    ).all(req.params.id, tid, req.user.id);
+
+    // Tier config for total target
+    let tiersConfig = [];
+    try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
+    const totalTarget = tiersConfig.reduce((s, t) => s + (parseInt(t.picks) || 0), 0);
+
+    const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tid);
+    const lockTime = (tourn && league.picks_lock_time) ? league.picks_lock_time : (tourn ? computeLockTime(tourn.start_date) : null);
+
+    res.json({
+      picks,
+      submitted: picks.length > 0,
+      picks_locked: !!league.picks_locked,
+      lock_time: lockTime,
+      tournament: tourn,
+      total_target: totalTarget,
+    });
+  } catch (err) {
+    console.error('[golf-pool] get my picks error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── POST /leagues/:id/picks ───────────────────────────────────────────────────
+
+router.post('/leagues/:id/picks', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+
+    const member = db.prepare('SELECT * FROM golf_league_members WHERE golf_league_id = ? AND user_id = ?').get(req.params.id, req.user.id);
+    if (!member) return res.status(403).json({ error: 'Not a member' });
+
+    if (league.picks_locked) return res.status(403).json({ error: 'Picks are locked for this tournament.' });
+
+    const { tournament_id, picks } = req.body;
+    const tid = tournament_id || league.pool_tournament_id;
+    if (!tid) return res.status(400).json({ error: 'tournament_id required' });
+    if (!Array.isArray(picks) || picks.length === 0) return res.status(400).json({ error: 'picks array required' });
+
+    const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tid);
+    if (!tourn) return res.status(404).json({ error: 'Tournament not found' });
+
+    // Check lock time
+    const lockTime = league.picks_lock_time || computeLockTime(tourn.start_date);
+    if (new Date() >= new Date(lockTime)) {
+      db.prepare('UPDATE golf_leagues SET picks_locked = 1 WHERE id = ?').run(req.params.id);
+      return res.status(403).json({ error: 'Picks are locked — tee time has passed.' });
+    }
+
+    // Validate picks vs tier config
+    let tiersConfig = [];
+    try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
+
+    if (tiersConfig.length > 0) {
+      for (const t of tiersConfig) {
+        const tierPicks = picks.filter(p => p.tier_number === t.tier);
+        if (tierPicks.length !== t.picks) {
+          return res.status(400).json({ error: `Tier ${t.tier} requires exactly ${t.picks} pick(s), got ${tierPicks.length}.` });
+        }
+      }
+    }
+
+    // Validate salary cap if applicable
+    if (league.pick_sheet_format === 'salary_cap' && league.pool_salary_cap) {
+      const totalSalary = picks.reduce((s, p) => {
+        const row = db.prepare('SELECT salary FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND player_id = ?').get(req.params.id, tid, p.player_id);
+        return s + (row?.salary || 0);
+      }, 0);
+      if (totalSalary > league.pool_salary_cap) {
+        return res.status(400).json({ error: `Picks exceed salary cap ($${league.pool_salary_cap.toLocaleString()}).` });
+      }
+    }
+
+    // Upsert picks (replace if already submitted)
+    db.transaction(() => {
+      db.prepare('DELETE FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ?').run(req.params.id, tid, req.user.id);
+      const ins = db.prepare(`
+        INSERT INTO pool_picks (id, league_id, tournament_id, user_id, player_id, player_name, tier_number, salary_used)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const p of picks) {
+        const player = db.prepare('SELECT * FROM golf_players WHERE id = ?').get(p.player_id);
+        const tierRow = db.prepare('SELECT salary FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND player_id = ?').get(req.params.id, tid, p.player_id);
+        ins.run(uuidv4(), req.params.id, tid, req.user.id, p.player_id, player?.name || p.player_name || '', p.tier_number || null, tierRow?.salary || 0);
+      }
+      // Persist lock_time on league so pick sheet can show consistent countdown
+      if (!league.picks_lock_time) {
+        db.prepare('UPDATE golf_leagues SET picks_lock_time = ? WHERE id = ?').run(lockTime, req.params.id);
+      }
+    })();
+
+    res.json({ ok: true, submitted_count: picks.length });
+  } catch (err) {
+    console.error('[golf-pool] submit picks error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── GET /leagues/:id/picks/all (commissioner) ─────────────────────────────────
+
+router.get('/leagues/:id/picks/all', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
+
+    const tid = req.query.tournament_id || league.pool_tournament_id;
+    const members = db.prepare(`
+      SELECT glm.*, u.username, u.email FROM golf_league_members glm
+      JOIN users u ON glm.user_id = u.id
+      WHERE glm.golf_league_id = ? ORDER BY glm.joined_at ASC
+    `).all(req.params.id);
+
+    const picks = tid
+      ? db.prepare('SELECT * FROM pool_picks WHERE league_id = ? AND tournament_id = ? ORDER BY user_id, tier_number').all(req.params.id, tid)
+      : [];
+
+    const memberStatus = members.map(m => {
+      const myPicks = picks.filter(p => p.user_id === m.user_id);
+      return {
+        user_id: m.user_id, username: m.username, email: m.email,
+        team_name: m.team_name,
+        submitted: myPicks.length > 0,
+        submitted_at: myPicks[0]?.submitted_at || null,
+        picks_count: myPicks.length,
+      };
+    });
+
+    res.json({ members: memberStatus, picks, tournament_id: tid });
+  } catch (err) {
+    console.error('[golf-pool] get all picks error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── POST /leagues/:id/picks/remind ───────────────────────────────────────────
+
+router.post('/leagues/:id/picks/remind', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
+
+    const tid = league.pool_tournament_id;
+    const unpicked = db.prepare(`
+      SELECT u.username, u.email FROM golf_league_members glm
+      JOIN users u ON glm.user_id = u.id
+      WHERE glm.golf_league_id = ?
+        AND glm.user_id NOT IN (SELECT user_id FROM pool_picks WHERE league_id = ? AND tournament_id = ?)
+    `).all(req.params.id, req.params.id, tid || '');
+
+    // Email sending is a stub — log for now, wire email service when ready
+    console.log(`[golf-pool] Reminder for ${league.name}: ${unpicked.length} unpicked members`, unpicked.map(u => u.email));
+
+    res.json({ ok: true, reminded: unpicked.length });
+  } catch (err) {
+    console.error('[golf-pool] remind error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

@@ -207,6 +207,37 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
         </div>
       )}
 
+      {/* Pool mode: make picks card (all members) */}
+      {league.format_type === 'pool' && league.pool_tournament_id && (
+        <div className={`border rounded-2xl p-5 ${league.picks_locked ? 'bg-gray-900 border-gray-800' : 'bg-blue-500/8 border-blue-500/20'}`}>
+          <div className="flex items-center gap-2 mb-3">
+            <Target className="w-4 h-4 text-blue-400" />
+            <span className="text-blue-400 font-bold text-sm">Pool Picks</span>
+            {league.picks_locked && (
+              <span className="ml-auto bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">
+                Locked
+              </span>
+            )}
+          </div>
+          <p className="text-gray-400 text-sm mb-4">
+            {league.picks_locked
+              ? 'Picks are locked. Check back after the tournament.'
+              : 'Select your golfers before picks lock.'}
+          </p>
+          <button
+            onClick={() => navigate(`/golf/league/${league.id}/picks`)}
+            className={`w-full py-3 font-bold rounded-xl transition-all ${
+              league.picks_locked
+                ? 'bg-gray-800 text-gray-400 border border-gray-700 cursor-not-allowed'
+                : 'bg-blue-500 hover:bg-blue-400 text-white'
+            }`}
+            disabled={league.picks_locked}
+          >
+            {league.picks_locked ? 'Picks Locked' : 'Make Picks →'}
+          </button>
+        </div>
+      )}
+
       {/* DK mode: no draft, direct to lineup */}
       {league.format_type === 'dk' && (
         <div className="bg-purple-500/8 border border-purple-500/20 rounded-2xl p-5">

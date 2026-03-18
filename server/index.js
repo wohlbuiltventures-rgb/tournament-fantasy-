@@ -474,6 +474,10 @@ setInterval(() => {
   }
 }, 30000);
 
+// Golf pool lock scheduler — checks pick deadlines every 5 minutes
+const { startPoolLockScheduler } = require('./golfPoolLockService');
+startPoolLockScheduler();
+
 // Golf score auto-sync — 30 min intervals Thu–Sun during active tournaments
 const { scheduleAutoSync, backfillCompleted } = require('./golfSyncService');
 scheduleAutoSync();

@@ -218,6 +218,8 @@ const _golfColMigrations = [
   `ALTER TABLE golf_leagues ADD COLUMN pool_salary_cap INTEGER DEFAULT 50000`,
   `ALTER TABLE golf_leagues ADD COLUMN pool_cap_unit INTEGER DEFAULT 50000`,
   `ALTER TABLE golf_leagues ADD COLUMN pool_tournament_id TEXT`,
+  `ALTER TABLE golf_leagues ADD COLUMN picks_locked INTEGER DEFAULT 0`,
+  `ALTER TABLE golf_leagues ADD COLUMN picks_lock_time TEXT`,
   `ALTER TABLE golf_players ADD COLUMN odds_display TEXT`,
   `ALTER TABLE golf_players ADD COLUMN odds_decimal REAL`,
   `ALTER TABLE golf_tournaments ADD COLUMN is_signature INTEGER DEFAULT 0`,
@@ -540,6 +542,23 @@ try {
 } catch (e) {
   console.error('[golf-db] Payment tables migration error:', e.message);
 }
+
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pool_picks (
+      id TEXT PRIMARY KEY,
+      league_id TEXT NOT NULL,
+      tournament_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      player_id TEXT NOT NULL,
+      player_name TEXT NOT NULL,
+      tier_number INTEGER,
+      salary_used INTEGER DEFAULT 0,
+      submitted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (league_id) REFERENCES golf_leagues(id)
+    );
+  `);
+} catch (e) { console.error('[golf-db] pool_picks table error:', e.message); }
 
 try {
   db.exec(`

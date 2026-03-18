@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, ChevronDown, AlertCircle } from 'lucide-react';
+import { ArrowLeft, RefreshCw, ChevronDown, AlertCircle, Users, Bell } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
@@ -242,6 +242,100 @@ function SalaryCapView({ tiers, cap, leagueId, tournamentId, onRefresh }) {
   );
 }
 
+// ── Member Picks Status ───────────────────────────────────────────────────────
+
+function MemberPicksSection({ leagueId, tournamentId }) {
+  const [members, setMembers]     = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [sending, setSending]     = useState(false);
+  const [remindMsg, setRemindMsg] = useState('');
+
+  useEffect(() => {
+    if (!tournamentId) return;
+    setLoading(true);
+    api.get(`/golf/leagues/${leagueId}/picks/all`, { params: { tournament_id: tournamentId } })
+      .then(res => setMembers(res.data.members || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [leagueId, tournamentId]);
+
+  async function sendReminder() {
+    setSending(true);
+    setRemindMsg('');
+    try {
+      const res = await api.post(`/golf/leagues/${leagueId}/picks/remind`, { tournament_id: tournamentId });
+      setRemindMsg(`✓ Reminded ${res.data.reminded ?? 'all'} members`);
+    } catch (err) {
+      setRemindMsg(err.response?.data?.error || 'Failed to send reminders');
+    }
+    setSending(false);
+  }
+
+  if (!tournamentId) return null;
+
+  const submitted = members.filter(m => m.submitted);
+  const pending   = members.filter(m => !m.submitted);
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4 text-gray-400" />
+          <h2 className="text-white font-bold text-sm">Member Picks</h2>
+          {!loading && (
+            <span className="text-gray-500 text-xs">
+              {submitted.length} submitted · {pending.length} pending
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={sendReminder}
+          disabled={sending || loading}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs font-semibold transition-all disabled:opacity-50"
+        >
+          <Bell className="w-3 h-3" />
+          {sending ? 'Sending…' : 'Remind unpicked'}
+        </button>
+      </div>
+
+      {remindMsg && (
+        <p className={`text-xs mb-3 font-medium ${remindMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>
+          {remindMsg}
+        </p>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+          {members.length === 0 ? (
+            <p className="text-gray-500 text-sm px-5 py-6 text-center">No members have submitted picks yet.</p>
+          ) : (
+            <div className="divide-y divide-gray-800/50">
+              {members.map(m => (
+                <div key={m.user_id} className="flex items-center gap-3 px-5 py-3">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${m.submitted ? 'bg-green-400' : 'bg-gray-600'}`} />
+                  <span className="text-gray-200 text-sm font-medium flex-1">
+                    {m.team_name || m.username}
+                  </span>
+                  {m.submitted ? (
+                    <span className="text-green-400 text-xs font-semibold">{m.picks_count} picks</span>
+                  ) : (
+                    <span className="text-gray-500 text-xs">Not submitted</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function GolfLeagueSettings() {
@@ -386,6 +480,9 @@ export default function GolfLeagueSettings() {
           />
         )
       )}
+
+      {/* Member picks status */}
+      <MemberPicksSection leagueId={id} tournamentId={selectedTournId} />
 
     </div>
   );
