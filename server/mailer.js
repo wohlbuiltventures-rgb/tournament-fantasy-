@@ -172,4 +172,117 @@ async function sendWelcome(toEmail, username) {
   });
 }
 
-module.exports = { sendPasswordReset, sendWelcome };
+async function sendGolfPaymentConfirmation(toEmail, username, type, meta) {
+  const transport = getTransport();
+  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
+  const baseUrl = process.env.CLIENT_URL
+    ? process.env.CLIENT_URL.replace(/\/$/, '')
+    : 'https://tourneyrun.app';
+
+  const subjects = {
+    golf_season_pass: '⛳ Your 2026 Golf Season Pass is active',
+    golf_pool_entry:  '⛳ Office Pool entry confirmed',
+    golf_comm_pro:    '⛳ Commissioner Pro unlocked',
+  };
+
+  const bodies = {
+    golf_season_pass: `You're in for the full 2026 PGA Tour season. Draft your roster, set your lineup every week, and make your run at the leaderboard.`,
+    golf_pool_entry:  `Your picks for ${meta.tournament_name || 'the tournament'} are locked in. Good luck this week${meta.is_major ? ' — it\'s a Major, points × 1.5!' : '.'}`,
+    golf_comm_pro:    `Commissioner Pro is active for your league. You now have access to auto-emails, payment tracking, FAAB results, CSV export, and more.`,
+  };
+
+  const subject = subjects[type] || '⛳ TourneyRun Golf — Payment confirmed';
+  const body    = bodies[type]   || 'Your payment was successful.';
+
+  await transport.sendMail({
+    from: `"TourneyRun Golf" <${from}>`,
+    to: toEmail,
+    subject,
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#050f08;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#050f08;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+        <tr><td style="background:linear-gradient(90deg,transparent,#22c55e,transparent);height:2px;border-radius:2px;"></td></tr>
+        <tr><td style="background:#0a1a0f;border:1px solid #14532d55;border-top:none;border-radius:0 0 16px 16px;padding:36px 36px 32px;">
+          <div style="text-align:center;margin-bottom:24px;">
+            <div style="font-size:36px;">⛳</div>
+            <div style="margin-top:8px;">
+              <span style="font-size:20px;font-weight:300;color:#86efac;">tourney</span><span style="font-size:20px;font-weight:800;color:#22c55e;">run</span>
+            </div>
+            <div style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#166534;margin-top:3px;">Golf Fantasy</div>
+          </div>
+          <h1 style="margin:0 0 12px;font-size:22px;font-weight:900;color:#ffffff;text-align:center;">
+            Payment confirmed ✓
+          </h1>
+          <p style="margin:0 0 24px;font-size:15px;color:#86efac;text-align:center;line-height:1.6;">
+            Hey ${username} — ${body}
+          </p>
+          <div style="text-align:center;margin-bottom:24px;">
+            <a href="${baseUrl}/golf/dashboard" style="display:inline-block;background:#16a34a;color:#fff;font-weight:700;font-size:14px;text-decoration:none;padding:12px 28px;border-radius:10px;">
+              Go to Golf Dashboard →
+            </a>
+          </div>
+          <p style="margin:0;font-size:11px;color:#166534;text-align:center;">
+            TourneyRun · Skill-based golf fantasy · Payments by Stripe<br>
+            Not available in WA, ID, MT, NV, LA
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  });
+}
+
+async function sendCommProUnlocked(toEmail, username, leagueName) {
+  const transport = getTransport();
+  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
+  const baseUrl = process.env.CLIENT_URL
+    ? process.env.CLIENT_URL.replace(/\/$/, '')
+    : 'https://tourneyrun.app';
+
+  await transport.sendMail({
+    from: `"TourneyRun Golf" <${from}>`,
+    to: toEmail,
+    subject: '🏆 You unlocked Commissioner Pro — free for 2026!',
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#050f08;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#050f08;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+        <tr><td style="background:linear-gradient(90deg,transparent,#22c55e,transparent);height:2px;border-radius:2px;"></td></tr>
+        <tr><td style="background:#0a1a0f;border:1px solid #14532d55;border-top:none;border-radius:0 0 16px 16px;padding:36px 36px 32px;">
+          <div style="text-align:center;margin-bottom:20px;">
+            <div style="font-size:40px;">🏆</div>
+          </div>
+          <h1 style="margin:0 0 12px;font-size:22px;font-weight:900;color:#ffffff;text-align:center;">
+            Commissioner Pro — unlocked free!
+          </h1>
+          <p style="margin:0 0 20px;font-size:15px;color:#86efac;text-align:center;line-height:1.6;">
+            Hey ${username}, your league <strong style="color:#ffffff;">${leagueName}</strong> hit 6 members — so we unlocked Commissioner Pro for the 2026 season at no charge.
+          </p>
+          <p style="margin:0 0 24px;font-size:14px;color:#4ade80;text-align:center;line-height:1.6;">
+            Auto-emails · Payment tracker · FAAB results · CSV export · Member roster · Mass blast
+          </p>
+          <div style="text-align:center;">
+            <a href="${baseUrl}/golf/dashboard" style="display:inline-block;background:#16a34a;color:#fff;font-weight:700;font-size:14px;text-decoration:none;padding:12px 28px;border-radius:10px;">
+              Open Commissioner Hub →
+            </a>
+          </div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  });
+}
+
+module.exports = { sendPasswordReset, sendWelcome, sendGolfPaymentConfirmation, sendCommProUnlocked };

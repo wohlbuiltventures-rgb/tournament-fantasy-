@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
 import BallLoader from '../../components/BallLoader';
+import GolfPaymentModal from '../../components/golf/GolfPaymentModal';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -443,6 +444,8 @@ function LineupTab({ leagueId, league }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [showPoolGate, setShowPoolGate] = useState(false);
+  const [paidTournaments, setPaidTournaments] = useState([]);
 
   useEffect(() => {
     api.get('/golf/tournaments').then(r => {
@@ -450,7 +453,11 @@ function LineupTab({ leagueId, league }) {
       setTournaments(upcoming);
       if (upcoming.length > 0) setSelectedTournId(upcoming[0].id);
     }).catch(() => setLoading(false));
-  }, []);
+    // Load paid office pool entries
+    if (league.format_type === 'office_pool') {
+      api.get('/golf/payments/status').then(r => setPaidTournaments(r.data.paidTournaments || [])).catch(() => {});
+    }
+  }, [league.format_type]);
 
   useEffect(() => {
     if (!selectedTournId) return;
@@ -476,6 +483,15 @@ function LineupTab({ leagueId, league }) {
   }
 
   async function saveLineup() {
+    // Gate 1: office_pool format requires entry fee per tournament
+    if (league.format_type === 'office_pool' && selectedTournId && !paidTournaments.includes(String(selectedTournId))) {
+      setShowPoolGate(true);
+      return;
+    }
+    await doSaveLineup();
+  }
+
+  async function doSaveLineup() {
     setSaving(true);
     setError('');
     setSaved(false);
@@ -491,8 +507,29 @@ function LineupTab({ leagueId, league }) {
 
   const maxStarters = league.starters_per_week || 6;
 
+  const selectedTourn = tournaments.find(t => t.id === selectedTournId || t.id === Number(selectedTournId));
+
   return (
     <div className="space-y-4">
+      {/* Gate 1: Office Pool entry modal */}
+      {showPoolGate && (
+        <GolfPaymentModal
+          type="office_pool"
+          meta={{
+            tournamentId: String(selectedTournId),
+            tournamentName: selectedTourn?.name,
+            isMajor: !!selectedTourn?.is_major,
+            leagueId,
+          }}
+          onClose={() => setShowPoolGate(false)}
+          onAlreadyPaid={() => {
+            setPaidTournaments(p => [...p, String(selectedTournId)]);
+            setShowPoolGate(false);
+            doSaveLineup();
+          }}
+        />
+      )}
+
       {/* Tournament selector */}
       {tournaments.length > 0 && (
         <div>
@@ -1163,9 +1200,233 @@ function ScheduleTab({ leagueId, isComm }) {
   );
 }
 
+// ── Tab: Commissioner Hub ──────────────────────────────────────────────────────
+
+function CommissionerTab({ leagueId, leagueName, members }) {
+  const [promoData, setPromoData]   = useState(null);
+  const [isPaid, setIsPaid]         = useState(false);
+  const [showGate, setShowGate]     = useState(false);
+  const [gateChecked, setGateChecked] = useState(false);
+  const [copied, setCopied]         = useState('');
+
+  useEffect(() => {
+    // Check payment status + run migration promo check simultaneously
+    Promise.all([
+      api.get('/golf/payments/status'),
+      api.post(`/golf/leagues/${leagueId}/check-migration-promo`).catch(() => null),
+    ]).then(([statusRes, promoRes]) => {
+      const commProLeagues = statusRes.data.commProLeagues || [];
+      const paid = commProLeagues.includes(leagueId);
+      if (promoRes?.data?.unlocked) {
+        setIsPaid(true);
+      } else {
+        setIsPaid(paid);
+      }
+      setPromoData(promoRes?.data || null);
+      setGateChecked(true);
+      if (!paid && !(promoRes?.data?.unlocked)) {
+        setShowGate(true);
+      }
+    }).catch(() => setGateChecked(true));
+  }, [leagueId]);
+
+  if (!gateChecked) {
+    return <div style={{ color: '#4b5563', padding: 32, textAlign: 'center', fontSize: 14 }}>Loading…</div>;
+  }
+
+  const memberCount    = promoData?.memberCount || members.length;
+  const membersNeeded  = promoData?.membersNeeded ?? Math.max(0, 6 - memberCount);
+  const alreadyUsedPromo = promoData?.alreadyUsedPromo || false;
+
+  // Promo progress bar (shown even when not yet unlocked)
+  const showPromoBar = !isPaid && !alreadyUsedPromo && membersNeeded > 0;
+  const pct = Math.min(100, Math.round((memberCount / 6) * 100));
+
+  return (
+    <div className="space-y-4">
+      {/* Gate modal */}
+      {showGate && (
+        <GolfPaymentModal
+          type="comm_pro"
+          meta={{ leagueId, memberCount, membersNeeded, alreadyUsedPromo }}
+          onClose={() => setShowGate(false)}
+          onAlreadyPaid={() => { setIsPaid(true); setShowGate(false); }}
+        />
+      )}
+
+      {/* "Bring Your League" promo banner */}
+      {showPromoBar && (
+        <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-blue-400 text-sm font-bold">🎁 Invite {membersNeeded} more to unlock Commissioner Pro free</span>
+            <span className="text-blue-400 text-sm font-bold">{memberCount}/6</span>
+          </div>
+          <div className="bg-gray-900 rounded-full h-2 overflow-hidden">
+            <div style={{ width: `${pct}%`, transition: 'width 0.4s' }} className="h-full bg-blue-500 rounded-full" />
+          </div>
+        </div>
+      )}
+
+      {!isPaid ? (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 text-center">
+          <div className="text-4xl mb-3">🔒</div>
+          <h3 className="text-white font-bold text-lg mb-2">Commissioner Pro required</h3>
+          <p className="text-gray-400 text-sm mb-4 max-w-sm mx-auto">
+            Unlock auto-emails, payment tracking, FAAB results, CSV export, and more for $19.99/season.
+          </p>
+          <button
+            onClick={() => setShowGate(true)}
+            className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3 rounded-xl text-sm transition-colors"
+          >
+            Unlock Commissioner Pro — $19.99
+          </button>
+          {!alreadyUsedPromo && (
+            <p className="text-gray-600 text-xs mt-3">Or invite {membersNeeded} more members to unlock free ↑</p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Commissioner Pro header */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-white font-bold">Commissioner Hub</h3>
+            <span className="bg-purple-500/15 text-purple-400 border border-purple-500/30 text-xs font-bold px-2 py-1 rounded-full">PRO</span>
+          </div>
+
+          {/* Member roster */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-800">
+              <h4 className="text-white text-sm font-bold">Member Roster ({members.length})</h4>
+            </div>
+            <div>
+              {members.map((m, i) => (
+                <div key={m.user_id} style={{ borderBottom: i < members.length - 1 ? '1px solid #111827' : 'none' }}
+                  className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <div className="text-white text-sm font-semibold">{m.team_name}</div>
+                    <div className="text-gray-500 text-xs">{m.username}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-green-400 text-sm font-bold tabular-nums">{Number(m.season_points || 0).toFixed(1)} pts</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Mass blast */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+            <h4 className="text-white text-sm font-bold mb-3">📣 Mass Blast</h4>
+            <MassBlast leagueId={leagueId} />
+          </div>
+
+          {/* CSV export */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+            <h4 className="text-white text-sm font-bold mb-3">📊 Export</h4>
+            <button
+              onClick={() => {
+                const rows = [['Team', 'Username', 'Points']];
+                members.forEach(m => rows.push([m.team_name, m.username, m.season_points || 0]));
+                const csv = rows.map(r => r.join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `${leagueName.replace(/\s+/g,'-')}-standings.csv`;
+                a.click(); URL.revokeObjectURL(url);
+              }}
+              className="text-sm text-green-400 hover:text-green-300 underline underline-offset-2"
+            >
+              Download standings CSV
+            </button>
+          </div>
+
+          {/* Referral link */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+            <h4 className="text-white text-sm font-bold mb-3">🔗 Referral Link</h4>
+            <ReferralSection />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MassBlast({ leagueId }) {
+  const [msg, setMsg] = useState('');
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function send() {
+    if (!msg.trim()) return;
+    setLoading(true);
+    try {
+      await api.post(`/golf/leagues/${leagueId}/blast`, { message: msg });
+      setSent(true);
+      setMsg('');
+      setTimeout(() => setSent(false), 4000);
+    } catch {
+      // silently fail — feature may not be wired on backend yet
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      <textarea
+        value={msg}
+        onChange={e => setMsg(e.target.value)}
+        placeholder="Send a message to all league members…"
+        rows={3}
+        className="input w-full resize-none text-sm"
+      />
+      {sent && <p className="text-green-400 text-xs">Message sent to all members!</p>}
+      <button
+        onClick={send}
+        disabled={loading || !msg.trim()}
+        className="text-sm bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+      >
+        {loading ? 'Sending…' : 'Send to all members'}
+      </button>
+    </div>
+  );
+}
+
+function ReferralSection() {
+  const [data, setData] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    api.get('/golf/referral/my-code').then(r => setData(r.data)).catch(() => {});
+  }, []);
+
+  if (!data) return <div className="text-gray-600 text-xs">Loading…</div>;
+
+  function copy() {
+    navigator.clipboard.writeText(data.link).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-2">
+        <span className="text-gray-400 text-xs truncate flex-1">{data.link}</span>
+        <button onClick={copy} className="text-green-400 text-xs font-bold shrink-0">
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </div>
+      <p className="text-gray-500 text-xs">
+        {data.creditsAvailable > 0
+          ? `You have $${data.creditsAvailable.toFixed(2)} referral credit available.`
+          : `Earn $1 credit for each friend who joins and pays.`}
+      </p>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
-function getTabs(league) {
+function getTabs(league, isComm) {
   const base = [
     { key: 'overview',  label: 'Overview'  },
     { key: 'schedule',  label: 'Schedule'  },
@@ -1178,6 +1439,9 @@ function getTabs(league) {
     { key: 'lineup',    label: 'Lineup'    },
     { key: 'standings', label: 'Standings' },
   );
+  if (isComm) {
+    base.push({ key: 'commissioner', label: '⚙ Commissioner' });
+  }
   return base;
 }
 
@@ -1265,7 +1529,7 @@ export default function GolfLeague() {
       {/* ── Tab bar ── */}
       <div className="relative mb-6">
         <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {getTabs(league).map(t => (
+          {getTabs(league, isComm).map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
@@ -1300,6 +1564,9 @@ export default function GolfLeague() {
       )}
       {tab === 'standings' && (
         <StandingsTab leagueId={id} currentUserId={user?.id} />
+      )}
+      {tab === 'commissioner' && isComm && (
+        <CommissionerTab leagueId={id} leagueName={league.name} members={members} />
       )}
     </div>
   );

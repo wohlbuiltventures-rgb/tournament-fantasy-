@@ -424,6 +424,14 @@ router.post('/webhook', async (req, res) => {
         `).run(session.id);
         console.log(`Smart Draft activated: league=${metadata.league_id} user=${metadata.user_id}`);
 
+      // ── Golf payment (season pass / pool entry / comm pro) ───────────────
+      } else if (metadata.type && metadata.type.startsWith('golf_')) {
+        try {
+          await require('./golf-payments').handleGolfWebhook(session);
+        } catch (golfErr) {
+          console.error('[webhook] golf handler error:', golfErr.message);
+        }
+
       // ── League entry fee ──────────────────────────────────────────────────
       } else {
         const payment = db.prepare(

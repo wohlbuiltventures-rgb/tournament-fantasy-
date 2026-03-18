@@ -442,4 +442,74 @@ if (hasPebble === 0) {
   console.log('[golf-db] Seeded', TOURNAMENTS_2026.length, '2026 signature/major tournaments');
 }
 
+// ── Golf Payment Tables ────────────────────────────────────────────────────────
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS golf_season_passes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      season TEXT NOT NULL DEFAULT '2026',
+      paid_at TEXT,
+      stripe_session_id TEXT,
+      UNIQUE(user_id, season)
+    );
+
+    CREATE TABLE IF NOT EXISTS golf_pool_entries (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      tournament_id TEXT NOT NULL,
+      paid_at TEXT,
+      stripe_session_id TEXT,
+      UNIQUE(user_id, tournament_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS golf_comm_pro (
+      id TEXT PRIMARY KEY,
+      league_id TEXT NOT NULL,
+      commissioner_id TEXT NOT NULL,
+      season TEXT NOT NULL DEFAULT '2026',
+      paid_at TEXT,
+      promo_applied INTEGER DEFAULT 0,
+      stripe_session_id TEXT,
+      UNIQUE(league_id, season)
+    );
+
+    CREATE TABLE IF NOT EXISTS golf_referral_codes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE,
+      code TEXT NOT NULL UNIQUE,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS golf_referral_credits (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      balance REAL DEFAULT 0,
+      season TEXT NOT NULL DEFAULT '2026',
+      expires_at TEXT,
+      UNIQUE(user_id, season)
+    );
+
+    CREATE TABLE IF NOT EXISTS golf_referral_redemptions (
+      id TEXT PRIMARY KEY,
+      referrer_id TEXT NOT NULL,
+      referred_id TEXT NOT NULL,
+      credit_amount REAL NOT NULL,
+      redeemed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS golf_migrations (
+      id TEXT PRIMARY KEY,
+      league_id TEXT NOT NULL,
+      commissioner_id TEXT NOT NULL,
+      member_count_at_promo INTEGER,
+      promo_applied INTEGER DEFAULT 0,
+      source_platform TEXT DEFAULT '',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+} catch (e) {
+  console.error('[golf-db] Payment tables migration error:', e.message);
+}
+
 module.exports = db;

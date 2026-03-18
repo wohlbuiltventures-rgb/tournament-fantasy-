@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Flag, ArrowRight } from 'lucide-react';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
+import GolfPaymentModal, { wasGateDismissed } from '../../components/golf/GolfPaymentModal';
 
 export default function JoinGolfLeague() {
   useDocTitle('Join Golf League | TourneyRun');
@@ -14,12 +15,42 @@ export default function JoinGolfLeague() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showGate, setShowGate] = useState(false);
+  const [gateChecked, setGateChecked] = useState(false);
+  const [hasSeasonPass, setHasSeasonPass] = useState(false);
+
+  // Capture ref code from URL
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    if (ref) sessionStorage.setItem('golf_ref_code', ref.toUpperCase());
+  }, [searchParams]);
+
+  // Check payment status on mount
+  useEffect(() => {
+    api.get('/golf/payments/status')
+      .then(r => {
+        setHasSeasonPass(r.data.hasSeasonPass || false);
+        setGateChecked(true);
+      })
+      .catch(() => setGateChecked(true));
+  }, []);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Gate 2: require Season Pass if not already paid
+    if (!hasSeasonPass && !wasGateDismissed('season_pass', '')) {
+      setShowGate(true);
+      return;
+    }
+
+    await doJoin();
+  };
+
+  async function doJoin() {
     setLoading(true);
     try {
       const res = await api.post('/golf/leagues/join', form);
@@ -28,7 +59,7 @@ export default function JoinGolfLeague() {
       setError(err.response?.data?.error || 'Failed to join league');
       setLoading(false);
     }
-  };
+  }
 
   return (
     <div className="max-w-md mx-auto px-4 py-12 sm:py-16">
@@ -70,14 +101,32 @@ export default function JoinGolfLeague() {
             required
           />
         </div>
+
+        {/* Season Pass badge if already paid */}
+        {gateChecked && hasSeasonPass && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4ade80', fontSize: 12 }}>
+            <span>✓</span> 2026 Season Pass active
+          </div>
+        )}
+
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !gateChecked}
           className="w-full flex items-center justify-center gap-2 py-3.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-black rounded-xl transition-all shadow-lg shadow-green-500/20"
         >
           {loading ? 'Joining...' : <><span>Join League</span><ArrowRight className="w-4 h-4" /></>}
         </button>
       </form>
+
+      {/* Gate 2: Season Pass modal */}
+      {showGate && (
+        <GolfPaymentModal
+          type="season_pass"
+          meta={{}}
+          onClose={() => setShowGate(false)}
+          onAlreadyPaid={() => { setHasSeasonPass(true); setShowGate(false); doJoin(); }}
+        />
+      )}
     </div>
   );
 }

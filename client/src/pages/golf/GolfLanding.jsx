@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDocTitle } from '../../hooks/useDocTitle';
 import { useState, useEffect, useRef } from 'react';
@@ -174,6 +174,13 @@ export default function GolfLanding() {
   const { user } = useAuth();
   const howItWorksRef = useRef(null);
   const [tournaments, setTournaments] = useState([]);
+  const [searchParams] = useSearchParams();
+
+  // Capture referral code from ?ref=CODE and store for checkout
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    if (ref) sessionStorage.setItem('golf_ref_code', ref.toUpperCase());
+  }, [searchParams]);
 
   useEffect(() => {
     api.get('/golf/tournaments').catch(() => null).then(res => {
