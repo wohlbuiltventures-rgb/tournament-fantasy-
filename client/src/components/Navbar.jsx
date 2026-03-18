@@ -39,15 +39,16 @@ export default function Navbar() {
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate('/basketball');
     setMenuOpen(false);
   };
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
   const isGolf = location.pathname.startsWith('/golf');
+  const isHub  = location.pathname === '/';
 
-  // Golf routes render their own GolfNavbar via GolfLayout
-  if (isGolf) return null;
+  // Golf routes render their own GolfNavbar; hub has its own minimal nav
+  if (isGolf || isHub) return null;
 
   // Pill link style helper
   const navLink = (path) => {
@@ -81,7 +82,7 @@ export default function Navbar() {
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', height: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 
         {/* ── LEFT: Logo ── */}
-        <Link to={isGolf ? '/golf' : '/'} className="flex items-center gap-2.5 select-none" style={{ textDecoration: 'none' }}>
+        <Link to={isGolf ? '/golf' : '/basketball'} className="flex items-center gap-2.5 select-none" style={{ textDecoration: 'none' }}>
           {isGolf ? (
             <svg viewBox="0 0 32 32" fill="none" style={{ width: 26, height: 26, lineHeight: 1, flexShrink: 0 }}>
               <circle cx="16" cy="16" r="15" fill="white" stroke="#d1d5db" strokeWidth="0.8"/>
@@ -116,10 +117,10 @@ export default function Navbar() {
               { to: '/golf/faq',       label: 'FAQ'        },
               { to: '/golf#how-it-works', label: 'How to Play', isAnchor: true },
             ] : [
-              { to: '/dashboard', label: 'Dashboard' },
-              { to: '/games',     label: 'Games', live: true },
-              { to: '/strategy',  label: 'Strategy' },
-              { to: '/faq',       label: 'FAQ'      },
+              { to: '/basketball/dashboard', label: 'Dashboard' },
+              { to: '/basketball/games',     label: 'Games', live: true },
+              { to: '/basketball/strategy',  label: 'Strategy' },
+              { to: '/basketball/faq',       label: 'FAQ'      },
             ]).map(({ to, label, live, isAnchor }) => {
               const style = navLink(to);
               const hoverIn  = e => { if (!isActive(to)) { e.currentTarget.style.color = '#e5e7eb'; e.currentTarget.style.background = '#1f2937'; } };
@@ -149,18 +150,18 @@ export default function Navbar() {
             <>
               {user.role === 'superadmin' && (
                 <Link
-                  to="/admin"
-                  style={{ ...navLink('/admin'), color: isActive('/admin') ? '#fff' : '#f59e0b', fontWeight: 500 }}
+                  to="/basketball/admin"
+                  style={{ ...navLink('/basketball/admin'), color: isActive('/basketball/admin') ? '#fff' : '#f59e0b', fontWeight: 500 }}
                   onMouseEnter={e => {
-                    if (!isActive('/admin')) {
+                    if (!isActive('/basketball/admin')) {
                       e.currentTarget.style.color = '#fcd34d';
                       e.currentTarget.style.background = '#1f2937';
                     }
                   }}
                   onMouseLeave={e => {
-                    if (!isActive('/admin')) {
+                    if (!isActive('/basketball/admin')) {
                       e.currentTarget.style.color = '#f59e0b';
-                      e.currentTarget.style.background = isActive('/admin') ? '#1f2937' : 'transparent';
+                      e.currentTarget.style.background = isActive('/basketball/admin') ? '#1f2937' : 'transparent';
                     }
                   }}
                 >
@@ -280,15 +281,15 @@ export default function Navbar() {
                     <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#7c3aed22', border: '1px solid #7c3aed55', color: '#a78bfa', fontSize: 10, fontWeight: 600, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials}</span>
                     <span>{user.display_name || user.username}</span>
                   </Link>
-                  <Link to="/dashboard" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Dashboard</Link>
-                  <Link to="/games" className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>
+                  <Link to="/basketball/dashboard" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Dashboard</Link>
+                  <Link to="/basketball/games" className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>
                     {hasLiveGames && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f97316', flexShrink: 0, animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite' }} />}
                     Games
                   </Link>
-                  <Link to="/strategy" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Strategy</Link>
-                  <Link to="/faq" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>FAQ</Link>
+                  <Link to="/basketball/strategy" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Strategy</Link>
+                  <Link to="/basketball/faq" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>FAQ</Link>
                   {user.role === 'superadmin' && (
-                    <Link to="/admin" className="block px-3 py-2 text-yellow-400 hover:text-yellow-300 hover:bg-gray-800 rounded-lg transition-colors font-medium" onClick={() => setMenuOpen(false)}>Admin</Link>
+                    <Link to="/basketball/admin" className="block px-3 py-2 text-yellow-400 hover:text-yellow-300 hover:bg-gray-800 rounded-lg transition-colors font-medium" onClick={() => setMenuOpen(false)}>Admin</Link>
                   )}
                   <button onClick={handleLogout} className="block w-full text-left px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-sm">Logout</button>
                 </>

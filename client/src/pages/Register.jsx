@@ -38,9 +38,9 @@ export default function Register() {
       // Claim the standalone Smart Draft credit if we came from Stripe checkout
       if (sdSession) {
         try { await api.post('/payments/claim-credit', { session_id: sdSession }); } catch {}
-        navigate('/create-league?smartdraft=1');
+        navigate('/basketball/create-league?smartdraft=1');
       } else {
-        navigate('/dashboard');
+        navigate('/basketball/dashboard');
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');

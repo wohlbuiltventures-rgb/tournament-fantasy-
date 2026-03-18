@@ -28,9 +28,9 @@ export default function Login() {
       await login(form.email, form.password);
       if (sdSession) {
         try { await api.post('/payments/claim-credit', { session_id: sdSession }); } catch {}
-        navigate('/create-league?smartdraft=1');
+        navigate('/basketball/create-league?smartdraft=1');
       } else {
-        navigate('/dashboard');
+        navigate('/basketball/dashboard');
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
