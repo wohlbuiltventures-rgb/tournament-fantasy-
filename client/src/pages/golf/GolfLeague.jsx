@@ -200,7 +200,9 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
             <>
               <button
                 onClick={() => navigate(`/golf/league/${league.id}/draft`)}
-                className="w-full py-3 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl transition-all mb-2"
+                style={{ width: '100%', background: '#00e87a', color: '#001a0d', fontWeight: 700, fontSize: 14, padding: '12px 24px', borderRadius: 8, border: 'none', cursor: 'pointer', transition: 'background 0.15s, transform 0.15s', marginBottom: 8 }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#00cc6a'; e.currentTarget.style.transform = 'scale(1.01)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#00e87a'; e.currentTarget.style.transform = 'scale(1)'; }}
               >
                 Go to Draft Room →
               </button>
@@ -211,7 +213,9 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
           )}
           <button
             onClick={() => navigate(`/golf/league/${league.id}/scores`)}
-            className="w-full py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-500 text-gray-200 font-bold rounded-xl transition-all"
+            style={{ width: '100%', background: 'transparent', border: '1.5px solid rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700, fontSize: 14, padding: '12px 24px', borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.background = 'transparent'; }}
           >
             Enter Scores →
           </button>
@@ -237,12 +241,18 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
           </p>
           <button
             onClick={() => navigate(`/golf/league/${league.id}/picks`)}
-            className={`w-full py-3 font-bold rounded-xl transition-all ${
-              league.picks_locked
-                ? 'bg-gray-800 text-gray-400 border border-gray-700 cursor-not-allowed'
-                : 'bg-blue-500 hover:bg-blue-400 text-white'
-            }`}
             disabled={league.picks_locked}
+            style={{
+              width: '100%',
+              background: league.picks_locked ? 'transparent' : '#00e87a',
+              color: league.picks_locked ? '#6b7280' : '#001a0d',
+              border: league.picks_locked ? '1px solid #374151' : 'none',
+              fontWeight: 700, fontSize: 14, padding: '12px 24px', borderRadius: 8,
+              cursor: league.picks_locked ? 'not-allowed' : 'pointer',
+              transition: 'background 0.15s, transform 0.15s',
+            }}
+            onMouseEnter={e => { if (!league.picks_locked) { e.currentTarget.style.background = '#00cc6a'; e.currentTarget.style.transform = 'scale(1.01)'; } }}
+            onMouseLeave={e => { if (!league.picks_locked) { e.currentTarget.style.background = '#00e87a'; e.currentTarget.style.transform = 'scale(1)'; } }}
           >
             {league.picks_locked ? 'Picks Locked' : 'Make Picks →'}
           </button>

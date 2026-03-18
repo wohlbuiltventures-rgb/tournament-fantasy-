@@ -212,7 +212,9 @@ function LeagueCard({ league, userId, past = false }) {
 
         {/* CTA row */}
         <div className="mt-auto pt-1">
-          <div className="flex items-center justify-center gap-1.5 bg-gray-800/60 hover:bg-gray-800 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white text-sm font-medium py-2 rounded-xl transition-all">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'transparent', border: '1.5px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 14, fontWeight: 700, padding: '10px 24px', borderRadius: 8, transition: 'border-color 0.15s, background 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.background = 'transparent'; }}>
             {past ? 'View Results' : 'Enter League'} <ChevronRight className="w-4 h-4" />
           </div>
         </div>
@@ -279,19 +281,25 @@ export default function GolfDashboard() {
         <div className="flex flex-wrap gap-2">
           <Link
             to="/golf/join"
-            className="inline-flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-500 text-gray-200 font-semibold px-4 py-2.5 rounded-full transition-all text-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'transparent', border: '1.5px solid rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700, fontSize: 14, padding: '10px 24px', borderRadius: 8, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.background = 'transparent'; }}
           >
             <Ticket className="w-4 h-4" /> Join League
           </Link>
           <Link
             to="/golf/create"
-            className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white font-semibold px-4 py-2.5 rounded-full transition-all shadow-lg shadow-green-500/25 text-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#00e87a', color: '#001a0d', fontWeight: 700, fontSize: 14, padding: '10px 24px', borderRadius: 8, textDecoration: 'none', transition: 'background 0.15s, transform 0.15s', letterSpacing: '0.01em' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#00cc6a'; e.currentTarget.style.transform = 'scale(1.01)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#00e87a'; e.currentTarget.style.transform = 'scale(1)'; }}
           >
-            <Plus className="w-4 h-4" /> Create Fantasy League
+            <Plus className="w-4 h-4" /> Create Custom League
           </Link>
           <Link
             to="/golf/create?format=pool"
-            className="inline-flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-amber-500/50 text-gray-200 font-semibold px-4 py-2.5 rounded-full transition-all text-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'transparent', border: '1.5px solid rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700, fontSize: 14, padding: '10px 24px', borderRadius: 8, textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.background = 'transparent'; }}
           >
             🏆 Run an Office Pool
           </Link>
@@ -322,7 +330,7 @@ export default function GolfDashboard() {
                   <Plus className="w-6 h-6 text-green-400" />
                 </div>
                 <div>
-                  <div className="text-white font-black text-sm">Create Fantasy League</div>
+                  <div className="text-white font-black text-sm">Create Custom League</div>
                   <div className="text-gray-500 text-xs mt-0.5">Draft, salary cap, or daily</div>
                 </div>
               </Link>

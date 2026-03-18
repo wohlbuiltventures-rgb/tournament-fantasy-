@@ -1114,9 +1114,13 @@ export default function CreateGolfLeague() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-4 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-black text-base rounded-2xl transition-all shadow-lg shadow-green-500/25"
+          style={{ width: '100%', background: loading ? 'rgba(0,232,122,0.4)' : '#00e87a', color: '#001a0d', fontWeight: 700, fontSize: 14, padding: '14px 24px', borderRadius: 8, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', transition: 'background 0.15s, transform 0.15s', letterSpacing: '0.01em' }}
+          onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = '#00cc6a'; e.currentTarget.style.transform = 'scale(1.01)'; } }}
+          onMouseLeave={e => { if (!loading) { e.currentTarget.style.background = '#00e87a'; e.currentTarget.style.transform = 'scale(1)'; } }}
         >
-          {loading ? 'Creating League...' : `Create ${selectedFmt?.title} League →`}
+          {loading ? 'Creating League...' : (
+            { pool: 'Launch Office Pool →', dk: 'Launch DFS League →', tourneyrun: 'Launch Fantasy League →' }[selectedFmt?.key] ?? `Create ${selectedFmt?.title} League →`
+          )}
         </button>
       </form>
     </div>
