@@ -167,6 +167,28 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
         </div>
       </div>
 
+      {/* Pool mode: picks CTA for members (only if open) */}
+      {league.format_type === 'pool' && league.pool_tournament_id && !league.picks_locked && (
+        <div style={{ background: 'rgba(0,232,122,0.06)', border: '1px solid rgba(0,232,122,0.2)', borderRadius: 16, padding: '20px' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <Flag className="w-4 h-4" style={{ color: '#00e87a' }} />
+            <span style={{ color: '#00e87a', fontWeight: 700, fontSize: 14 }}>Make Your Picks</span>
+            {league.pool_tournament_name && (
+              <span className="text-gray-500 text-xs ml-auto">{league.pool_tournament_name}</span>
+            )}
+          </div>
+          <p className="text-gray-400 text-sm mb-4">Select your golfers before picks lock. Use the Roster tab or click below.</p>
+          <button
+            onClick={() => navigate(`/golf/league/${league.id}/picks`)}
+            style={{ width: '100%', background: '#00e87a', color: '#001a0d', fontWeight: 700, fontSize: 14, padding: '12px 24px', borderRadius: 8, border: 'none', cursor: 'pointer', transition: 'background 0.15s, transform 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#00cc6a'; e.currentTarget.style.transform = 'scale(1.01)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#00e87a'; e.currentTarget.style.transform = 'scale(1)'; }}
+          >
+            Select Your Players →
+          </button>
+        </div>
+      )}
+
       {/* Commissioner actions */}
       {isComm && (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
@@ -222,42 +244,6 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
         </div>
       )}
 
-      {/* Pool mode: make picks card (all members) */}
-      {league.format_type === 'pool' && league.pool_tournament_id && (
-        <div className={`border rounded-2xl p-5 ${league.picks_locked ? 'bg-gray-900 border-gray-800' : 'bg-blue-500/8 border-blue-500/20'}`}>
-          <div className="flex items-center gap-2 mb-3">
-            <Target className="w-4 h-4 text-blue-400" />
-            <span className="text-blue-400 font-bold text-sm">Pool Picks</span>
-            {league.picks_locked && (
-              <span className="ml-auto bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">
-                Locked
-              </span>
-            )}
-          </div>
-          <p className="text-gray-400 text-sm mb-4">
-            {league.picks_locked
-              ? 'Picks are locked. Check back after the tournament.'
-              : 'Select your golfers before picks lock.'}
-          </p>
-          <button
-            onClick={() => navigate(`/golf/league/${league.id}/picks`)}
-            disabled={league.picks_locked}
-            style={{
-              width: '100%',
-              background: league.picks_locked ? 'transparent' : '#00e87a',
-              color: league.picks_locked ? '#6b7280' : '#001a0d',
-              border: league.picks_locked ? '1px solid #374151' : 'none',
-              fontWeight: 700, fontSize: 14, padding: '12px 24px', borderRadius: 8,
-              cursor: league.picks_locked ? 'not-allowed' : 'pointer',
-              transition: 'background 0.15s, transform 0.15s',
-            }}
-            onMouseEnter={e => { if (!league.picks_locked) { e.currentTarget.style.background = '#00cc6a'; e.currentTarget.style.transform = 'scale(1.01)'; } }}
-            onMouseLeave={e => { if (!league.picks_locked) { e.currentTarget.style.background = '#00e87a'; e.currentTarget.style.transform = 'scale(1)'; } }}
-          >
-            {league.picks_locked ? 'Picks Locked' : 'Make Picks →'}
-          </button>
-        </div>
-      )}
 
       {/* DK mode: no draft, direct to lineup */}
       {league.format_type === 'dk' && (
@@ -2112,9 +2098,13 @@ export default function GolfLeague() {
               <Chip color="green">Golf</Chip>
               {isComm && <Chip color="blue">Commissioner</Chip>}
               {league.format_type === 'pool'
-                ? (league.picks_locked
-                    ? <Chip color="yellow">Picks Locked</Chip>
-                    : <Chip color="green">Picks Open</Chip>)
+                ? (() => {
+                    const ts = league.pool_tournament_status;
+                    if (ts === 'active')    return <Chip color="green"><span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse mr-1" />Live</Chip>;
+                    if (ts === 'completed') return <Chip color="gray">Complete</Chip>;
+                    if (league.picks_locked) return <Chip color="yellow">Picks Locked</Chip>;
+                    return <Chip color="green">Picks Open</Chip>;
+                  })()
                 : (league.draft_status === 'completed'
                     ? <Chip color="green">Season Active</Chip>
                     : <Chip color="yellow">Draft Pending</Chip>)
@@ -2122,19 +2112,17 @@ export default function GolfLeague() {
             </div>
           </div>
           {league.format_type === 'pool'
-            ? (league.picks_locked
-                ? <Link
-                    to={`/golf/league/${id}?tab=standings`}
-                    className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white font-bold px-5 py-2.5 rounded-full transition-all shadow-lg shadow-green-500/20 text-sm shrink-0"
-                  >
-                    View Leaderboard <ChevronRight className="w-4 h-4" />
-                  </Link>
-                : <Link
-                    to={`/golf/league/${id}/picks`}
-                    className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white font-bold px-5 py-2.5 rounded-full transition-all shadow-lg shadow-green-500/20 text-sm shrink-0"
-                  >
-                    Make My Picks <ChevronRight className="w-4 h-4" />
-                  </Link>)
+            ? (() => {
+                const ts = league.pool_tournament_status;
+                const ctaClass = "inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white font-bold px-5 py-2.5 rounded-full transition-all shadow-lg shadow-green-500/20 text-sm shrink-0";
+                if (!league.picks_locked)
+                  return <Link to={`/golf/league/${id}/picks`} className={ctaClass}>Make My Picks <ChevronRight className="w-4 h-4" /></Link>;
+                if (ts === 'completed')
+                  return <Link to={`/golf/league/${id}?tab=standings`} className={ctaClass}>Final Results <ChevronRight className="w-4 h-4" /></Link>;
+                if (ts === 'active')
+                  return <Link to={`/golf/league/${id}?tab=standings`} className={ctaClass}>View Leaderboard <ChevronRight className="w-4 h-4" /></Link>;
+                return <Link to={`/golf/league/${id}?tab=standings`} className={ctaClass}>View Standings <ChevronRight className="w-4 h-4" /></Link>;
+              })()
             : (league.draft_status !== 'completed' && (
                 <Link
                   to={`/golf/league/${id}/draft`}

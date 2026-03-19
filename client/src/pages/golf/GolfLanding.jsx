@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useDocTitle } from '../../hooks/useDocTitle';
 import { useState, useEffect, useRef } from 'react';
 import api from '../../api';
-import { ArrowRight, Plus, MessageCircle, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowRight, Plus, MessageCircle, CheckCircle, XCircle, Trophy, Calendar, DollarSign, Star, Flag, BarChart2, Clipboard, Mail, FileText } from 'lucide-react';
 
 // ── Keyframes ─────────────────────────────────────────────────────────────────
 const STYLES = `
@@ -49,8 +49,29 @@ function Section({ children, className = '', style = {} }) {
 }
 
 // ── Ticker ────────────────────────────────────────────────────────────────────
-const TICKER_TEXT =
-  '⛳ Masters in 3 weeks  ·  🏆 13 PGA Tour events  ·  📅 Draft before Thursday  ·  💰 One draft all season  ·  ⭐ Majors count 1.5×  ·  🏌️ Real scoring, real stakes  ·  ';
+const TICKER_ITEMS = [
+  { Icon: Flag,        text: 'Masters in 3 weeks' },
+  { Icon: Trophy,      text: '13 PGA Tour events' },
+  { Icon: Calendar,    text: 'Draft before Thursday' },
+  { Icon: DollarSign,  text: 'One draft all season' },
+  { Icon: Star,        text: 'Majors count 1.5×' },
+  { Icon: Trophy,      text: 'Real scoring, real stakes' },
+];
+
+function TickerRow() {
+  const items = [...TICKER_ITEMS, ...TICKER_ITEMS]; // double for seamless loop
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0, whiteSpace: 'nowrap' }}>
+      {items.map(({ Icon, text }, i) => (
+        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 32, color: '#6b7280', fontSize: 12, fontWeight: 500, letterSpacing: '0.03em' }}>
+          <Icon size={12} color="#00e87a" strokeWidth={2} />
+          {text}
+          <span style={{ marginLeft: 16, color: '#374151' }}>·</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function Ticker() {
   return (
@@ -58,11 +79,8 @@ function Ticker() {
       <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
         <div style={{ animation: 'marqueeGolf 30s linear infinite', display: 'flex', whiteSpace: 'nowrap', willChange: 'transform' }}>
           {[0, 1].map(i => (
-            <span key={i} className="inline-flex items-center gap-2 pr-12">
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', flexShrink: 0, display: 'inline-block' }} />
-              <span style={{ color: '#6b7280', fontSize: 12, fontWeight: 500, letterSpacing: '0.03em' }}>
-                {TICKER_TEXT}
-              </span>
+            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', paddingRight: 48 }}>
+              <TickerRow />
             </span>
           ))}
         </div>
@@ -92,27 +110,27 @@ const FINISH_BONUSES = [
 // ── Commissioner pain points ───────────────────────────────────────────────────
 const PAIN_POINTS = [
   {
-    icon: '📋',
+    Icon: Clipboard,
     before: 'Copying scores from PGA.com every Sunday',
     after: 'Scores sync automatically from ESPN',
   },
   {
-    icon: '📧',
+    Icon: Mail,
     before: 'Texting everyone their standings',
     after: 'Automated email after every round',
   },
   {
-    icon: '💰',
+    Icon: DollarSign,
     before: 'Chasing people for buy-in money',
     after: 'Payment tracker built in',
   },
   {
-    icon: '📝',
+    Icon: FileText,
     before: 'Managing a Google Form for picks',
     after: 'Members submit picks inside the app',
   },
   {
-    icon: '📊',
+    Icon: BarChart2,
     before: "Answering 'what place am I in?' at 11pm",
     after: 'Live leaderboard, always up to date',
   },
@@ -510,9 +528,9 @@ export default function GolfLanding() {
         </div>
 
         <div className="space-y-3 max-w-2xl mx-auto mb-10">
-          {PAIN_POINTS.map(({ icon, before, after }) => (
+          {PAIN_POINTS.map(({ Icon, before, after }) => (
             <div key={before} className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4 flex items-start gap-4">
-              <span className="text-xl shrink-0 mt-0.5">{icon}</span>
+              <Icon size={18} color="#00e87a" strokeWidth={1.5} className="shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="text-gray-500 text-sm line-through">{before}</span>
@@ -671,7 +689,7 @@ export default function GolfLanding() {
             ))}
           </div>
           <div className="mt-5 pt-4 border-t border-gray-800 flex items-center gap-2 flex-wrap">
-            <span className="text-yellow-400 text-base">⭐</span>
+            <Star size={16} color="#f59e0b" fill="#f59e0b" strokeWidth={1} />
             <span className="text-yellow-400 font-bold text-sm">Majors: all points × 1.5</span>
             <span className="text-gray-600 text-xs ml-auto">Masters · PGA Champ · US Open · The Open</span>
           </div>
@@ -684,9 +702,9 @@ export default function GolfLanding() {
       <Section className="bg-gray-900/40 border-y border-gray-800 py-16 sm:py-20 px-4">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-black text-white text-center mb-3">
-            13 events. One season.
+            Majors + Signature Events
           </h2>
-          <p className="text-gray-500 text-center text-sm mb-10">Your players compete every week. Points stack all season.</p>
+          <p className="text-gray-500 text-center text-sm mb-10">The biggest events of the season. Points stack all year.</p>
 
           {tournaments.length === 0 ? (
             <div className="space-y-2">
@@ -695,12 +713,13 @@ export default function GolfLanding() {
               ))}
             </div>
           ) : (() => {
-            const nextUpIdx = tournaments.findIndex(
+            const featured = tournaments.filter(t => t.is_major || t.is_signature);
+            const nextUpIdx = featured.findIndex(
               t => t.status !== 'completed' && t.status !== 'active'
             );
             return (
               <div className="space-y-2">
-                {tournaments.map((t, idx) => {
+                {featured.map((t, idx) => {
                   const isNextUp = idx === nextUpIdx;
                   const countdown = isNextUp && t.start_date ? daysUntil(t.start_date) : null;
                   return (

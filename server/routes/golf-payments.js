@@ -69,7 +69,7 @@ router.get('/referral/my-code', authMiddleware, (req, res) => {
     const code = ensureReferralCode(req.user.id);
     const clientUrl = process.env.CLIENT_URL
       ? process.env.CLIENT_URL.replace(/\/$/, '')
-      : 'https://tourneyrun.app';
+      : 'https://www.tourneyrun.app';
 
     const credits = db.prepare(
       'SELECT balance FROM golf_referral_credits WHERE user_id = ? AND season = ?'
@@ -81,7 +81,7 @@ router.get('/referral/my-code', authMiddleware, (req, res) => {
 
     res.json({
       code,
-      link: `${clientUrl}/golf?ref=${code}`,
+      link: `${clientUrl}/golf/join?ref=${code}`,
       creditsAvailable: credits?.balance || 0,
       creditsEarned: earned?.total || 0,
     });

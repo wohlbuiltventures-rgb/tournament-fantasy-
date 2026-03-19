@@ -211,7 +211,8 @@ router.get('/leagues', authMiddleware, (req, res) => {
              (SELECT COUNT(*) FROM golf_league_members WHERE golf_league_id = gl.id) as member_count,
              gt.name as pool_tournament_name,
              gt.start_date as pool_tournament_start,
-             gt.end_date as pool_tournament_end
+             gt.end_date as pool_tournament_end,
+             gt.status as pool_tournament_status
       FROM golf_leagues gl
       JOIN golf_league_members glm ON glm.golf_league_id = gl.id AND glm.user_id = ?
       LEFT JOIN golf_tournaments gt ON gt.id = gl.pool_tournament_id
@@ -366,7 +367,14 @@ router.post('/leagues/join', authMiddleware, (req, res) => {
 
 router.get('/leagues/:id', authMiddleware, (req, res) => {
   try {
-    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    const league = db.prepare(`
+      SELECT gl.*, gt.status as pool_tournament_status,
+        gt.start_date as pool_tournament_start, gt.end_date as pool_tournament_end,
+        gt.name as pool_tournament_name
+      FROM golf_leagues gl
+      LEFT JOIN golf_tournaments gt ON gt.id = gl.pool_tournament_id
+      WHERE gl.id = ?
+    `).get(req.params.id);
     if (!league) return res.status(404).json({ error: 'League not found' });
     const members = db.prepare(`
       SELECT glm.*, u.username, u.avatar_url

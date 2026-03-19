@@ -92,7 +92,7 @@ function TieredView({ tiers, leagueId, tournamentId, onRefresh }) {
                   {p.player_name}
                   {p.manually_overridden ? <span className="text-[10px] text-amber-400/70 ml-1.5">moved</span> : null}
                 </span>
-                <span className="text-gray-600 text-xs shrink-0">{p.odds_display}</span>
+                <span className="text-gray-600 text-xs shrink-0">{(p.odds_display || '').replace(':', '/')}</span>
 
                 {/* Move dropdown */}
                 <div className="relative shrink-0">

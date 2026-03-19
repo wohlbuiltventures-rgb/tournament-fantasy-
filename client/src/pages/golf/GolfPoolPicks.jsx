@@ -234,7 +234,7 @@ function TieredPickSheet({ tiers, selected, names, onToggle }) {
                       </span>
                     </div>
                     <span className={`text-xs shrink-0 ml-2 tabular-nums ${isSelected ? 'text-green-300' : 'text-gray-500'}`}>
-                      {p.odds_display}
+                      {(p.odds_display || '').replace(':', '/')}
                     </span>
                   </button>
                 );
