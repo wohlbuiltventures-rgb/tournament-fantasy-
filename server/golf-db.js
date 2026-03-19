@@ -244,6 +244,18 @@ for (const { pattern, id } of _espnIdSeeds) {
   } catch (_) {}
 }
 
+// ── One-time fix: Beta Group 1.0 league — set draft_type to 'tiered' ──────────
+// League 68b1e250 was created as an auction draft but is configured as a tiered
+// pool (pick_sheet_format='tiered', format_type='pool'). Align draft_type to match.
+try {
+  db.prepare(`
+    UPDATE golf_leagues
+    SET draft_type = 'tiered'
+    WHERE id = '68b1e250-6afc-4e80-ad7b-d8a22ae3ad7d'
+      AND draft_type != 'tiered'
+  `).run();
+} catch (e) { console.error('[golf-db] Beta Group 1.0 draft_type fix error:', e.message); }
+
 // ── Seed golf_players (March 2026 OWGR) ───────────────────────────────────────
 const GOLF_PLAYERS = [
   // Elite $800 (rank 1-10)
