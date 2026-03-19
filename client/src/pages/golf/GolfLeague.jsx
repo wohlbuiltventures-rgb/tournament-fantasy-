@@ -1795,7 +1795,6 @@ function FreeAgencyTab({ leagueId, league }) {
 
 // ── Tab: Standings ─────────────────────────────────────────────────────────────
 
-const TIER_NAMES = { 1: 'Tier 1 · Elite', 2: 'Tier 2 · Premium', 3: 'Tier 3 · Mid-Field', 4: 'Tier 4 · Longshots' };
 const RANK_COLORS = ['#fbbf24', '#d1d5db', '#f97316']; // gold / silver / bronze
 
 // Shared sub-components -------------------------------------------------------
