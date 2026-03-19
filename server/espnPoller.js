@@ -136,6 +136,21 @@ async function processBoxScore(gameId, summary) {
   const roundCode = game ? roundNameToCode(game.round_name) : '';
   const playedAt  = new Date().toISOString();
 
+  // Collect the ESPN team IDs for both teams in this game so we can validate
+  // player group membership. Without this check, name-matched players from
+  // unrelated teams (e.g. UConn players appearing in an Ohio State vs TCU box
+  // score) get incorrectly inserted.
+  const getTeamEspnIds = (teamName) => {
+    if (!teamName) return new Set();
+    const rows = db.prepare(
+      "SELECT DISTINCT espn_team_id FROM players WHERE team = ? AND espn_team_id IS NOT NULL AND espn_team_id != ''"
+    ).all(teamName);
+    return new Set(rows.map(r => String(r.espn_team_id)));
+  };
+  const team1EspnIds = game ? getTeamEspnIds(game.team1) : new Set();
+  const team2EspnIds = game ? getTeamEspnIds(game.team2) : new Set();
+  const validEspnTeamIds = new Set([...team1EspnIds, ...team2EspnIds]);
+
   let playersUpdated = 0;
   const playerGroups = summary.boxscore?.players || [];
   for (const group of playerGroups) {
@@ -146,7 +161,14 @@ async function processBoxScore(gameId, summary) {
     if (ptsIdx === -1) continue;
 
     // ESPN tells us which team this group belongs to
-    const groupTeamName = group.team?.displayName || '';
+    const groupTeamName  = group.team?.displayName || '';
+    const groupEspnTeamId = group.team?.id ? String(group.team.id) : '';
+
+    // Skip entire player group if its ESPN team isn't one of this game's two teams
+    if (groupEspnTeamId && validEspnTeamIds.size > 0 && !validEspnTeamIds.has(groupEspnTeamId)) {
+      console.log(`[stats] skipping group "${groupTeamName}" (espn_team_id=${groupEspnTeamId}) — not in game "${game?.team1}" vs "${game?.team2}"`);
+      continue;
+    }
 
     // Derive opponent: the other team in this game
     let opponent = '';
@@ -161,6 +183,15 @@ async function processBoxScore(gameId, summary) {
       if (!displayName) continue;
       const player = findMatchingPlayer(displayName);
       if (!player) continue;
+
+      // Second guard: player's stored espn_team_id must match this group's team.
+      // This catches cases where findMatchingPlayer returns a same-named player
+      // from a different team.
+      if (player.espn_team_id && groupEspnTeamId && player.espn_team_id !== groupEspnTeamId) {
+        console.log(`[stats] skipped "${displayName}" — player espn_team_id=${player.espn_team_id} ≠ group espn_team_id=${groupEspnTeamId}`);
+        continue;
+      }
+
       db.prepare(`
         INSERT INTO player_stats (id, game_id, player_id, points, round, opponent, played_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
