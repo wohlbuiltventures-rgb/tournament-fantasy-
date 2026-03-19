@@ -632,15 +632,98 @@ router.post('/espn-poll', superadmin, async (req, res) => {
   }
 });
 
-// ── Re-ingest all completed game stats by espn_event_id ─────────────────────
+// ── Re-ingest game stats ─────────────────────────────────────────────────────
 // POST /api/superadmin/reingest-stats
+// Body (optional): { "espn_event_id": "401856479" }
+// Without body: re-ingests ALL completed games.
+// With espn_event_id: re-ingests that one game synchronously and returns the
+//   full per-player result in the response so you can see it without logs.
 router.post('/reingest-stats', superadmin, async (req, res) => {
   try {
-    const { reingestCompletedGames } = require('../espnPoller');
+    const { espn_event_id } = req.body || {};
+    const https = require('https');
+    const { v4: uuidv4 } = require('uuid');
     const io = req.app.get('io');
-    // Run async, respond immediately so request doesn't time out
-    reingestCompletedGames(io).catch(e => console.error('[reingest] error:', e.message));
-    res.json({ ok: true, message: 'Re-ingestion started — check server logs for progress' });
+
+    if (espn_event_id) {
+      // Single-game synchronous reingest with full per-player response
+      const game = db.prepare('SELECT * FROM games WHERE espn_event_id = ?').get(String(espn_event_id));
+      if (!game) return res.status(404).json({ error: `No game found with espn_event_id ${espn_event_id}` });
+
+      const SUMMARY_BASE = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event=';
+      const summary = await new Promise((resolve, reject) => {
+        https.get(SUMMARY_BASE + espn_event_id, { timeout: 10000 }, r => {
+          let d = ''; r.on('data', c => d += c); r.on('end', () => { try { resolve(JSON.parse(d)); } catch(e) { reject(e); } });
+        }).on('error', reject);
+      });
+
+      const playerGroups = summary.boxscore?.players || [];
+      const players = [];
+
+      for (const group of playerGroups) {
+        const statsBlock = group.statistics?.[0];
+        if (!statsBlock) continue;
+        const labels = statsBlock.names || statsBlock.labels || [];
+        const ptsIdx = labels.indexOf('PTS');
+        if (ptsIdx === -1) continue;
+        const groupTeamName   = group.team?.displayName || '';
+        const groupEspnTeamId = group.team?.id ? String(group.team.id) : '';
+
+        for (const entry of (statsBlock.athletes || [])) {
+          const displayName   = entry.athlete?.displayName || entry.athlete?.shortName;
+          const espnAthleteId = entry.athlete?.id ? String(entry.athlete.id) : '';
+          const pts = parseInt(entry.stats?.[ptsIdx]) || 0;
+          if (!displayName) continue;
+
+          let dbPlayer = espnAthleteId
+            ? db.prepare("SELECT id, name, team, espn_athlete_id, espn_team_id FROM players WHERE espn_athlete_id = ? LIMIT 1").get(espnAthleteId)
+            : null;
+          let matchMethod = dbPlayer ? 'athlete_id' : null;
+
+          if (!dbPlayer) {
+            const norm = displayName.toLowerCase().trim();
+            dbPlayer = db.prepare('SELECT id, name, team, espn_athlete_id, espn_team_id FROM players WHERE LOWER(name) = ?').get(norm);
+            if (!dbPlayer) {
+              const last = norm.split(' ').pop();
+              const rows = db.prepare("SELECT id, name, team, espn_athlete_id, espn_team_id FROM players WHERE LOWER(name) LIKE ?").all(`%${last}`);
+              if (rows.length === 1) dbPlayer = rows[0];
+            }
+            if (dbPlayer) {
+              const playerTeamId = dbPlayer.espn_team_id != null ? String(dbPlayer.espn_team_id) : '';
+              if (playerTeamId && groupEspnTeamId && playerTeamId !== groupEspnTeamId) {
+                players.push({ espn_name: displayName, espn_athlete_id: espnAthleteId, pts, espn_team: groupTeamName, match: 'SKIPPED_TEAM_MISMATCH', db_player: dbPlayer.name, db_team_id: playerTeamId, group_team_id: groupEspnTeamId });
+                dbPlayer = null;
+              } else {
+                matchMethod = 'name';
+              }
+            }
+          }
+
+          if (!dbPlayer) {
+            players.push({ espn_name: displayName, espn_athlete_id: espnAthleteId, pts, espn_team: groupTeamName, match: 'NO_MATCH' });
+            continue;
+          }
+
+          // Insert/update stat row
+          const statsBefore = db.prepare('SELECT points FROM player_stats WHERE game_id = ? AND player_id = ?').get(game.id, dbPlayer.id);
+          db.prepare(`
+            INSERT INTO player_stats (id, game_id, player_id, points, round, opponent, played_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(game_id, player_id) DO UPDATE SET points = excluded.points
+          `).run(uuidv4(), game.id, dbPlayer.id, pts, '', '', new Date().toISOString());
+
+          players.push({ espn_name: displayName, espn_athlete_id: espnAthleteId, pts, espn_team: groupTeamName, match: matchMethod, db_player: dbPlayer.name, db_team: dbPlayer.team, pts_before: statsBefore?.points ?? null });
+        }
+      }
+
+      const matched = players.filter(p => p.match && p.match !== 'NO_MATCH' && p.match !== 'SKIPPED_TEAM_MISMATCH');
+      res.json({ game: `${game.team1} vs ${game.team2}`, espn_event_id, total_espn_athletes: players.length, matched: matched.length, players });
+    } else {
+      // All completed games — async, check logs
+      const { reingestCompletedGames } = require('../espnPoller');
+      reingestCompletedGames(io).catch(e => console.error('[reingest] error:', e.message));
+      res.json({ ok: true, message: 'Re-ingestion started for all completed games — check server logs' });
+    }
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
