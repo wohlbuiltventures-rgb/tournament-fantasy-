@@ -220,39 +220,97 @@ async function processBoxScore(gameId, summary) {
 // Fetches ESPN boxscores by espn_event_id and re-inserts via ON CONFLICT DO
 // UPDATE. Safe to run repeatedly — idempotent. Restores stats lost to any
 // prior bad DELETE.
+//
+// Logs per-game: ESPN athlete count, how many matched to DB, how many inserted.
+// Called at startup AND on a 30-min interval so games that fail the first time
+// are retried automatically.
 async function reingestCompletedGames(io) {
   const completedGames = db.prepare(`
-    SELECT id, espn_event_id, team1, team2, game_date
-    FROM games
-    WHERE is_completed = 1
-      AND espn_event_id IS NOT NULL AND espn_event_id != ''
-    ORDER BY game_date ASC
+    SELECT g.id, g.espn_event_id, g.team1, g.team2, g.game_date,
+           (SELECT COUNT(*) FROM player_stats ps WHERE ps.game_id = g.id) AS existing_stat_count
+    FROM games g
+    WHERE g.is_completed = 1
+      AND g.espn_event_id IS NOT NULL AND g.espn_event_id != ''
+    ORDER BY g.game_date ASC
   `).all();
 
   if (!completedGames.length) {
     console.log('[reingest] No completed games with espn_event_id found.');
-    return;
+    return 0;
   }
 
-  console.log(`[reingest] Re-ingesting stats for ${completedGames.length} completed game(s)...`);
-  let totalUpdated = 0;
+  console.log(`[reingest] Checking ${completedGames.length} completed game(s)...`);
+  let totalInserted = 0;
 
   for (const game of completedGames) {
     try {
       const summary = await fetchJson(SUMMARY_BASE + game.espn_event_id);
-      const updated = await processBoxScore(game.id, summary);
-      if (updated > 0) {
-        console.log(`[reingest] ${game.team1} vs ${game.team2} (${game.game_date}): ${updated} player(s) updated`);
-        totalUpdated += updated;
+
+      // Count total ESPN athletes in the boxscore for diagnostics
+      let espnAthleteCount = 0;
+      let espnIdMatchCount = 0;
+      let espnNameMatchCount = 0;
+      let espnSkippedCount = 0;
+
+      const playerGroups = summary.boxscore?.players || [];
+      for (const group of playerGroups) {
+        const statsBlock = group.statistics?.[0];
+        if (!statsBlock) continue;
+        const labels = statsBlock.names || statsBlock.labels || [];
+        if (labels.indexOf('PTS') === -1) continue;
+        const groupEspnTeamId = group.team?.id ? String(group.team.id) : '';
+
+        for (const entry of (statsBlock.athletes || [])) {
+          if (!entry.athlete?.displayName && !entry.athlete?.shortName) continue;
+          espnAthleteCount++;
+          const espnAthleteId = entry.athlete?.id ? String(entry.athlete.id) : '';
+          const displayName   = entry.athlete?.displayName || entry.athlete?.shortName;
+
+          const byId = espnAthleteId
+            ? db.prepare("SELECT id, name, espn_team_id FROM players WHERE espn_athlete_id = ? LIMIT 1").get(espnAthleteId)
+            : null;
+
+          if (byId) {
+            espnIdMatchCount++;
+          } else {
+            // Try name match
+            const byName = findMatchingPlayer(displayName);
+            if (byName) {
+              const playerTeamId = byName.espn_team_id != null ? String(byName.espn_team_id) : '';
+              if (playerTeamId && groupEspnTeamId && playerTeamId !== groupEspnTeamId) {
+                espnSkippedCount++;
+                console.log(`[reingest]   SKIP name-match "${displayName}" athlete_id=${espnAthleteId || 'none'} — player team=${playerTeamId} ≠ group team=${groupEspnTeamId}`);
+              } else {
+                espnNameMatchCount++;
+              }
+            } else {
+              // Log unmatched athletes that ARE in our drafted players (useful for debugging)
+              const isDrafted = espnAthleteId
+                ? db.prepare("SELECT 1 FROM draft_picks dp JOIN players p ON p.id = dp.player_id WHERE p.espn_athlete_id = ? LIMIT 1").get(espnAthleteId)
+                : null;
+              if (isDrafted || (!espnAthleteId && db.prepare("SELECT 1 FROM players WHERE LOWER(name) LIKE ? LIMIT 1").get(`%${(displayName || '').split(' ').pop()?.toLowerCase()}%`))) {
+                console.log(`[reingest]   NOMATCH "${displayName}" athlete_id=${espnAthleteId || 'none'} team_id=${groupEspnTeamId}`);
+              }
+            }
+          }
+        }
       }
+
+      const inserted = await processBoxScore(game.id, summary);
+      const afterCount = db.prepare('SELECT COUNT(*) as c FROM player_stats WHERE game_id = ?').get(game.id)?.c ?? 0;
+
+      console.log(`[reingest] ${game.espn_event_id} ${game.team1} vs ${game.team2} (${game.game_date}) — ESPN athletes: ${espnAthleteCount}, id-match: ${espnIdMatchCount}, name-match: ${espnNameMatchCount}, skipped: ${espnSkippedCount}, inserted/updated: ${inserted}, total stats in DB: ${afterCount}`);
+
+      totalInserted += inserted;
       await new Promise(r => setTimeout(r, 150));
     } catch (err) {
-      console.warn(`[reingest] Failed for event ${game.espn_event_id} (${game.team1} vs ${game.team2}):`, err.message);
+      console.warn(`[reingest] FAILED event ${game.espn_event_id} (${game.team1} vs ${game.team2}): ${err.message}`);
     }
   }
 
-  console.log(`[reingest] Complete — ${totalUpdated} total stat rows restored/updated`);
-  if (totalUpdated > 0) pushStandingsToLeagues(io);
+  console.log(`[reingest] Complete — ${totalInserted} total stat rows inserted/updated across ${completedGames.length} game(s)`);
+  if (totalInserted > 0) pushStandingsToLeagues(io);
+  return totalInserted;
 }
 
 function recordResult(game, winnerTeam, score1, score2) {

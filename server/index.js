@@ -540,6 +540,10 @@ setTimeout(() => pollESPN(io).catch(e => console.error('[startup] immediate ESPN
 // Uses athlete-ID-first matching so NC State and other mis-seeded players are found.
 setTimeout(() => reingestCompletedGames(io).catch(e => console.error('[startup] reingest failed:', e.message)), 8000);
 
+// Retry reingest every 30 min — catches players whose espn_athlete_id wasn't
+// set on first ingest (e.g. NC State fix runs at startup, IDs now populated).
+setInterval(() => reingestCompletedGames(io).catch(e => console.error('[reingest] periodic error:', e.message)), 30 * 60 * 1000);
+
 // Pull full tournament schedule at startup (after bracket pull finishes) + every 6h
 // This populates the games table with all scheduled games including future ones.
 setTimeout(() => pullSchedule(io), 12 * 1000);
