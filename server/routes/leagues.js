@@ -318,7 +318,7 @@ router.get('/:id/live-games', authMiddleware, (req, res) => {
     const draftedInLiveGames = db.prepare(`
       SELECT
         dp.player_id, dp.user_id,
-        p.name AS player_name, p.team,
+        p.name AS player_name, p.team, p.jersey_number,
         lm.team_name AS owner_team_name,
         u.username AS owner_username,
         COALESCE(ps.points, 0) AS points,

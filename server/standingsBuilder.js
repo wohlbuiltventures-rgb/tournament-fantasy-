@@ -39,7 +39,8 @@ function buildStandings(leagueId) {
       COALESCE(p.is_eliminated, 0)          AS is_eliminated,
       COALESCE(p.season_ppg, 0)             AS season_ppg,
       COALESCE(p.region, '')                AS region,
-      COALESCE(p.is_first_four, 0)          AS is_first_four
+      COALESCE(p.is_first_four, 0)          AS is_first_four,
+      COALESCE(p.jersey_number, '')         AS jersey_number
     FROM draft_picks dp
     LEFT JOIN players p ON dp.player_id = p.id
     WHERE dp.league_id = ?
@@ -128,10 +129,11 @@ function buildStandings(leagueId) {
         team:          player.team,
         position:      player.position,
         seed:          player.seed,
-        is_eliminated: player.is_eliminated,
-        season_ppg:    player.season_ppg,
-        region:        player.region,
-        is_first_four: player.is_first_four,
+        is_eliminated:  player.is_eliminated,
+        season_ppg:     player.season_ppg,
+        region:         player.region,
+        is_first_four:  player.is_first_four,
+        jersey_number:  player.jersey_number || '',
         stats,
         fantasy_points:  Math.round(fantasyPoints * 10) / 10,
         is_live:         livePlayerIds.has(player.player_id),
