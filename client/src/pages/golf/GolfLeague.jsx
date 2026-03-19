@@ -1864,11 +1864,16 @@ function PrizeCard({ prizeTotal, buyIn, memberCount, p1, p2, p3 }) {
 }
 
 // Compute rank (1-based) respecting ties
-function computeRanks(standings) {
-  const sorted = standings.map((s, i) => ({ pts: s.season_points || 0, i }));
-  return sorted.map(({ pts, i }) => {
-    const rank = sorted.filter(x => x.pts > pts).length + 1;
-    const tied = sorted.filter(x => x.pts === pts).length > 1;
+// For total_strokes: lower score = better (rank 1 has fewest strokes)
+// For fantasy_points: higher score = better (rank 1 has most pts)
+function computeRanks(standings, scoringStyle) {
+  const lowerIsBetter = scoringStyle === 'total_strokes';
+  const arr = standings.map((s, i) => ({ pts: s.season_points ?? 0, i }));
+  return arr.map(({ pts }) => {
+    const rank = lowerIsBetter
+      ? arr.filter(x => x.pts < pts).length + 1   // fewer strokes = better rank
+      : arr.filter(x => x.pts > pts).length + 1;   // more points = better rank
+    const tied = arr.filter(x => x.pts === pts).length > 1;
     return { rank, tied };
   });
 }
@@ -1923,15 +1928,20 @@ function StandingsTab({ leagueId, league, currentUserId }) {
     );
   }
 
-  const ranks = computeRanks(standings);
+  const scoringStyle = data?.scoring_style || 'fantasy_points';
+  const isTotalStrokes = scoringStyle === 'total_strokes';
+  const ranks = computeRanks(standings, scoringStyle);
 
   // Shared leaderboard row renderer — used by both pool and tourneyrun
   function LeaderboardRow({ s, i, rankInfo, expandContent, canExpand }) {
     const isMe   = s.user_id === currentUserId;
     const isOpen = expanded === s.user_id;
-    const pts    = s.season_points || 0;
+    const pts    = s.season_points ?? 0;
     const myPrize = hasPrize ? prizeForRank(rankInfo.rank, prizeTotal, p1, p2, p3) : null;
-    const ptColor = pts > 0 ? '#00e87a' : pts < 0 ? '#ef4444' : '#9ca3af';
+    // total_strokes: stroke count is always positive; color by rank not sign
+    const ptColor = isTotalStrokes
+      ? (rankInfo.rank <= 3 ? '#00e87a' : '#e5e7eb')
+      : (pts > 0 ? '#00e87a' : pts < 0 ? '#ef4444' : '#9ca3af');
     const isBot  = /^bot[\s_]?\d/i.test(s.username || '');
 
     return (
@@ -1980,12 +1990,16 @@ function StandingsTab({ leagueId, league, currentUserId }) {
             </div>
           )}
 
-          {/* Pts */}
+          {/* Pts / Strokes */}
           <div style={{ textAlign: 'right', minWidth: 50, flexShrink: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 15, color: hasScores ? ptColor : '#6b7280', fontVariantNumeric: 'tabular-nums' }}>
-              {hasScores ? (pts > 0 ? '+' : '') + pts.toFixed(1) : '—'}
+              {hasScores
+                ? isTotalStrokes
+                  ? Math.round(pts)
+                  : (pts > 0 ? '+' : '') + pts.toFixed(1)
+                : '—'}
             </div>
-            <div style={{ color: '#4b5563', fontSize: 10 }}>pts</div>
+            <div style={{ color: '#4b5563', fontSize: 10 }}>{isTotalStrokes ? 'strk' : 'pts'}</div>
           </div>
 
           {/* Chevron */}

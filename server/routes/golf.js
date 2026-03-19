@@ -459,9 +459,14 @@ router.get('/leagues/:id/standings', authMiddleware, (req, res) => {
       }
       standings.forEach((s, i) => { s.rank = i + 1; });
 
-      const hasScores = standings.some(s => s.season_points !== 0);
+      const scoringStyle = league.scoring_style || 'fantasy_points';
+      // has_scores: for total_strokes check if any round data exists; for fantasy_points check points
+      const hasScores = scoringStyle === 'total_strokes'
+        ? standings.some(s => s.picks?.some(p => p.round1 != null || p.round2 != null || p.round3 != null || p.round4 != null))
+        : standings.some(s => s.season_points !== 0);
       return res.json({
         standings, format: 'pool',
+        scoring_style: scoringStyle,
         active_tournament_id: tid,
         tournament: tourn,
         has_scores: hasScores,
