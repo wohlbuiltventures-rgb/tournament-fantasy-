@@ -7,6 +7,24 @@ const { postEliminations, checkAndPostRankChanges } = require('./wallUtils');
 const SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard';
 const SUMMARY_BASE = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/summary?event=';
 
+// Known mismatches between ESPN displayName and our DB team strings.
+// ESPN uses full names; seeds may use short-form or vice versa.
+// Each alias is bidirectional — add both directions.
+const TEAM_ALIASES = {
+  'North Carolina State': 'NC State',
+  'NC State':             'North Carolina State',
+  'North Carolina':       'UNC',
+  'UNC':                  'North Carolina',
+  'Saint Mary\'s':        'Saint Mary\'s (CA)',
+  'Saint Mary\'s (CA)':   'Saint Mary\'s',
+  'USC':                  'Southern California',
+  'Southern California':  'USC',
+  'Miami':                'Miami (FL)',
+  'Miami (FL)':           'Miami',
+  'Texas A&M-Corpus Christi': 'TAMU-CC',
+  'TAMU-CC':              'Texas A&M-Corpus Christi',
+};
+
 // All 2026 NCAA tournament dates (First Four eve through Championship)
 const TOURNAMENT_DATES = [
   '20260317',                                           // Tue  Mar 17 — First Four eve / Selection shows
@@ -213,10 +231,18 @@ function recordResult(game, winnerTeam, score1, score2) {
   db.prepare(`
     UPDATE games SET is_completed = 1, is_live = 0, winner_team = ?, team1_score = ?, team2_score = ? WHERE id = ?
   `).run(winnerTeam, score1, score2, game.id);
-  db.prepare('UPDATE players SET is_eliminated = 1 WHERE team = ?').run(loser);
-  console.log(`[ESPN] Game recorded: ${game.team1} vs ${game.team2} → winner: ${winnerTeam}`);
-  // Will be called with io after this function returns — store loser for caller
+
+  // Eliminate players — try both the ESPN display name and any known alias
+  // (e.g. ESPN says "North Carolina State" but DB stores "NC State")
+  const loserAlias = TEAM_ALIASES[loser] || null;
+  const elimStmt = db.prepare('UPDATE players SET is_eliminated = 1 WHERE team = ?');
+  const directChanges = elimStmt.run(loser).changes;
+  const aliasChanges  = loserAlias ? elimStmt.run(loserAlias).changes : 0;
+  console.log(`[ESPN] Game recorded: ${game.team1} vs ${game.team2} → winner: ${winnerTeam} | eliminated ${directChanges + aliasChanges} player(s)${loserAlias && aliasChanges > 0 ? ` (${aliasChanges} via alias "${loserAlias}")` : ''}`);
+
+  // Will be called with io after this function returns — store loser + alias for caller
   recordResult._lastLoser = loser;
+  recordResult._lastLoserAlias = loserAlias;
 }
 
 // ── Game metadata from ESPN ──────────────────────────────────────────────────
@@ -509,8 +535,10 @@ async function pollESPN(io) {
           : (score1 > score2 ? game.team1 : game.team2);
         recordResult(game, winnerTeam, flipped ? score2 : score1, flipped ? score1 : score2);
         if (recordResult._lastLoser) {
-          postEliminations(recordResult._lastLoser, io);
+          const loserNames = [recordResult._lastLoser, recordResult._lastLoserAlias].filter(Boolean);
+          postEliminations(loserNames, io);
           recordResult._lastLoser = null;
+          recordResult._lastLoserAlias = null;
           stats.eliminationsRecorded++;
         }
       }

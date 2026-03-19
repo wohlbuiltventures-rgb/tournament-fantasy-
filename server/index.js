@@ -518,6 +518,41 @@ try {
   console.error('[cleanup] player_stats cleanup error:', err.message);
 }
 
+// ── One-time fix: NC State players were seeded before the bracket pull ran,
+//    leaving them with team='NC State', espn_team_id=null, espn_athlete_id=''.
+//    ESPN uses "North Carolina State" as the display name so elimination and
+//    stat-matching never fired. This block fixes all three fields at startup.
+try {
+  // 1. Mark eliminated (NC State lost in First Round 2026)
+  const elimFix = db.prepare(
+    "UPDATE players SET is_eliminated = 1 WHERE team = 'NC State' AND is_eliminated != 1"
+  ).run();
+  console.log(`[cleanup] NC State: ${elimFix.changes} player(s) marked eliminated`);
+
+  // 2. Set correct ESPN team ID
+  const teamIdFix = db.prepare(
+    "UPDATE players SET espn_team_id = '152' WHERE team = 'NC State' AND (espn_team_id IS NULL OR espn_team_id = '')"
+  ).run();
+  console.log(`[cleanup] NC State: ${teamIdFix.changes} player(s) espn_team_id → 152`);
+
+  // 3. Set espn_athlete_id for the four drafted players by name
+  const NC_STATE_ATHLETES = [
+    { name: 'Quadir Copeland',  id: '4683860' },
+    { name: 'Paul McNeil Jr.',  id: '4873151' },
+    { name: 'Ven-Allen Lubin',  id: '4684799' },
+    { name: 'Darrion Williams', id: '4937074' },
+  ];
+  const athleteStmt = db.prepare(
+    "UPDATE players SET espn_athlete_id = ? WHERE team = 'NC State' AND LOWER(name) = LOWER(?) AND (espn_athlete_id IS NULL OR espn_athlete_id = '')"
+  );
+  for (const { name, id } of NC_STATE_ATHLETES) {
+    const r = athleteStmt.run(id, name);
+    if (r.changes > 0) console.log(`[cleanup] NC State: espn_athlete_id set for ${name} → ${id}`);
+  }
+} catch (err) {
+  console.error('[cleanup] NC State fix error:', err.message);
+}
+
 // ESPN live scoring poller — smart polling (2 min live window, 30 min otherwise)
 const { startSmartPoller, pullSchedule } = require('./espnPoller');
 startSmartPoller(io);

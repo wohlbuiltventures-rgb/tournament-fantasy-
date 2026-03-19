@@ -37,17 +37,26 @@ function postDraftPick(leagueId, teamName, playerName, io) {
 /**
  * Post elimination messages for all leagues that have drafted players
  * from the eliminated team.
+ *
+ * loserTeams: string OR array of strings — ESPN display name + any known aliases
+ * (e.g. ['North Carolina State', 'NC State']) so players stored under either
+ * name are all found.
  */
-function postEliminations(loserTeam, io) {
+function postEliminations(loserTeams, io) {
+  const names = Array.isArray(loserTeams) ? loserTeams : [loserTeams];
+  if (!names.length) return;
+
   const leagues = db.prepare("SELECT id FROM leagues WHERE status IN ('active', 'drafting')").all();
+  const placeholders = names.map(() => '?').join(', ');
+
   for (const { id: leagueId } of leagues) {
     const owners = db.prepare(`
       SELECT lm.team_name, p.name AS player_name
       FROM draft_picks dp
       JOIN players p ON dp.player_id = p.id
       JOIN league_members lm ON dp.user_id = lm.user_id AND dp.league_id = lm.league_id
-      WHERE dp.league_id = ? AND p.team = ?
-    `).all(leagueId, loserTeam);
+      WHERE dp.league_id = ? AND p.team IN (${placeholders})
+    `).all(leagueId, ...names);
 
     for (const owner of owners) {
       postSystemMessage(leagueId, `💀 ${owner.player_name} has been eliminated from ${owner.team_name}'s roster`, io);
