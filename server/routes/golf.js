@@ -502,13 +502,13 @@ router.get('/leagues/:id/pga-live', authMiddleware, async (req, res) => {
       return res.json({ ...cached.data, my_pick_names: myPickNames });
     }
 
-    // Fetch from ESPN
+    // Fetch from ESPN scoreboard
     let espnData;
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
       const r = await fetch(
-        `https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard?event=${eventId}`,
+        `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=${eventId}`,
         { headers: { Accept: 'application/json' }, signal: controller.signal }
       );
       clearTimeout(timeout);
@@ -519,33 +519,40 @@ router.get('/leagues/:id/pga-live', authMiddleware, async (req, res) => {
       return res.json({ competitors: [], tournament: tourn, my_pick_names: myPickNames, fetch_error: true });
     }
 
-    const rawComps =
-      espnData?.leaderboard?.competitors ||
-      espnData?.leaderboard?.entries ||
-      espnData?.events?.[0]?.competitions?.[0]?.competitors || [];
+    const rawComps = espnData?.events?.[0]?.competitions?.[0]?.competitors || [];
 
     const competitors = rawComps.map(comp => {
-      const name = comp.athlete?.displayName || comp.athlete?.fullName || comp.displayName || '';
-      const statusId = comp.status?.type?.id || comp.status?.id || '';
-      const posText = comp.status?.position?.displayText || comp.position?.displayText || String(comp.sortOrder ?? '');
+      const name = comp.athlete?.displayName || comp.athlete?.fullName || '';
 
-      // Round scores (to-par)
-      const ls = comp.linescores || comp.rounds || [];
+      // Status
+      const statusDesc = (comp.status?.type?.description || '').toLowerCase();
+      const isCut = statusDesc.includes('cut') || statusDesc === 'cut';
+      const isWD  = statusDesc.includes('withdrawn') || statusDesc === 'wd';
+      const isMDF = statusDesc.includes('did not finish');
+
+      // Position
+      const posText = comp.status?.position?.displayValue || comp.status?.position?.displayText || String(comp.sortOrder ?? '');
+
+      // Total score (to-par string like "-8", "E", "+2") + numeric version
+      const totalStr = comp.score != null ? String(comp.score) : null;
+      const totalNum = totalStr == null ? null : totalStr === 'E' ? 0 : parseInt(totalStr, 10);
+
+      // Round scores from linescores — value is to-par for that round
+      const ls = comp.linescores || [];
       const getRound = n => {
-        const e = ls.find(l => Number(l.period?.number ?? l.period ?? l.roundNumber ?? l.number) === n);
+        const e = ls[n - 1]; // linescores are ordered R1, R2, R3, R4
         if (!e) return null;
-        const v = e.value ?? e.score;
-        if (v == null || v === '' || v === '--') return null;
-        const n2 = Number(v);
-        return isNaN(n2) ? null : n2; // to-par value
+        const v = e.value;
+        if (v == null || v === '' || v === '--' || v === 'E') return v === 'E' ? 0 : null;
+        const num = Number(v);
+        return isNaN(num) ? null : num;
       };
 
       const r1 = getRound(1), r2 = getRound(2), r3 = getRound(3), r4 = getRound(4);
       const completedRounds = [r1, r2, r3, r4].filter(r => r !== null);
-      const total = completedRounds.length > 0 ? completedRounds.reduce((a, b) => a + b, 0) : null;
       const currentRound = completedRounds.length;
       const today = completedRounds[currentRound - 1] ?? null;
-      const thru = comp.status?.thruHole ?? comp.status?.holes ?? null;
+      const thru = comp.status?.thruHole ?? null;
 
       // Flag / country
       const flagHref = comp.athlete?.flag?.href || '';
@@ -555,11 +562,12 @@ router.get('/leagues/:id/pga-live', authMiddleware, async (req, res) => {
         name,
         sortOrder: comp.sortOrder ?? 999,
         posText,
-        r1, r2, r3, r4, total, today, thru,
+        total: totalNum,   // numeric to-par (what frontend fmtPar expects)
+        totalStr,          // raw string from ESPN
+        r1, r2, r3, r4, today, thru,
         flagHref, countryAlt, currentRound,
-        isCut: statusId === 'C' || statusId === 'STATUS_MISSED_CUT',
-        isWD:  statusId === 'WD' || statusId === 'STATUS_WITHDRAWN',
-        isMDF: statusId === 'MDF' || statusId === 'STATUS_MADE_CUT_DID_NOT_FINISH',
+        status: isWD ? 'wd' : isCut ? 'cut' : isMDF ? 'mdf' : 'active',
+        isCut, isWD, isMDF,
       };
     });
 
