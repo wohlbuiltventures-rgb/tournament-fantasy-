@@ -1938,9 +1938,9 @@ function StandingsTab({ leagueId, league, currentUserId }) {
     const isOpen = expanded === s.user_id;
     const pts    = s.season_points ?? 0;
     const myPrize = hasPrize ? prizeForRank(rankInfo.rank, prizeTotal, p1, p2, p3) : null;
-    // total_strokes: stroke count is always positive; color by rank not sign
+    // total_strokes: to-par (negative = under par = good)
     const ptColor = isTotalStrokes
-      ? (rankInfo.rank <= 3 ? '#00e87a' : '#e5e7eb')
+      ? (pts < 0 ? '#00e87a' : pts > 0 ? '#ef4444' : '#9ca3af')
       : (pts > 0 ? '#00e87a' : pts < 0 ? '#ef4444' : '#9ca3af');
     const isBot  = /^bot[\s_]?\d/i.test(s.username || '');
 
@@ -1990,16 +1990,16 @@ function StandingsTab({ leagueId, league, currentUserId }) {
             </div>
           )}
 
-          {/* Pts / Strokes */}
+          {/* Pts / Total to-par */}
           <div style={{ textAlign: 'right', minWidth: 50, flexShrink: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 15, color: hasScores ? ptColor : '#6b7280', fontVariantNumeric: 'tabular-nums' }}>
               {hasScores
                 ? isTotalStrokes
-                  ? Math.round(pts)
+                  ? pts === 0 ? 'E' : (pts < 0 ? '' : '+') + Math.round(pts)
                   : (pts > 0 ? '+' : '') + pts.toFixed(1)
                 : '—'}
             </div>
-            <div style={{ color: '#4b5563', fontSize: 10 }}>{isTotalStrokes ? 'strk' : 'pts'}</div>
+            <div style={{ color: '#4b5563', fontSize: 10 }}>{isTotalStrokes ? 'to par' : 'pts'}</div>
           </div>
 
           {/* Chevron */}
@@ -2030,11 +2030,11 @@ function StandingsTab({ leagueId, league, currentUserId }) {
     else if (allPicks.some(p => p.round2 != null)) currentRound = 2;
     else if (allPicks.some(p => p.round1 != null)) currentRound = 1;
 
+    // r is already stored as to-par (e.g. -7, 0, +2)
     const fmtScore = r => {
       if (r == null) return <span style={{ color: '#374151' }}>—</span>;
-      const toPar = r - 72;
-      const color = toPar < 0 ? '#00e87a' : toPar > 0 ? '#ef4444' : '#9ca3af';
-      const label = toPar === 0 ? 'E' : (toPar > 0 ? `+${toPar}` : String(toPar));
+      const color = r < 0 ? '#00e87a' : r > 0 ? '#ef4444' : '#9ca3af';
+      const label = r === 0 ? 'E' : (r > 0 ? `+${r}` : String(r));
       return <span style={{ color }}>{label}</span>;
     };
 
@@ -2047,37 +2047,80 @@ function StandingsTab({ leagueId, league, currentUserId }) {
         if (!byTier[t]) byTier[t] = [];
         byTier[t].push(p);
       });
+
       return (
         <div style={{ padding: '12px 14px 14px' }}>
-          {Object.entries(byTier).sort(([a], [b]) => a - b).map(([tier, tPicks]) => (
-            <div key={tier} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#4b5563', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>
-                {TIER_NAMES[tier] || `Tier ${tier}`}
-              </div>
-              {[...tPicks].sort((a, b) => (b.fantasy_points || 0) - (a.fantasy_points || 0)).map((p, pi) => {
-                const isWD = p.round1 == null && p.made_cut === 0 && p.finish_position == null;
-                const fp   = p.fantasy_points || 0;
-                const fpColor = fp > 0 ? '#00e87a' : fp < 0 ? '#ef4444' : '#6b7280';
-                return (
-                  <div key={pi} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: pi > 0 ? '1px solid rgba(255,255,255,0.03)' : 'none' }}>
-                    <span style={{ flex: 1, color: '#d1d5db', fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.player_name}
-                    </span>
-                    {isWD ? (
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 5px', borderRadius: 4 }}>WD</span>
-                    ) : (
-                      <span style={{ fontSize: 12, color: '#9ca3af', minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                        {currentRound > 0 ? fmtScore(p[`round${currentRound}`]) : '—'}
+          {Object.entries(byTier).sort(([a], [b]) => a - b).map(([tier, tPicks]) => {
+            // Sort: total_strokes → ascending by player total (lower = better); else descending by fp
+            const sorted = [...tPicks].sort((a, b) => {
+              if (isTotalStrokes) {
+                const aTotal = [a.round1, a.round2, a.round3, a.round4].filter(r => r != null).reduce((s, r) => s + r, 0);
+                const bTotal = [b.round1, b.round2, b.round3, b.round4].filter(r => r != null).reduce((s, r) => s + r, 0);
+                return aTotal - bTotal;
+              }
+              return (b.fantasy_points || 0) - (a.fantasy_points || 0);
+            });
+            return (
+              <div key={tier} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#4b5563', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>
+                  {TIER_NAMES[tier] || `Tier ${tier}`}
+                </div>
+                {sorted.map((p, pi) => {
+                  const isWD = p.round1 == null && p.made_cut === 0 && p.finish_position == null;
+                  if (isTotalStrokes) {
+                    const rounds = [p.round1, p.round2, p.round3, p.round4].filter(r => r != null);
+                    const playerTotal = rounds.reduce((s, r) => s + r, 0);
+                    const hasRounds = rounds.length > 0;
+                    return (
+                      <div key={pi} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: pi > 0 ? '1px solid rgba(255,255,255,0.03)' : 'none' }}>
+                        <span style={{ flex: 1, color: '#d1d5db', fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {p.player_name}
+                        </span>
+                        {isWD ? (
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 5px', borderRadius: 4 }}>WD</span>
+                        ) : (
+                          <>
+                            {/* Per-round to-par scores */}
+                            {[p.round1, p.round2, p.round3, p.round4].map((r, ri) => (
+                              currentRound >= ri + 1 ? (
+                                <span key={ri} style={{ fontSize: 11, color: '#6b7280', minWidth: 22, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                                  {fmtScore(r)}
+                                </span>
+                              ) : null
+                            ))}
+                            {/* Player total */}
+                            <span style={{ fontSize: 12, fontWeight: 700, minWidth: 32, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: hasRounds ? (playerTotal < 0 ? '#00e87a' : playerTotal > 0 ? '#ef4444' : '#9ca3af') : '#374151' }}>
+                              {hasRounds ? (playerTotal === 0 ? 'E' : (playerTotal > 0 ? '+' : '') + playerTotal) : '—'}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    );
+                  }
+                  // Fantasy points display (original)
+                  const fp = p.fantasy_points || 0;
+                  const fpColor = fp > 0 ? '#00e87a' : fp < 0 ? '#ef4444' : '#6b7280';
+                  return (
+                    <div key={pi} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: pi > 0 ? '1px solid rgba(255,255,255,0.03)' : 'none' }}>
+                      <span style={{ flex: 1, color: '#d1d5db', fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.player_name}
                       </span>
-                    )}
-                    <span style={{ fontSize: 12, fontWeight: 700, color: fpColor, minWidth: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                      {fp !== 0 ? (fp > 0 ? '+' : '') + fp.toFixed(1) : hasScores ? '0.0' : '—'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+                      {isWD ? (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 5px', borderRadius: 4 }}>WD</span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#9ca3af', minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          {currentRound > 0 ? fmtScore(p[`round${currentRound}`]) : '—'}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 12, fontWeight: 700, color: fpColor, minWidth: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        {fp !== 0 ? (fp > 0 ? '+' : '') + fp.toFixed(1) : hasScores ? '0.0' : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       );
     }

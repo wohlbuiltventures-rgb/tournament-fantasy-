@@ -23,9 +23,10 @@ function fetchJson(url) {
 
 // ── Fantasy points (same formula as commissioner entry) ────────────────────────
 function calcFantasyPts(r1, r2, r3, r4, finishPos, madeCut, par, isMajor) {
+  // r1-r4 are now to-par values (e.g. -7, +2). Each under-par round earns positive pts.
   let pts = 0;
   [r1, r2, r3, r4].forEach(r => {
-    if (r !== null && r !== undefined) pts += (Number(r) - par) * -1.5;
+    if (r !== null && r !== undefined) pts += Number(r) * -1.5;
   });
   if (finishPos !== null && finishPos !== undefined) {
     if (finishPos === 1)       pts += 30;
@@ -117,28 +118,49 @@ function parseCompetitor(comp) {
   // Name
   const name = comp.displayName || comp.athlete?.displayName || '';
 
+  // Parse a linescore entry to to-par integer.
+  // ESPN scoreboard:  displayValue="-7" (to-par string), value=64 (raw strokes)
+  // ESPN dated scoreboard: may only have value (raw strokes) without displayValue
+  function parsePar(entry) {
+    if (!entry) return null;
+    // Prefer displayValue (already to-par string from ESPN scoreboard)
+    const dv = entry.displayValue;
+    if (dv != null && dv !== '' && dv !== '--') {
+      if (dv === 'E' || dv === 'Even') return 0;
+      const n = parseInt(dv, 10);
+      if (!isNaN(n)) return n;
+    }
+    // Fall back: value field — raw strokes (55-95) → convert to to-par; small numbers already to-par
+    const v = entry.value;
+    if (v == null) return null;
+    const n = Number(v);
+    if (isNaN(n)) return null;
+    if (n >= 55 && n <= 95) return n - 72;    // raw strokes → to-par
+    if (Math.abs(n) <= 25) return n;           // already to-par
+    return null;
+  }
+
   // Linescores — detect format by checking if any item has a nested `linescores` array
   const ls = comp.linescores || [];
-  const isHistorical = ls.some(l => l.linescores !== undefined);
+  const isHistorical = ls.some(l => Array.isArray(l.linescores));
 
   let r1 = null, r2 = null, r3 = null, r4 = null;
   if (isHistorical) {
-    // Period-keyed rounds (1–4 are round-level, nested entries are holes)
-    const rounds = ls.filter(l => l.period >= 1 && l.period <= 4);
-    r1 = rounds.find(l => l.period === 1)?.value ?? null;
-    r2 = rounds.find(l => l.period === 2)?.value ?? null;
-    r3 = rounds.find(l => l.period === 3)?.value ?? null;
-    r4 = rounds.find(l => l.period === 4)?.value ?? null;
+    // Period-keyed round objects (period 1-4), may have nested hole linescores
+    r1 = parsePar(ls.find(l => l.period === 1));
+    r2 = parsePar(ls.find(l => l.period === 2));
+    r3 = parsePar(ls.find(l => l.period === 3));
+    r4 = parsePar(ls.find(l => l.period === 4));
   } else {
-    // Simple indexed array (live scoreboard)
-    r1 = ls[0]?.value != null ? Number(ls[0].value) : null;
-    r2 = ls[1]?.value != null ? Number(ls[1].value) : null;
-    r3 = ls[2]?.value != null ? Number(ls[2].value) : null;
-    r4 = ls[3]?.value != null ? Number(ls[3].value) : null;
+    // Simple indexed array (live scoreboard) — ls[0]=R1, ls[1]=R2, etc.
+    r1 = parsePar(ls[0]);
+    r2 = parsePar(ls[1]);
+    r3 = parsePar(ls[2]);
+    r4 = parsePar(ls[3]);
   }
 
-  // Validate: stroke counts should be between 55–95 for a golf round
-  const valid = v => v !== null && v >= 55 && v <= 95;
+  // Validate: to-par values should be within ±25 (any outside this is bad data)
+  const valid = v => v !== null && Math.abs(v) <= 25;
   const r1v = valid(r1) ? r1 : null;
   const r2v = valid(r2) ? r2 : null;
   const r3v = valid(r3) ? r3 : null;
@@ -154,7 +176,7 @@ function parseCompetitor(comp) {
     madeCut = r3v !== null || r4v !== null;
   }
 
-  // Finish position — historical uses `order`, live uses `sortOrder`
+  // Finish position — scoreboard uses `order`, dated scoreboard uses `sortOrder`
   const finishPos = comp.order ? parseInt(comp.order) : (comp.sortOrder ? parseInt(comp.sortOrder) : null);
 
   return { name, r1: r1v, r2: r2v, r3: r3v, r4: r4v, madeCut, finishPos };
