@@ -385,6 +385,56 @@ router.get('/leagues/:id/standings', authMiddleware, (req, res) => {
     const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
     if (!league) return res.status(404).json({ error: 'Not found' });
     if (!getMember(req.params.id, req.user.id) && league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Not a member' });
+
+    // ── Pool format: rank by pool_picks × golf_scores ─────────────────────────
+    if (league.format_type === 'pool') {
+      const tid = league.pool_tournament_id || null;
+      const tourn = tid ? db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tid) : null;
+      const members = db.prepare(`
+        SELECT glm.*, u.username, u.avatar_url
+        FROM golf_league_members glm JOIN users u ON glm.user_id = u.id
+        WHERE glm.golf_league_id = ? ORDER BY glm.joined_at ASC
+      `).all(req.params.id);
+
+      const standings = members.map(m => {
+        const picks = tid ? db.prepare(`
+          SELECT pp.player_id, pp.player_name, pp.tier_number,
+                 gs.fantasy_points, gs.round1, gs.round2, gs.round3, gs.round4,
+                 gs.finish_position, gs.made_cut
+          FROM pool_picks pp
+          LEFT JOIN golf_scores gs ON pp.player_id = gs.player_id AND gs.tournament_id = ?
+          WHERE pp.league_id = ? AND pp.tournament_id = ? AND pp.user_id = ?
+          ORDER BY pp.tier_number ASC
+        `).all(tid, req.params.id, tid, m.user_id) : [];
+
+        const total_points = Math.round(picks.reduce((s, p) => s + (p.fantasy_points || 0), 0) * 10) / 10;
+        return {
+          user_id: m.user_id, username: m.username, team_name: m.team_name,
+          avatar_url: m.avatar_url,
+          season_points: total_points,
+          submitted: picks.length > 0,
+          picks: picks.map(p => ({
+            player_name: p.player_name, tier_number: p.tier_number,
+            fantasy_points: p.fantasy_points || 0,
+            round1: p.round1, round2: p.round2, round3: p.round3, round4: p.round4,
+            finish_position: p.finish_position, made_cut: p.made_cut,
+          })),
+        };
+      });
+
+      standings.sort((a, b) => b.season_points - a.season_points);
+      standings.forEach((s, i) => { s.rank = i + 1; });
+
+      const hasScores = standings.some(s => s.season_points !== 0);
+      return res.json({
+        standings, format: 'pool',
+        active_tournament_id: tid,
+        tournament: tourn,
+        has_scores: hasScores,
+      });
+    }
+
+    // ── TourneyRun / DK: rank by golf_weekly_lineups × golf_scores ────────────
     const activeTournament = db.prepare("SELECT id FROM golf_tournaments WHERE status = 'active' ORDER BY start_date ASC LIMIT 1").get();
     const activeTournId = activeTournament?.id || '';
     const standings = db.prepare(`

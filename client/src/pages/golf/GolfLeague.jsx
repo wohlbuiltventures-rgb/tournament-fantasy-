@@ -1474,18 +1474,25 @@ function FreeAgencyTab({ leagueId, league }) {
 
 // ── Tab: Standings ─────────────────────────────────────────────────────────────
 
-function StandingsTab({ leagueId, currentUserId }) {
-  const [standings, setStandings] = useState([]);
+function StandingsTab({ leagueId, league, currentUserId }) {
+  const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null); // expanded user_id for pool pick detail
 
   useEffect(() => {
     api.get(`/golf/leagues/${leagueId}/standings`)
-      .then(r => setStandings(r.data.standings || []))
+      .then(r => setData(r.data))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [leagueId]);
 
   if (loading) return <div className="py-10 text-center text-gray-500">Loading standings...</div>;
+
+  const standings  = data?.standings || [];
+  const isPool     = data?.format === 'pool';
+  const tournament = data?.tournament;
+  const isLive     = tournament?.status === 'active';
+  const hasScores  = data?.has_scores;
 
   if (standings.length === 0) {
     return (
@@ -1493,16 +1500,149 @@ function StandingsTab({ leagueId, currentUserId }) {
         <div className="w-14 h-14 rounded-2xl bg-gray-800 flex items-center justify-center mx-auto mb-3">
           <Flag className="w-7 h-7 text-gray-600" />
         </div>
-        <p>No scores yet — season hasn't started.</p>
+        <p>No members yet.</p>
       </div>
     );
   }
 
   const MEDAL_COLORS = ['text-yellow-400', 'text-gray-300', 'text-orange-400'];
-
-  // Determine tied ranks
   const ptsList = standings.map(s => s.season_points || 0);
 
+  // ── Pool leaderboard ──────────────────────────────────────────────────────
+  if (isPool) {
+    const fmtRound = r => r !== null && r !== undefined ? String(r) : '—';
+    return (
+      <div className="space-y-4">
+        {/* Tournament header */}
+        {tournament && (
+          <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>{tournament.name}</div>
+              <div style={{ color: '#6b7280', fontSize: 12, marginTop: 2 }}>
+                {tournament.course}{tournament.course ? ' · ' : ''}
+                {tournament.start_date?.slice(0, 10)}
+              </div>
+            </div>
+            {isLive ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.25)', color: '#00e87a', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00e87a', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                Live
+              </span>
+            ) : !hasScores ? (
+              <span style={{ color: '#4b5563', fontSize: 12 }}>Scores update Thursday</span>
+            ) : null}
+          </div>
+        )}
+
+        {/* Leaderboard */}
+        <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 16, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #1f2937', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Trophy style={{ width: 15, height: 15, color: '#fbbf24' }} />
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Pool Leaderboard</span>
+            <span style={{ marginLeft: 'auto', color: '#4b5563', fontSize: 12 }}>{standings.length} entries</span>
+          </div>
+
+          {standings.map((s, i) => {
+            const isMe   = s.user_id === currentUserId;
+            const pts    = s.season_points || 0;
+            const isTied = ptsList.filter(p => p === pts).length > 1;
+            const rank   = isTied ? `T${i + 1}` : `${i + 1}`;
+            const isOpen = expanded === s.user_id;
+
+            return (
+              <div key={s.user_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                {/* Main row */}
+                <button
+                  onClick={() => s.submitted ? setExpanded(isOpen ? null : s.user_id) : null}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '12px 16px', background: isMe ? 'rgba(0,232,122,0.04)' : 'transparent',
+                    border: 'none', cursor: s.submitted ? 'pointer' : 'default', textAlign: 'left',
+                  }}
+                  onMouseEnter={e => { if (s.submitted) e.currentTarget.style.background = isMe ? 'rgba(0,232,122,0.07)' : 'rgba(255,255,255,0.03)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = isMe ? 'rgba(0,232,122,0.04)' : 'transparent'; }}
+                >
+                  {/* Rank */}
+                  <span style={{ width: 28, flexShrink: 0, textAlign: 'center' }}>
+                    {i < 3
+                      ? <Award style={{ width: 18, height: 18, display: 'inline', color: ['#fbbf24','#d1d5db','#f97316'][i] }} />
+                      : <span style={{ color: '#6b7280', fontSize: 13, fontWeight: 700 }}>{rank}</span>}
+                  </span>
+
+                  {/* Name */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: isMe ? '#00e87a' : '#fff', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.team_name}
+                    </div>
+                    <div style={{ color: '#4b5563', fontSize: 11, marginTop: 1 }}>
+                      {s.username}{!s.submitted ? ' · no picks' : ''}
+                    </div>
+                  </div>
+
+                  {/* Points + chevron */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: '#fff', fontWeight: 800, fontSize: 15, tabularNums: true }}>
+                        {hasScores ? pts.toFixed(1) : (s.submitted ? '—' : '—')}
+                      </div>
+                      <div style={{ color: '#4b5563', fontSize: 10 }}>pts</div>
+                    </div>
+                    {s.submitted && (
+                      <svg style={{ width: 12, height: 12, color: '#4b5563', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+
+                {/* Expanded picks */}
+                {isOpen && s.picks && s.picks.length > 0 && (
+                  <div style={{ background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.04)', padding: '10px 16px 12px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ color: '#4b5563' }}>
+                          <th style={{ textAlign: 'left', padding: '0 4px 6px 0', fontWeight: 600 }}>Player</th>
+                          <th style={{ textAlign: 'center', padding: '0 4px 6px', fontWeight: 600, width: 28 }}>R1</th>
+                          <th style={{ textAlign: 'center', padding: '0 4px 6px', fontWeight: 600, width: 28 }}>R2</th>
+                          <th style={{ textAlign: 'center', padding: '0 4px 6px', fontWeight: 600, width: 28 }}>R3</th>
+                          <th style={{ textAlign: 'center', padding: '0 4px 6px', fontWeight: 600, width: 28 }}>R4</th>
+                          <th style={{ textAlign: 'right', padding: '0 0 6px 4px', fontWeight: 600, width: 40 }}>Pts</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {s.picks.map((p, pi) => (
+                          <tr key={pi} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                            <td style={{ padding: '5px 4px 5px 0', color: '#d1d5db', fontWeight: 500 }}>
+                              <div>{p.player_name}</div>
+                              <div style={{ color: '#4b5563', fontSize: 10 }}>T{p.tier_number}</div>
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '5px 4px', color: '#9ca3af' }}>{fmtRound(p.round1)}</td>
+                            <td style={{ textAlign: 'center', padding: '5px 4px', color: '#9ca3af' }}>{fmtRound(p.round2)}</td>
+                            <td style={{ textAlign: 'center', padding: '5px 4px', color: '#9ca3af' }}>{fmtRound(p.round3)}</td>
+                            <td style={{ textAlign: 'center', padding: '5px 4px', color: '#9ca3af' }}>{fmtRound(p.round4)}</td>
+                            <td style={{ textAlign: 'right', padding: '5px 0 5px 4px', fontWeight: 700, color: p.fantasy_points > 0 ? '#00e87a' : p.fantasy_points < 0 ? '#ef4444' : '#6b7280' }}>
+                              {p.fantasy_points !== 0 ? (p.fantasy_points > 0 ? '+' : '') + p.fantasy_points.toFixed(1) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer note */}
+        <p style={{ color: '#374151', fontSize: 11, textAlign: 'center' }}>
+          {isLive ? 'Scores update automatically from ESPN · refresh to see latest' : 'Scores sync from ESPN once tournament begins'}
+        </p>
+      </div>
+    );
+  }
+
+  // ── TourneyRun / DK standings (unchanged) ────────────────────────────────
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
@@ -2025,7 +2165,7 @@ export default function GolfLeague() {
         <LineupTab leagueId={id} league={league} />
       )}
       {tab === 'standings' && (
-        <StandingsTab leagueId={id} currentUserId={user?.id} />
+        <StandingsTab leagueId={id} league={league} currentUserId={user?.id} />
       )}
       {tab === 'commissioner' && isComm && (
         <CommissionerTab leagueId={id} leagueName={league.name} members={members} />

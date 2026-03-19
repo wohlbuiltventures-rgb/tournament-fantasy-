@@ -237,6 +237,10 @@ const _espnIdSeeds = [
   { pattern: '%Genesis Invit%',  id: '401811933' },
   { pattern: '%Arnold Palmer%',  id: '401811935' },
   { pattern: '%PLAYERS%',        id: '401811937' },
+  // Valspar Championship 2026 (Mar 20-23, Innisbrook).
+  // ID 401811939 follows THE PLAYERS in ESPN's sequential event numbering.
+  // Verify with: GET /api/golf/admin/dev/sync/:tournamentId
+  { pattern: '%Valspar%',        id: '401811939' },
 ];
 for (const { pattern, id } of _espnIdSeeds) {
   try {
