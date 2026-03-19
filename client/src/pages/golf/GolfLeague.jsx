@@ -658,7 +658,7 @@ function TieredPickSheet({ leagueId, league }) {
 
 // ── Pool Roster Tab ────────────────────────────────────────────────────────────
 
-const TIER_COLORS = {
+const ROSTER_TIER_COLORS = {
   1: { bg: 'linear-gradient(135deg,#f59e0b,#d97706)', border: 'rgba(245,158,11,0.3)', accent: '#f59e0b', label: '#fbbf24' },
   2: { bg: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', border: 'rgba(139,92,246,0.3)', accent: '#8b5cf6', label: '#a78bfa' },
   3: { bg: 'linear-gradient(135deg,#3b82f6,#2563eb)', border: 'rgba(59,130,246,0.3)', accent: '#3b82f6', label: '#60a5fa' },
@@ -695,7 +695,7 @@ function scoreColor(val) {
 }
 
 function InitialsAvatar({ name, tier, size = 44 }) {
-  const tc = TIER_COLORS[tier] || TIER_COLORS[4];
+  const tc = ROSTER_TIER_COLORS[tier] || ROSTER_TIER_COLORS[4];
   const initials = (name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
   return (
     <div style={{
@@ -721,7 +721,7 @@ function CountryFlag({ cc }) {
 }
 
 function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagueId }) {
-  const tc = TIER_COLORS[tier] || TIER_COLORS[4];
+  const tc = ROSTER_TIER_COLORS[tier] || ROSTER_TIER_COLORS[4];
   const rounds = getRounds(pick);
   const todayRaw = getTodayScore(pick);
   const totalPar = rounds.reduce((s, r) => s + (r || 0), 0);
@@ -808,7 +808,7 @@ function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagu
 }
 
 function EmptySlot({ tier }) {
-  const tc = TIER_COLORS[tier] || TIER_COLORS[4];
+  const tc = ROSTER_TIER_COLORS[tier] || ROSTER_TIER_COLORS[4];
   return (
     <div style={{
       border: `1.5px dashed ${tc.border}`,
@@ -917,7 +917,7 @@ function PoolRosterTab({ leagueId, league }) {
         /* ── Empty state ── */
         <div>
           {tierNums.map(tierNum => {
-            const tc = TIER_COLORS[tierNum] || TIER_COLORS[4];
+            const tc = ROSTER_TIER_COLORS[tierNum] || ROSTER_TIER_COLORS[4];
             const tierCfg = tiersConfig.find(t => parseInt(t.tier || t.tier_number || t.id) === tierNum);
             const slotCount = parseInt(tierCfg?.picks || 1);
             return (
@@ -951,7 +951,7 @@ function PoolRosterTab({ leagueId, league }) {
         /* ── Picks grid ── */
         <div>
           {tierNums.map(tierNum => {
-            const tc = TIER_COLORS[tierNum] || TIER_COLORS[4];
+            const tc = ROSTER_TIER_COLORS[tierNum] || ROSTER_TIER_COLORS[4];
             const tierPicks = byTier[tierNum] || [];
             const tierCfg = tiersConfig.find(t => parseInt(t.tier || t.tier_number || t.id) === tierNum);
             const slotCount = parseInt(tierCfg?.picks || tierPicks.length || 1);
