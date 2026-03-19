@@ -747,17 +747,6 @@ function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagu
     onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 24px ${tc.border}`; }}
     onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
     >
-      {/* WD/CUT overlay */}
-      {(isWD || isCUT) && (
-        <div style={{
-          position: 'absolute', top: 8, right: 10,
-          background: isWD ? 'rgba(239,68,68,0.15)' : 'rgba(107,114,128,0.15)',
-          border: `1px solid ${isWD ? 'rgba(239,68,68,0.4)' : 'rgba(107,114,128,0.3)'}`,
-          borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 700,
-          color: isWD ? '#f87171' : '#9ca3af', letterSpacing: '0.05em',
-        }}>{isWD ? 'WD' : 'CUT'}</div>
-      )}
-
       <InitialsAvatar name={pick.player_name} tier={tier} />
 
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -783,18 +772,26 @@ function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagu
         </div>
       </div>
 
-      {/* Score column */}
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+      {/* Score column — badge sits inline at top, no absolute positioning */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0, minWidth: 70 }}>
+        {(isWD || isCUT) && (
+          <div style={{
+            background: isWD ? 'rgba(239,68,68,0.15)' : 'rgba(107,114,128,0.15)',
+            border: `1px solid ${isWD ? 'rgba(239,68,68,0.4)' : 'rgba(107,114,128,0.3)'}`,
+            borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 700,
+            color: isWD ? '#f87171' : '#9ca3af', letterSpacing: '0.05em',
+          }}>{isWD ? 'WD' : 'CUT'}</div>
+        )}
         {hasScores ? (
           <>
             <div style={{ fontSize: 18, fontWeight: 800, color: scoreColor(totalPar), lineHeight: 1 }}>
               {fmtScore(totalPar)}
             </div>
-            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: '#6b7280' }}>
               {isLive ? `R${rounds.length}: ${fmtScore(todayRaw)}` : isComplete ? `Rd ${rounds.length}` : ''}
             </div>
             {pts != null && (
-              <div style={{ fontSize: 11, fontWeight: 700, color: tc.label, marginTop: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: tc.label }}>
                 {pts > 0 ? '+' : ''}{pts} pts
               </div>
             )}
