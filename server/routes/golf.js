@@ -419,12 +419,26 @@ router.get('/leagues/:id/standings', authMiddleware, (req, res) => {
           ORDER BY pp.tier_number ASC
         `).all(tid, req.params.id, tid, m.user_id) : [];
 
-        const total_points = Math.round(picks.reduce((s, p) => s + (p.fantasy_points || 0), 0) * 10) / 10;
+        const isTotalStrokes = league.scoring_style === 'total_strokes';
+
+        let total_points;
+        if (isTotalStrokes) {
+          // Sum to-par strokes for all picks (lower = better); null round scores = 0
+          const toParPerPick = picks.map(p => {
+            const rounds = [p.round1, p.round2, p.round3, p.round4].filter(r => r != null);
+            return rounds.reduce((s, r) => s + r, 0);
+          });
+          total_points = toParPerPick.reduce((s, v) => s + v, 0);
+        } else {
+          total_points = Math.round(picks.reduce((s, p) => s + (p.fantasy_points || 0), 0) * 10) / 10;
+        }
+
         return {
           user_id: m.user_id, username: m.username, team_name: m.team_name,
           avatar_url: m.avatar_url,
           season_points: total_points,
           submitted: picks.length > 0,
+          scoring_style: league.scoring_style || 'fantasy_points',
           picks: picks.map(p => ({
             player_name: p.player_name, tier_number: p.tier_number,
             fantasy_points: p.fantasy_points || 0,
@@ -434,7 +448,15 @@ router.get('/leagues/:id/standings', authMiddleware, (req, res) => {
         };
       });
 
-      standings.sort((a, b) => b.season_points - a.season_points);
+      // Total strokes: sort ascending (lower is better); fantasy points: descending
+      if (standings[0]?.scoring_style === 'total_strokes') {
+        const withScores    = standings.filter(s => s.submitted);
+        const withoutScores = standings.filter(s => !s.submitted);
+        withScores.sort((a, b) => a.season_points - b.season_points);
+        standings.splice(0, standings.length, ...withScores, ...withoutScores);
+      } else {
+        standings.sort((a, b) => b.season_points - a.season_points);
+      }
       standings.forEach((s, i) => { s.rank = i + 1; });
 
       const hasScores = standings.some(s => s.season_points !== 0);

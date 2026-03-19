@@ -18,7 +18,7 @@ function fmtDateRange(start, end) {
   return `${MONTHS[s.getMonth()]} ${s.getDate()} – ${MONTHS[e.getMonth()]} ${e.getDate()}`;
 }
 
-const ACTIVE_STATUSES = new Set(['active', 'lobby', 'draft', 'draft_pending']);
+const ACTIVE_STATUSES = new Set(['active', 'lobby', 'draft', 'draft_pending', 'drafting']);
 
 // ── Format pills config ────────────────────────────────────────────────────────
 
@@ -48,13 +48,14 @@ const PLACE_ICONS = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
 
 function PrizeBreakdown({ league }) {
   const buyIn = parseFloat(league.buy_in_amount) || 0;
-  if (buyIn <= 0) return null;
+  const teams  = parseInt(league.member_count) || 0;
+  const prizePool = league.payout_pool_override
+    ? parseFloat(league.payout_pool_override)
+    : buyIn * teams;
+  if (prizePool <= 0) return null;
 
   const places  = parsePayout(league);
   if (!places.length) return null;
-
-  const teams    = parseInt(league.member_count) || 0;
-  const prizePool = buyIn * teams;
   const shown    = places.slice(0, 3);
   const extra    = places.length - shown.length;
 
@@ -190,9 +191,11 @@ function LeagueCard({ league, userId, past = false }) {
           <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.pill}`}>
             {meta.label}
           </span>
-          <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.dPill}`}>
-            {meta.duration}
-          </span>
+          {league.format_type === 'tourneyrun' && (
+            <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.dPill}`}>
+              {meta.duration}
+            </span>
+          )}
         </div>
 
         {/* Pool tournament line */}

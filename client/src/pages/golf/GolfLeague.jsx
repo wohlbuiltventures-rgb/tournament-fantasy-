@@ -1821,8 +1821,9 @@ function AvatarCircle({ name, isMe }) {
   );
 }
 
-function PrizeCard({ buyIn, memberCount, p1, p2, p3 }) {
-  const total  = buyIn * memberCount;
+function PrizeCard({ prizeTotal, buyIn, memberCount, p1, p2, p3 }) {
+  const total  = prizeTotal || (buyIn * memberCount);
+  const isOverride = prizeTotal && prizeTotal !== buyIn * memberCount;
   const amt1   = Math.round(total * p1 / 100);
   const amt2   = Math.round(total * p2 / 100);
   const amt3   = Math.round(total * p3 / 100);
@@ -1843,7 +1844,10 @@ function PrizeCard({ buyIn, memberCount, p1, p2, p3 }) {
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ color: '#fff', fontWeight: 800, fontSize: 20 }}>{fmtAmt(total)}</div>
-          <div style={{ color: '#6b7280', fontSize: 11 }}>${buyIn} × {memberCount} teams</div>
+          {isOverride
+            ? <div style={{ color: '#6b7280', fontSize: 11 }}>Test prize pool</div>
+            : <div style={{ color: '#6b7280', fontSize: 11 }}>${buyIn} × {memberCount} teams</div>
+          }
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0 }}>
@@ -1870,9 +1874,8 @@ function computeRanks(standings) {
 }
 
 // Prize for a given rank
-function prizeForRank(rank, buyIn, memberCount, p1, p2, p3) {
-  if (!buyIn || !memberCount) return null;
-  const total = buyIn * memberCount;
+function prizeForRank(rank, total, p1, p2, p3) {
+  if (!total) return null;
   if (rank === 1) return Math.round(total * p1 / 100);
   if (rank === 2) return Math.round(total * p2 / 100);
   if (rank === 3) return Math.round(total * p3 / 100);
@@ -1900,12 +1903,14 @@ function StandingsTab({ leagueId, league, currentUserId }) {
   const isLive     = tournament?.status === 'active';
   const hasScores  = data?.has_scores;
 
-  // Payout config from league
-  const buyIn    = league?.buy_in_amount || 0;
-  const p1       = league?.payout_first  ?? 70;
-  const p2       = league?.payout_second ?? 20;
-  const p3       = league?.payout_third  ?? 10;
-  const hasPrize = buyIn > 0 && standings.length > 0;
+  // Payout config from league — payout_pool_override takes precedence over buy_in * members
+  const p1         = league?.payout_first  ?? 70;
+  const p2         = league?.payout_second ?? 20;
+  const p3         = league?.payout_third  ?? 10;
+  const prizeTotal = league?.payout_pool_override
+    ? league.payout_pool_override
+    : (league?.buy_in_amount || 0) * standings.length;
+  const hasPrize = prizeTotal > 0 && standings.length > 0;
 
   if (standings.length === 0) {
     return (
@@ -1925,7 +1930,7 @@ function StandingsTab({ leagueId, league, currentUserId }) {
     const isMe   = s.user_id === currentUserId;
     const isOpen = expanded === s.user_id;
     const pts    = s.season_points || 0;
-    const myPrize = hasPrize ? prizeForRank(rankInfo.rank, buyIn, standings.length, p1, p2, p3) : null;
+    const myPrize = hasPrize ? prizeForRank(rankInfo.rank, prizeTotal, p1, p2, p3) : null;
     const ptColor = pts > 0 ? '#00e87a' : pts < 0 ? '#ef4444' : '#9ca3af';
     const isBot  = /^bot[\s_]?\d/i.test(s.username || '');
 
@@ -2099,7 +2104,7 @@ function StandingsTab({ leagueId, league, currentUserId }) {
         )}
 
         {/* ── Prize pool card ── */}
-        {hasPrize && <PrizeCard buyIn={buyIn} memberCount={standings.length} p1={p1} p2={p2} p3={p3} />}
+        {hasPrize && <PrizeCard prizeTotal={prizeTotal} buyIn={league?.buy_in_amount || 0} memberCount={standings.length} p1={p1} p2={p2} p3={p3} />}
 
         {/* ── Leaderboard ── */}
         <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 16, overflow: 'hidden' }}>
@@ -2162,7 +2167,7 @@ function StandingsTab({ leagueId, league, currentUserId }) {
 
   return (
     <div className="space-y-4">
-      {hasPrize && <PrizeCard buyIn={buyIn} memberCount={standings.length} p1={p1} p2={p2} p3={p3} />}
+      {hasPrize && <PrizeCard prizeTotal={prizeTotal} buyIn={league?.buy_in_amount || 0} memberCount={standings.length} p1={p1} p2={p2} p3={p3} />}
 
       <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 16, overflow: 'hidden' }}>
         {/* Column headers */}

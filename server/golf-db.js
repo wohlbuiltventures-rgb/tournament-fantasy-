@@ -226,6 +226,7 @@ const _golfColMigrations = [
   `ALTER TABLE golf_tournaments ADD COLUMN prize_money INTEGER DEFAULT 0`,
   `ALTER TABLE golf_tournaments ADD COLUMN espn_event_id TEXT`,
   `ALTER TABLE golf_tournaments ADD COLUMN last_synced_at DATETIME`,
+  `ALTER TABLE golf_leagues ADD COLUMN payout_pool_override REAL`,
 ];
 for (const sql of _golfColMigrations) { try { db.exec(sql); } catch (_) {} }
 
@@ -259,6 +260,20 @@ try {
       AND draft_type != 'tiered'
   `).run();
 } catch (e) { console.error('[golf-db] Beta Group 1.0 draft_type fix error:', e.message); }
+
+// ── Beta Group 1.0 — status, scoring_style, and test prize pool ───────────────
+try {
+  db.prepare(`
+    UPDATE golf_leagues
+    SET status               = 'active',
+        scoring_style        = 'total_strokes',
+        payout_pool_override = 1000,
+        payout_first         = 70,
+        payout_second        = 20,
+        payout_third         = 10
+    WHERE id = '68b1e250-6afc-4e80-ad7b-d8a22ae3ad7d'
+  `).run();
+} catch (e) { console.error('[golf-db] Beta Group 1.0 config fix error:', e.message); }
 
 // ── Seed golf_players (March 2026 OWGR) ───────────────────────────────────────
 const GOLF_PLAYERS = [
