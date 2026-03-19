@@ -632,4 +632,18 @@ router.post('/espn-poll', superadmin, async (req, res) => {
   }
 });
 
+// ── Re-ingest all completed game stats by espn_event_id ─────────────────────
+// POST /api/superadmin/reingest-stats
+router.post('/reingest-stats', superadmin, async (req, res) => {
+  try {
+    const { reingestCompletedGames } = require('../espnPoller');
+    const io = req.app.get('io');
+    // Run async, respond immediately so request doesn't time out
+    reingestCompletedGames(io).catch(e => console.error('[reingest] error:', e.message));
+    res.json({ ok: true, message: 'Re-ingestion started — check server logs for progress' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;

@@ -154,20 +154,7 @@ async function processBoxScore(gameId, summary) {
   const roundCode = game ? roundNameToCode(game.round_name) : '';
   const playedAt  = new Date().toISOString();
 
-  // Collect the ESPN team IDs for both teams in this game so we can validate
-  // player group membership. Without this check, name-matched players from
-  // unrelated teams (e.g. UConn players appearing in an Ohio State vs TCU box
-  // score) get incorrectly inserted.
-  const getTeamEspnIds = (teamName) => {
-    if (!teamName) return new Set();
-    const rows = db.prepare(
-      "SELECT DISTINCT espn_team_id FROM players WHERE team = ? AND espn_team_id IS NOT NULL AND espn_team_id != ''"
-    ).all(teamName);
-    return new Set(rows.map(r => String(r.espn_team_id)));
-  };
-  const team1EspnIds = game ? getTeamEspnIds(game.team1) : new Set();
-  const team2EspnIds = game ? getTeamEspnIds(game.team2) : new Set();
-  const validEspnTeamIds = new Set([...team1EspnIds, ...team2EspnIds]);
+  const byAthleteId = db.prepare("SELECT * FROM players WHERE espn_athlete_id = ? LIMIT 1");
 
   let playersUpdated = 0;
   const playerGroups = summary.boxscore?.players || [];
@@ -179,14 +166,8 @@ async function processBoxScore(gameId, summary) {
     if (ptsIdx === -1) continue;
 
     // ESPN tells us which team this group belongs to
-    const groupTeamName  = group.team?.displayName || '';
+    const groupTeamName   = group.team?.displayName || '';
     const groupEspnTeamId = group.team?.id ? String(group.team.id) : '';
-
-    // Skip entire player group if its ESPN team isn't one of this game's two teams
-    if (groupEspnTeamId && validEspnTeamIds.size > 0 && !validEspnTeamIds.has(groupEspnTeamId)) {
-      console.log(`[stats] skipping group "${groupTeamName}" (espn_team_id=${groupEspnTeamId}) — not in game "${game?.team1}" vs "${game?.team2}"`);
-      continue;
-    }
 
     // Derive opponent: the other team in this game
     let opponent = '';
@@ -196,19 +177,29 @@ async function processBoxScore(gameId, summary) {
 
     const athletes = statsBlock.athletes || [];
     for (const entry of athletes) {
-      const displayName = entry.athlete?.displayName || entry.athlete?.shortName;
+      const displayName   = entry.athlete?.displayName || entry.athlete?.shortName;
+      const espnAthleteId = entry.athlete?.id ? String(entry.athlete.id) : '';
       const pts = parseInt(entry.stats?.[ptsIdx]) || 0;
       if (!displayName) continue;
-      const player = findMatchingPlayer(displayName);
-      if (!player) continue;
 
-      // Second guard: player's stored espn_team_id must match this group's team.
-      // This catches cases where findMatchingPlayer returns a same-named player
-      // from a different team.
-      if (player.espn_team_id && groupEspnTeamId && player.espn_team_id !== groupEspnTeamId) {
-        console.log(`[stats] skipped "${displayName}" — player espn_team_id=${player.espn_team_id} ≠ group espn_team_id=${groupEspnTeamId}`);
-        continue;
+      // Match by espn_athlete_id first — most reliable, no team ambiguity.
+      // Falls back to name matching with team-ID guard to prevent cross-team
+      // contamination (name match only; ID-matched players are always correct).
+      let player = espnAthleteId ? byAthleteId.get(espnAthleteId) : null;
+
+      if (!player) {
+        player = findMatchingPlayer(displayName);
+        if (player && groupEspnTeamId) {
+          // String() on both sides: SQLite may store espn_team_id as integer
+          const playerTeamId = player.espn_team_id != null ? String(player.espn_team_id) : '';
+          if (playerTeamId && playerTeamId !== groupEspnTeamId) {
+            console.log(`[stats] skipped "${displayName}" (name-match) — player team=${playerTeamId} ≠ group team=${groupEspnTeamId}`);
+            player = null;
+          }
+        }
       }
+
+      if (!player) continue;
 
       db.prepare(`
         INSERT INTO player_stats (id, game_id, player_id, points, round, opponent, played_at)
@@ -223,6 +214,45 @@ async function processBoxScore(gameId, summary) {
     }
   }
   return playersUpdated;
+}
+
+// ── Re-ingest player_stats for all completed games ───────────────────────────
+// Fetches ESPN boxscores by espn_event_id and re-inserts via ON CONFLICT DO
+// UPDATE. Safe to run repeatedly — idempotent. Restores stats lost to any
+// prior bad DELETE.
+async function reingestCompletedGames(io) {
+  const completedGames = db.prepare(`
+    SELECT id, espn_event_id, team1, team2, game_date
+    FROM games
+    WHERE is_completed = 1
+      AND espn_event_id IS NOT NULL AND espn_event_id != ''
+    ORDER BY game_date ASC
+  `).all();
+
+  if (!completedGames.length) {
+    console.log('[reingest] No completed games with espn_event_id found.');
+    return;
+  }
+
+  console.log(`[reingest] Re-ingesting stats for ${completedGames.length} completed game(s)...`);
+  let totalUpdated = 0;
+
+  for (const game of completedGames) {
+    try {
+      const summary = await fetchJson(SUMMARY_BASE + game.espn_event_id);
+      const updated = await processBoxScore(game.id, summary);
+      if (updated > 0) {
+        console.log(`[reingest] ${game.team1} vs ${game.team2} (${game.game_date}): ${updated} player(s) updated`);
+        totalUpdated += updated;
+      }
+      await new Promise(r => setTimeout(r, 150));
+    } catch (err) {
+      console.warn(`[reingest] Failed for event ${game.espn_event_id} (${game.team1} vs ${game.team2}):`, err.message);
+    }
+  }
+
+  console.log(`[reingest] Complete — ${totalUpdated} total stat rows restored/updated`);
+  if (totalUpdated > 0) pushStandingsToLeagues(io);
 }
 
 function recordResult(game, winnerTeam, score1, score2) {
@@ -592,4 +622,4 @@ function startSmartPoller(io) {
   _pollerTimeout = setTimeout(tick, 15 * 1000);
 }
 
-module.exports = { pollESPN, startSmartPoller, pullSchedule };
+module.exports = { pollESPN, startSmartPoller, pullSchedule, reingestCompletedGames };

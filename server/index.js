@@ -528,12 +528,17 @@ try {
 }
 
 // ESPN live scoring poller — smart polling (2 min live window, 30 min otherwise)
-const { startSmartPoller, pullSchedule, pollESPN } = require('./espnPoller');
+const { startSmartPoller, pullSchedule, pollESPN, reingestCompletedGames } = require('./espnPoller');
 startSmartPoller(io);
 
 // Immediate ESPN poll at startup to restore any stats that were incorrectly
 // deleted — ON CONFLICT DO UPDATE means this is a safe re-ingest, not a dupe.
 setTimeout(() => pollESPN(io).catch(e => console.error('[startup] immediate ESPN poll failed:', e.message)), 3000);
+
+// Re-ingest all completed games by espn_event_id — restores historical stats
+// that the live poller can't recover (completed games no longer on scoreboard).
+// Uses athlete-ID-first matching so NC State and other mis-seeded players are found.
+setTimeout(() => reingestCompletedGames(io).catch(e => console.error('[startup] reingest failed:', e.message)), 8000);
 
 // Pull full tournament schedule at startup (after bracket pull finishes) + every 6h
 // This populates the games table with all scheduled games including future ones.
