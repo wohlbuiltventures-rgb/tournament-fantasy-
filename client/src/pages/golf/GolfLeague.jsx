@@ -1460,10 +1460,95 @@ function FreeAgencyTab({ leagueId, league }) {
 
 // ── Tab: Standings ─────────────────────────────────────────────────────────────
 
+const TIER_NAMES = { 1: 'Tier 1 · Elite', 2: 'Tier 2 · Premium', 3: 'Tier 3 · Mid-Field', 4: 'Tier 4 · Longshots' };
+const RANK_COLORS = ['#fbbf24', '#d1d5db', '#f97316']; // gold / silver / bronze
+
+// Shared sub-components -------------------------------------------------------
+
+function RankBadge({ rank, isTied }) {
+  if (rank <= 3) return (
+    <div style={{ width: 30, height: 30, borderRadius: '50%', background: `${RANK_COLORS[rank-1]}22`, border: `1.5px solid ${RANK_COLORS[rank-1]}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <Trophy style={{ width: 14, height: 14, color: RANK_COLORS[rank-1] }} />
+    </div>
+  );
+  return (
+    <div style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <span style={{ color: '#6b7280', fontSize: 13, fontWeight: 700 }}>{isTied ? `T${rank}` : rank}</span>
+    </div>
+  );
+}
+
+function AvatarCircle({ name, isMe }) {
+  const initials = (name || '?').trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  return (
+    <div style={{ width: 32, height: 32, borderRadius: '50%', background: isMe ? 'rgba(0,232,122,0.15)' : 'rgba(255,255,255,0.06)', border: `1.5px solid ${isMe ? 'rgba(0,232,122,0.35)' : 'rgba(255,255,255,0.1)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: isMe ? '#00e87a' : '#9ca3af', letterSpacing: '0.03em' }}>{initials}</span>
+    </div>
+  );
+}
+
+function PrizeCard({ buyIn, memberCount, p1, p2, p3 }) {
+  const total  = buyIn * memberCount;
+  const amt1   = Math.round(total * p1 / 100);
+  const amt2   = Math.round(total * p2 / 100);
+  const amt3   = Math.round(total * p3 / 100);
+  const fmtAmt = n => n >= 1000 ? `$${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : `$${n}`;
+  const places = [
+    { icon: '🥇', label: '1st', pct: p1, amt: amt1 },
+    { icon: '🥈', label: '2nd', pct: p2, amt: amt2 },
+    { icon: '🥉', label: '3rd', pct: p3, amt: amt3 },
+  ];
+  return (
+    <div style={{ background: '#111827', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Trophy style={{ width: 14, height: 14, color: '#f59e0b' }} />
+          </div>
+          <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: 13, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Prize Pool</span>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ color: '#fff', fontWeight: 800, fontSize: 20 }}>{fmtAmt(total)}</div>
+          <div style={{ color: '#6b7280', fontSize: 11 }}>${buyIn} × {memberCount} teams</div>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0 }}>
+        {places.map(({ icon, label, pct, amt }, i) => (
+          <div key={label} style={{ padding: '12px 14px', borderRight: i < 2 ? '1px solid rgba(245,158,11,0.1)' : 'none', textAlign: 'center' }}>
+            <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
+            <div style={{ color: '#fff', fontWeight: 800, fontSize: 16 }}>{fmtAmt(amt)}</div>
+            <div style={{ color: '#6b7280', fontSize: 11, marginTop: 2 }}>{label} · {pct}%</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Compute rank (1-based) respecting ties
+function computeRanks(standings) {
+  const sorted = standings.map((s, i) => ({ pts: s.season_points || 0, i }));
+  return sorted.map(({ pts, i }) => {
+    const rank = sorted.filter(x => x.pts > pts).length + 1;
+    const tied = sorted.filter(x => x.pts === pts).length > 1;
+    return { rank, tied };
+  });
+}
+
+// Prize for a given rank
+function prizeForRank(rank, buyIn, memberCount, p1, p2, p3) {
+  if (!buyIn || !memberCount) return null;
+  const total = buyIn * memberCount;
+  if (rank === 1) return Math.round(total * p1 / 100);
+  if (rank === 2) return Math.round(total * p2 / 100);
+  if (rank === 3) return Math.round(total * p3 / 100);
+  return null;
+}
+
 function StandingsTab({ leagueId, league, currentUserId }) {
-  const [data, setData]     = useState(null);
+  const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(null); // expanded user_id for pool pick detail
+  const [expanded, setExpanded] = useState(null);
 
   useEffect(() => {
     api.get(`/golf/leagues/${leagueId}/standings`)
@@ -1472,7 +1557,7 @@ function StandingsTab({ leagueId, league, currentUserId }) {
       .finally(() => setLoading(false));
   }, [leagueId]);
 
-  if (loading) return <div className="py-10 text-center text-gray-500">Loading standings...</div>;
+  if (loading) return <div className="py-10 text-center text-gray-500 text-sm">Loading standings…</div>;
 
   const standings  = data?.standings || [];
   const isPool     = data?.format === 'pool';
@@ -1480,205 +1565,287 @@ function StandingsTab({ leagueId, league, currentUserId }) {
   const isLive     = tournament?.status === 'active';
   const hasScores  = data?.has_scores;
 
+  // Payout config from league
+  const buyIn    = league?.buy_in_amount || 0;
+  const p1       = league?.payout_first  ?? 70;
+  const p2       = league?.payout_second ?? 20;
+  const p3       = league?.payout_third  ?? 10;
+  const hasPrize = buyIn > 0 && standings.length > 0;
+
   if (standings.length === 0) {
     return (
       <div className="py-10 text-center text-gray-500">
         <div className="w-14 h-14 rounded-2xl bg-gray-800 flex items-center justify-center mx-auto mb-3">
           <Flag className="w-7 h-7 text-gray-600" />
         </div>
-        <p>No members yet.</p>
+        <p className="text-sm">No members yet.</p>
       </div>
     );
   }
 
-  const MEDAL_COLORS = ['text-yellow-400', 'text-gray-300', 'text-orange-400'];
-  const ptsList = standings.map(s => s.season_points || 0);
+  const ranks = computeRanks(standings);
 
-  // ── Pool leaderboard ──────────────────────────────────────────────────────
-  if (isPool) {
-    const fmtRound = r => r !== null && r !== undefined ? String(r) : '—';
+  // Shared leaderboard row renderer — used by both pool and tourneyrun
+  function LeaderboardRow({ s, i, rankInfo, expandContent, canExpand }) {
+    const isMe   = s.user_id === currentUserId;
+    const isOpen = expanded === s.user_id;
+    const pts    = s.season_points || 0;
+    const myPrize = hasPrize ? prizeForRank(rankInfo.rank, buyIn, standings.length, p1, p2, p3) : null;
+    const ptColor = pts > 0 ? '#00e87a' : pts < 0 ? '#ef4444' : '#9ca3af';
+    const isBot  = /^bot[\s_]?\d/i.test(s.username || '');
+
     return (
-      <div className="space-y-4">
-        {/* Tournament header */}
-        {tournament && (
-          <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <div>
-              <div style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>{tournament.name}</div>
-              <div style={{ color: '#6b7280', fontSize: 12, marginTop: 2 }}>
-                {tournament.course}{tournament.course ? ' · ' : ''}
-                {tournament.start_date?.slice(0, 10)}
-              </div>
-            </div>
-            {isLive ? (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.25)', color: '#00e87a', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap' }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00e87a', animation: 'pulse 1.5s ease-in-out infinite' }} />
-                Live
+      <div style={{ borderLeft: `3px solid ${isMe ? '#00e87a' : 'transparent'}`, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <button
+          onClick={() => canExpand ? setExpanded(isOpen ? null : s.user_id) : null}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px 11px 11px', background: isMe ? 'rgba(0,232,122,0.04)' : 'transparent', border: 'none', cursor: canExpand ? 'pointer' : 'default', textAlign: 'left' }}
+          onMouseEnter={e => { if (canExpand) e.currentTarget.style.background = isMe ? 'rgba(0,232,122,0.07)' : 'rgba(255,255,255,0.03)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = isMe ? 'rgba(0,232,122,0.04)' : 'transparent'; }}
+        >
+          {/* Rank badge */}
+          <RankBadge rank={rankInfo.rank} isTied={rankInfo.tied} />
+
+          {/* Avatar */}
+          <AvatarCircle name={s.team_name} isMe={isMe} />
+
+          {/* Name + username */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}>
+              <span style={{ color: isMe ? '#00e87a' : '#fff', fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {s.team_name}
               </span>
-            ) : !hasScores ? (
-              <span style={{ color: '#4b5563', fontSize: 12 }}>Scores update Thursday</span>
-            ) : null}
+              {isBot && (
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', background: '#1f2937', border: '1px solid #374151', padding: '1px 5px', borderRadius: 4, letterSpacing: '0.05em', flexShrink: 0 }}>BOT</span>
+              )}
+            </div>
+            <div style={{ color: '#4b5563', fontSize: 11, marginTop: 1 }}>{s.username}</div>
+          </div>
+
+          {/* Prize */}
+          {hasPrize && (
+            <div style={{ textAlign: 'right', minWidth: 44, flexShrink: 0 }}>
+              {myPrize ? (
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#f59e0b' }}>${myPrize.toLocaleString()}</span>
+              ) : (
+                <span style={{ fontSize: 11, color: '#374151' }}>—</span>
+              )}
+            </div>
+          )}
+
+          {/* Pts */}
+          <div style={{ textAlign: 'right', minWidth: 50, flexShrink: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: hasScores ? ptColor : '#6b7280', fontVariantNumeric: 'tabular-nums' }}>
+              {hasScores ? (pts > 0 ? '+' : '') + pts.toFixed(1) : '—'}
+            </div>
+            <div style={{ color: '#4b5563', fontSize: 10 }}>pts</div>
+          </div>
+
+          {/* Chevron */}
+          {canExpand && (
+            <svg style={{ width: 12, height: 12, color: '#4b5563', flexShrink: 0, transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          )}
+        </button>
+
+        {/* Expanded content */}
+        {isOpen && expandContent && (
+          <div style={{ background: 'rgba(0,0,0,0.25)', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+            {expandContent}
           </div>
         )}
+      </div>
+    );
+  }
 
-        {/* Leaderboard */}
-        <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 16, overflow: 'hidden' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #1f2937', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Trophy style={{ width: 15, height: 15, color: '#fbbf24' }} />
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Pool Leaderboard</span>
-            <span style={{ marginLeft: 'auto', color: '#4b5563', fontSize: 12 }}>{standings.length} entries</span>
-          </div>
+  // ── Pool leaderboard ────────────────────────────────────────────────────────
+  if (isPool) {
+    // Derive which round(s) have data
+    const allPicks = standings.flatMap(s => s.picks || []);
+    let currentRound = 0;
+    if (allPicks.some(p => p.round4 != null)) currentRound = 4;
+    else if (allPicks.some(p => p.round3 != null)) currentRound = 3;
+    else if (allPicks.some(p => p.round2 != null)) currentRound = 2;
+    else if (allPicks.some(p => p.round1 != null)) currentRound = 1;
 
-          {standings.map((s, i) => {
-            const isMe   = s.user_id === currentUserId;
-            const pts    = s.season_points || 0;
-            const isTied = ptsList.filter(p => p === pts).length > 1;
-            const rank   = isTied ? `T${i + 1}` : `${i + 1}`;
-            const isOpen = expanded === s.user_id;
+    const fmtScore = r => {
+      if (r == null) return <span style={{ color: '#374151' }}>—</span>;
+      const toPar = r - 72;
+      const color = toPar < 0 ? '#00e87a' : toPar > 0 ? '#ef4444' : '#9ca3af';
+      const label = toPar === 0 ? 'E' : (toPar > 0 ? `+${toPar}` : String(toPar));
+      return <span style={{ color }}>{label}</span>;
+    };
 
-            return (
-              <div key={s.user_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                {/* Main row */}
-                <button
-                  onClick={() => s.submitted ? setExpanded(isOpen ? null : s.user_id) : null}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '12px 16px', background: isMe ? 'rgba(0,232,122,0.04)' : 'transparent',
-                    border: 'none', cursor: s.submitted ? 'pointer' : 'default', textAlign: 'left',
-                  }}
-                  onMouseEnter={e => { if (s.submitted) e.currentTarget.style.background = isMe ? 'rgba(0,232,122,0.07)' : 'rgba(255,255,255,0.03)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = isMe ? 'rgba(0,232,122,0.04)' : 'transparent'; }}
-                >
-                  {/* Rank */}
-                  <span style={{ width: 28, flexShrink: 0, textAlign: 'center' }}>
-                    {i < 3
-                      ? <Award style={{ width: 18, height: 18, display: 'inline', color: ['#fbbf24','#d1d5db','#f97316'][i] }} />
-                      : <span style={{ color: '#6b7280', fontSize: 13, fontWeight: 700 }}>{rank}</span>}
-                  </span>
-
-                  {/* Name */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: isMe ? '#00e87a' : '#fff', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.team_name}
-                    </div>
-                    <div style={{ color: '#4b5563', fontSize: 11, marginTop: 1 }}>
-                      {s.username}{!s.submitted ? ' · no picks' : ''}
-                    </div>
-                  </div>
-
-                  {/* Points + chevron */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ color: '#fff', fontWeight: 800, fontSize: 15, tabularNums: true }}>
-                        {hasScores ? pts.toFixed(1) : (s.submitted ? '—' : '—')}
-                      </div>
-                      <div style={{ color: '#4b5563', fontSize: 10 }}>pts</div>
-                    </div>
-                    {s.submitted && (
-                      <svg style={{ width: 12, height: 12, color: '#4b5563', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
+    function PoolExpandContent({ picks }) {
+      if (!picks || picks.length === 0) return null;
+      // Group by tier
+      const byTier = {};
+      picks.forEach(p => {
+        const t = p.tier_number || 0;
+        if (!byTier[t]) byTier[t] = [];
+        byTier[t].push(p);
+      });
+      return (
+        <div style={{ padding: '12px 14px 14px' }}>
+          {Object.entries(byTier).sort(([a], [b]) => a - b).map(([tier, tPicks]) => (
+            <div key={tier} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#4b5563', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>
+                {TIER_NAMES[tier] || `Tier ${tier}`}
+              </div>
+              {[...tPicks].sort((a, b) => (b.fantasy_points || 0) - (a.fantasy_points || 0)).map((p, pi) => {
+                const isWD = p.round1 == null && p.made_cut === 0 && p.finish_position == null;
+                const fp   = p.fantasy_points || 0;
+                const fpColor = fp > 0 ? '#00e87a' : fp < 0 ? '#ef4444' : '#6b7280';
+                return (
+                  <div key={pi} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: pi > 0 ? '1px solid rgba(255,255,255,0.03)' : 'none' }}>
+                    <span style={{ flex: 1, color: '#d1d5db', fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.player_name}
+                    </span>
+                    {isWD ? (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 5px', borderRadius: 4 }}>WD</span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: '#9ca3af', minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        {currentRound > 0 ? fmtScore(p[`round${currentRound}`]) : '—'}
+                      </span>
                     )}
+                    <span style={{ fontSize: 12, fontWeight: 700, color: fpColor, minWidth: 48, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {fp !== 0 ? (fp > 0 ? '+' : '') + fp.toFixed(1) : hasScores ? '0.0' : '—'}
+                    </span>
                   </div>
-                </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      );
+    }
 
-                {/* Expanded picks */}
-                {isOpen && s.picks && s.picks.length > 0 && (
-                  <div style={{ background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.04)', padding: '10px 16px 12px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                      <thead>
-                        <tr style={{ color: '#4b5563' }}>
-                          <th style={{ textAlign: 'left', padding: '0 4px 6px 0', fontWeight: 600 }}>Player</th>
-                          <th style={{ textAlign: 'center', padding: '0 4px 6px', fontWeight: 600, width: 28 }}>R1</th>
-                          <th style={{ textAlign: 'center', padding: '0 4px 6px', fontWeight: 600, width: 28 }}>R2</th>
-                          <th style={{ textAlign: 'center', padding: '0 4px 6px', fontWeight: 600, width: 28 }}>R3</th>
-                          <th style={{ textAlign: 'center', padding: '0 4px 6px', fontWeight: 600, width: 28 }}>R4</th>
-                          <th style={{ textAlign: 'right', padding: '0 0 6px 4px', fontWeight: 600, width: 40 }}>Pts</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {s.picks.map((p, pi) => (
-                          <tr key={pi} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                            <td style={{ padding: '5px 4px 5px 0', color: '#d1d5db', fontWeight: 500 }}>
-                              <div>{p.player_name}</div>
-                              <div style={{ color: '#4b5563', fontSize: 10 }}>T{p.tier_number}</div>
-                            </td>
-                            <td style={{ textAlign: 'center', padding: '5px 4px', color: '#9ca3af' }}>{fmtRound(p.round1)}</td>
-                            <td style={{ textAlign: 'center', padding: '5px 4px', color: '#9ca3af' }}>{fmtRound(p.round2)}</td>
-                            <td style={{ textAlign: 'center', padding: '5px 4px', color: '#9ca3af' }}>{fmtRound(p.round3)}</td>
-                            <td style={{ textAlign: 'center', padding: '5px 4px', color: '#9ca3af' }}>{fmtRound(p.round4)}</td>
-                            <td style={{ textAlign: 'right', padding: '5px 0 5px 4px', fontWeight: 700, color: p.fantasy_points > 0 ? '#00e87a' : p.fantasy_points < 0 ? '#ef4444' : '#6b7280' }}>
-                              {p.fantasy_points !== 0 ? (p.fantasy_points > 0 ? '+' : '') + p.fantasy_points.toFixed(1) : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+    return (
+      <div className="space-y-4">
+
+        {/* ── Tournament status card ── */}
+        {tournament && (
+          <div style={{ background: '#111827', border: `1px solid ${isLive ? 'rgba(0,232,122,0.2)' : '#1f2937'}`, borderRadius: 14, padding: '14px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>{tournament.name}</div>
+                <div style={{ color: '#6b7280', fontSize: 12, marginTop: 3 }}>
+                  {[tournament.course, tournament.start_date?.slice(0, 10)].filter(Boolean).join(' · ')}
+                </div>
+                {currentRound > 0 && (
+                  <div style={{ color: '#9ca3af', fontSize: 11, marginTop: 4 }}>
+                    Round {currentRound} of 4{isLive ? ' · In Progress' : tournament.status === 'completed' ? ' · Final' : ''}
                   </div>
                 )}
               </div>
-            );
-          })}
+              <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                {isLive ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.3)', color: '#00e87a', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                    Live
+                  </span>
+                ) : tournament.status === 'completed' ? (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', background: '#1f2937', border: '1px solid #374151', padding: '3px 10px', borderRadius: 20 }}>Final</span>
+                ) : (
+                  <span style={{ color: '#4b5563', fontSize: 11 }}>Starts {tournament.start_date?.slice(0, 10)}</span>
+                )}
+                {isLive && <span style={{ color: '#374151', fontSize: 10 }}>Scores auto-update · refresh for latest</span>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Prize pool card ── */}
+        {hasPrize && <PrizeCard buyIn={buyIn} memberCount={standings.length} p1={p1} p2={p2} p3={p3} />}
+
+        {/* ── Leaderboard ── */}
+        <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 16, overflow: 'hidden' }}>
+          {/* Column headers */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px 8px 11px', borderBottom: '1px solid #1f2937' }}>
+            <div style={{ width: 30, flexShrink: 0 }} />
+            <div style={{ width: 32, flexShrink: 0 }} />
+            <div style={{ flex: 1, color: '#4b5563', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Team</div>
+            {hasPrize && <div style={{ minWidth: 44, textAlign: 'right', color: '#4b5563', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>Prize</div>}
+            <div style={{ minWidth: 50, textAlign: 'right', color: '#4b5563', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>Pts</div>
+            <div style={{ width: 12, flexShrink: 0 }} />
+          </div>
+
+          {standings.map((s, i) => (
+            <LeaderboardRow
+              key={s.user_id}
+              s={s} i={i}
+              rankInfo={ranks[i]}
+              canExpand={!!s.submitted && (s.picks?.length > 0)}
+              expandContent={s.picks?.length > 0 ? <PoolExpandContent picks={s.picks} /> : null}
+            />
+          ))}
         </div>
 
-        {/* Footer note */}
+        {!hasPrize && (
+          <p style={{ color: '#374151', fontSize: 11, textAlign: 'center' }}>No buy-in · bragging rights only</p>
+        )}
         <p style={{ color: '#374151', fontSize: 11, textAlign: 'center' }}>
-          {isLive ? 'Scores update automatically from ESPN · refresh to see latest' : 'Scores sync from ESPN once tournament begins'}
+          {isLive ? 'Scores sync automatically from ESPN' : hasScores ? 'Tournament complete' : 'Scores sync from ESPN once tournament begins'}
         </p>
       </div>
     );
   }
 
-  // ── TourneyRun / DK standings (unchanged) ────────────────────────────────
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
-        <Trophy className="w-4 h-4 text-yellow-400" />
-        <h3 className="text-white font-bold">Season Standings</h3>
-      </div>
-      <div className="divide-y divide-gray-800">
-        {standings.map((s, i) => {
-          const isMe = s.user_id === currentUserId;
-          const pts = s.season_points || 0;
-          const isTied = ptsList.filter(p => p === pts).length > 1;
-          const rankLabel = isTied ? `T${i + 1}` : `${i + 1}`;
-          const weekPts = s.points_this_week != null ? Number(s.points_this_week).toFixed(1) : null;
-          const tournsPlayed = s.tournaments_played || 0;
-
-          return (
-            <div
-              key={s.user_id}
-              className={`flex items-center justify-between px-5 py-3.5 gap-3 ${isMe ? 'bg-green-500/5' : ''}`}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="w-8 flex items-center justify-center shrink-0">
-                  {i < 3
-                    ? <Award className={`w-5 h-5 ${MEDAL_COLORS[i]}`} />
-                    : <span className="text-gray-500 text-sm font-bold">{rankLabel}</span>}
-                </span>
-                <div className="min-w-0">
-                  <div className={`text-sm font-semibold truncate ${isMe ? 'text-green-400' : 'text-white'}`}>
-                    {s.team_name}
-                  </div>
-                  <div className="text-gray-500 text-xs flex items-center gap-2">
-                    <span>{s.username}</span>
-                    {tournsPlayed > 0 && (
-                      <span className="text-gray-600">· {tournsPlayed} event{tournsPlayed !== 1 ? 's' : ''}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-white font-black tabular-nums">{pts.toFixed(1)}</div>
-                {weekPts !== null && Number(weekPts) !== 0 ? (
-                  <div className="text-gray-500 text-xs tabular-nums">{Number(weekPts) > 0 ? '+' : ''}{weekPts} this wk</div>
-                ) : (
-                  <div className="text-gray-600 text-xs">pts</div>
-                )}
-              </div>
+  // ── TourneyRun / DK standings ───────────────────────────────────────────────
+  function TourneyExpandContent({ s }) {
+    const weekPts = s.points_this_week != null ? Number(s.points_this_week) : null;
+    const tournsPlayed = s.tournaments_played || 0;
+    return (
+      <div style={{ padding: '12px 14px', display: 'flex', gap: 24 }}>
+        {weekPts !== null && (
+          <div>
+            <div style={{ color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>This Week</div>
+            <div style={{ color: weekPts > 0 ? '#00e87a' : weekPts < 0 ? '#ef4444' : '#9ca3af', fontSize: 15, fontWeight: 800 }}>
+              {weekPts > 0 ? '+' : ''}{weekPts.toFixed(1)}
             </div>
-          );
-        })}
+          </div>
+        )}
+        <div>
+          <div style={{ color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Events</div>
+          <div style={{ color: '#9ca3af', fontSize: 15, fontWeight: 800 }}>{tournsPlayed}</div>
+        </div>
+        <div>
+          <div style={{ color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Season Pts</div>
+          <div style={{ color: '#fff', fontSize: 15, fontWeight: 800 }}>{(s.season_points || 0).toFixed(1)}</div>
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {hasPrize && <PrizeCard buyIn={buyIn} memberCount={standings.length} p1={p1} p2={p2} p3={p3} />}
+
+      <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 16, overflow: 'hidden' }}>
+        {/* Column headers */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px 8px 11px', borderBottom: '1px solid #1f2937' }}>
+          <div style={{ width: 30, flexShrink: 0 }} />
+          <div style={{ width: 32, flexShrink: 0 }} />
+          <div style={{ flex: 1, color: '#4b5563', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Team</div>
+          {hasPrize && <div style={{ minWidth: 44, textAlign: 'right', color: '#4b5563', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>Prize</div>}
+          <div style={{ minWidth: 50, textAlign: 'right', color: '#4b5563', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>Pts</div>
+          <div style={{ width: 12, flexShrink: 0 }} />
+        </div>
+
+        {standings.map((s, i) => (
+          <LeaderboardRow
+            key={s.user_id}
+            s={s} i={i}
+            rankInfo={ranks[i]}
+            canExpand={true}
+            expandContent={<TourneyExpandContent s={s} />}
+          />
+        ))}
+      </div>
+
+      {!hasPrize && (
+        <p style={{ color: '#374151', fontSize: 11, textAlign: 'center' }}>No buy-in · bragging rights only</p>
+      )}
     </div>
   );
 }
