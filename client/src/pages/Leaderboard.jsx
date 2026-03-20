@@ -634,21 +634,15 @@ export default function Leaderboard() {
                         </div>
                       )}
                       {totalPlayers > 0 && (
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
-                            style={aliveCount === 0
-                              ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }
-                              : { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }
-                            }>
-                            {aliveCount} alive
-                          </span>
-                          {leftToPlay > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                              style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#93c5fd' }}>
-                              {leftToPlay} left {ROUND_SHORT[currentRound]}
-                            </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
+                          style={aliveCount === 0
+                            ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }
+                            : { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }
+                          }>
+                          {aliveCount} alive{leftToPlay > 0 && (
+                            <span style={{ opacity: 0.65 }}>· {leftToPlay} left</span>
                           )}
-                        </div>
+                        </span>
                       )}
                       <div className="text-right min-w-[40px]">
                         <div className="font-black leading-tight" style={{ fontSize: 22, color: ptsColor }}>{team.total_points > 0 ? team.total_points : '—'}</div>
