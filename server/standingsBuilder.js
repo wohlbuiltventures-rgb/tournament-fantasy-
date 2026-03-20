@@ -59,6 +59,19 @@ function buildStandings(leagueId) {
     picksByUser[pick.user_id].push(pick);
   }
 
+  // Batch-fetch next scheduled (unplayed, not live) game per team for "Next game" display
+  const upcomingGameRows = db.prepare(`
+    SELECT game_date, round_name, team1, team2
+    FROM games
+    WHERE is_completed = 0 AND (is_live IS NULL OR is_live = 0)
+    ORDER BY game_date ASC
+  `).all();
+  const nextGameByTeam = {};
+  for (const g of upcomingGameRows) {
+    if (!nextGameByTeam[g.team1]) nextGameByTeam[g.team1] = g;
+    if (!nextGameByTeam[g.team2]) nextGameByTeam[g.team2] = g;
+  }
+
   // Which player IDs are currently in a live game?
   const liveGameIds = db.prepare('SELECT id FROM games WHERE is_live = 1').all().map(r => r.id);
   const livePlayerIds = new Set();
@@ -141,6 +154,16 @@ function buildStandings(leagueId) {
         game_log:        gameLog,
         proj_etp:        projEtp,
         games_remaining: gamesRemaining,
+        next_game: (() => {
+          if (player.is_eliminated) return null;
+          const g = nextGameByTeam[player.team] || null;
+          if (!g) return null;
+          return {
+            opponent:   g.team1 === player.team ? g.team2 : g.team1,
+            game_date:  g.game_date,
+            round_name: g.round_name,
+          };
+        })(),
       };
     });
 

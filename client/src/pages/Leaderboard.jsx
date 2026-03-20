@@ -225,6 +225,13 @@ function nameInitials(name) {
 const ROUND_ORDER = ['First Four', 'R64', 'R32', 'S16', 'E8', 'F4', 'NCG'];
 const ROUND_SHORT = { 'First Four': 'FF', R64: 'R64', R32: 'R32', S16: 'S16', E8: 'E8', F4: 'F4', NCG: 'NCG' };
 
+function fmtGameDate(dateStr) {
+  if (!dateStr) return '';
+  const [, m, d] = dateStr.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`;
+}
+
 function TeamBadge({ avatarUrl, teamName, size = 32 }) {
   if (avatarUrl) {
     return (
@@ -505,6 +512,16 @@ export default function Leaderboard() {
           );
         };
 
+        // Derive current active round: the highest ROUND_ORDER entry that has appeared
+        // in any player's game log across all teams. Defaults to 'R64' before tip-off.
+        const allPlayedRounds = new Set(
+          standings.flatMap(t => (t.players || []).flatMap(p => (p.game_log || []).map(g => g.round_code)))
+        );
+        let currentRound = 'R64';
+        for (const r of ROUND_ORDER) {
+          if (allPlayedRounds.has(r)) currentRound = r;
+        }
+
         return (
         <>
           {/* Column header bar */}
@@ -528,6 +545,9 @@ export default function Leaderboard() {
             // Use server-computed counts (reliable even pre-tournament / no scoring settings)
             const totalPlayers = team.totalPlayers ?? (team.players ? team.players.length : 0);
             const aliveCount = team.aliveCount ?? (team.players ? team.players.filter(p => !p.is_eliminated).length : 0);
+            const leftToPlay = (team.players || []).filter(p =>
+              !p.is_eliminated && !(p.game_log || []).some(g => g.round_code === currentRound)
+            ).length;
             const alivePlayers = team.players?.filter(p => !p.is_eliminated) ?? [];
             const projETP = team.players
               ? alivePlayers.reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0)
@@ -600,13 +620,21 @@ export default function Leaderboard() {
                         </div>
                       )}
                       {totalPlayers > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
-                          style={aliveCount === 0
-                            ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }
-                            : { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }
-                          }>
-                          {aliveCount} alive
-                        </span>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
+                            style={aliveCount === 0
+                              ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }
+                              : { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }
+                            }>
+                            {aliveCount} alive
+                          </span>
+                          {leftToPlay > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                              style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#93c5fd' }}>
+                              {leftToPlay} left {ROUND_SHORT[currentRound]}
+                            </span>
+                          )}
+                        </div>
                       )}
                       <div className="text-right min-w-[40px]">
                         <div className="font-black leading-tight" style={{ fontSize: 22, color: ptsColor }}>{team.total_points > 0 ? team.total_points : '—'}</div>
@@ -771,6 +799,20 @@ export default function Leaderboard() {
                                             </div>
                                           );
                                         })}
+                                      </div>
+                                    )}
+
+                                    {/* Next game info */}
+                                    {!player.is_eliminated && (
+                                      <div className="border-t border-gray-800/40 mt-1 pt-1.5 flex items-center gap-2">
+                                        <span className="text-gray-600 text-[11px] flex-shrink-0">📅</span>
+                                        {player.next_game ? (
+                                          <span className="text-gray-500 text-[10px] italic">
+                                            Next: vs {player.next_game.opponent} · {fmtGameDate(player.next_game.game_date)} · {player.next_game.round_name}
+                                          </span>
+                                        ) : player.games_remaining > 0 ? (
+                                          <span className="text-gray-600 text-[10px] italic">Next game: TBD</span>
+                                        ) : null}
                                       </div>
                                     )}
 
