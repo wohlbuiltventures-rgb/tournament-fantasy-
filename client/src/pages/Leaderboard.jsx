@@ -229,7 +229,21 @@ function fmtGameDate(dateStr) {
   if (!dateStr) return '';
   const [, m, d] = dateStr.split('-');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`;
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dt = new Date(`${dateStr}T12:00:00`); // noon local to get correct weekday
+  return `${days[dt.getDay()]} ${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`;
+}
+
+function fmtTipOff(isoStr) {
+  if (!isoStr) return null;
+  try {
+    const dt = new Date(isoStr);
+    return dt.toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
+    }) + ' ET';
+  } catch {
+    return null;
+  }
 }
 
 function TeamBadge({ avatarUrl, teamName, size = 32 }) {
@@ -803,16 +817,28 @@ export default function Leaderboard() {
                                     )}
 
                                     {/* Next game info */}
-                                    {!player.is_eliminated && (
-                                      <div className="border-t border-gray-800/40 mt-1 pt-1.5 flex items-center gap-2">
-                                        <span className="text-gray-600 text-[11px] flex-shrink-0">📅</span>
-                                        {player.next_game ? (
-                                          <span className="text-gray-500 text-[10px] italic">
-                                            Next: vs {player.next_game.opponent} · {fmtGameDate(player.next_game.game_date)} · {player.next_game.round_name}
-                                          </span>
-                                        ) : player.games_remaining > 0 ? (
-                                          <span className="text-gray-600 text-[10px] italic">Next game: TBD</span>
-                                        ) : null}
+                                    {!player.is_eliminated && (player.next_game || player.games_remaining > 0) && (
+                                      <div className="border-t border-gray-800/40 mt-1 pt-1.5 space-y-0.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-gray-600 text-[11px]">📅</span>
+                                          {player.next_game ? (
+                                            <span className="text-gray-400 text-[10px]">
+                                              vs {player.next_game.opponent} · {fmtGameDate(player.next_game.game_date)}
+                                            </span>
+                                          ) : (
+                                            <span className="text-gray-600 text-[10px] italic">Next game: TBD</span>
+                                          )}
+                                        </div>
+                                        {player.next_game && (fmtTipOff(player.next_game.tip_off_time) || player.next_game.tv_network) && (
+                                          <div className="flex items-center gap-2 pl-5">
+                                            {fmtTipOff(player.next_game.tip_off_time) && (
+                                              <span className="text-gray-500 text-[10px]">🕐 {fmtTipOff(player.next_game.tip_off_time)}</span>
+                                            )}
+                                            {player.next_game.tv_network && (
+                                              <span className="text-gray-500 text-[10px]">📺 {player.next_game.tv_network}</span>
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
                                     )}
 

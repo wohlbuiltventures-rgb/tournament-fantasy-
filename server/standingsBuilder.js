@@ -61,7 +61,7 @@ function buildStandings(leagueId) {
 
   // Batch-fetch next scheduled (unplayed, not live) game per team for "Next game" display
   const upcomingGameRows = db.prepare(`
-    SELECT game_date, round_name, team1, team2
+    SELECT game_date, round_name, team1, team2, tip_off_time, tv_network
     FROM games
     WHERE is_completed = 0 AND (is_live IS NULL OR is_live = 0)
     ORDER BY game_date ASC
@@ -159,9 +159,11 @@ function buildStandings(leagueId) {
           const g = nextGameByTeam[player.team] || null;
           if (!g) return null;
           return {
-            opponent:   g.team1 === player.team ? g.team2 : g.team1,
-            game_date:  g.game_date,
-            round_name: g.round_name,
+            opponent:     g.team1 === player.team ? g.team2 : g.team1,
+            game_date:    g.game_date,
+            round_name:   g.round_name,
+            tip_off_time: g.tip_off_time || null,
+            tv_network:   g.tv_network   || null,
           };
         })(),
       };
