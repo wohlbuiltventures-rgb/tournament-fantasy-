@@ -526,16 +526,6 @@ export default function Leaderboard() {
           );
         };
 
-        // Derive current active round: the highest ROUND_ORDER entry that has appeared
-        // in any player's game log across all teams. Defaults to 'R64' before tip-off.
-        const allPlayedRounds = new Set(
-          standings.flatMap(t => (t.players || []).flatMap(p => (p.game_log || []).map(g => g.round_code)))
-        );
-        let currentRound = 'R64';
-        for (const r of ROUND_ORDER) {
-          if (allPlayedRounds.has(r)) currentRound = r;
-        }
-
         return (
         <>
           {/* Column header bar */}
@@ -559,9 +549,6 @@ export default function Leaderboard() {
             // Use server-computed counts (reliable even pre-tournament / no scoring settings)
             const totalPlayers = team.totalPlayers ?? (team.players ? team.players.length : 0);
             const aliveCount = team.aliveCount ?? (team.players ? team.players.filter(p => !p.is_eliminated).length : 0);
-            const leftToPlay = (team.players || []).filter(p =>
-              !p.is_eliminated && !(p.game_log || []).some(g => g.round_code === currentRound)
-            ).length;
             const alivePlayers = team.players?.filter(p => !p.is_eliminated) ?? [];
             const projETP = team.players
               ? alivePlayers.reduce((s, p) => s + (calcETP(p.season_ppg, p.seed, p.is_first_four) ?? 0), 0)
@@ -639,9 +626,7 @@ export default function Leaderboard() {
                             ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }
                             : { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399' }
                           }>
-                          {aliveCount} alive{leftToPlay > 0 && (
-                            <span style={{ opacity: 0.65 }}>· {leftToPlay} left</span>
-                          )}
+                          {aliveCount} alive
                         </span>
                       )}
                       <div className="text-right min-w-[40px]">
