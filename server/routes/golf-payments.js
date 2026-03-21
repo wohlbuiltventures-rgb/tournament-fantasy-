@@ -24,9 +24,9 @@ const AMOUNTS = {
 function getSquare() {
   const accessToken = process.env.SQUARE_ACCESS_TOKEN;
   if (!accessToken) throw new Error('SQUARE_ACCESS_TOKEN not set');
-  const { Client } = require('square');
+  const { SquareClient } = require('square');
   const environment = process.env.SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
-  return new Client({ accessToken, environment });
+  return new SquareClient({ accessToken, environment });
 }
 
 // ── Webhook signature verification ───────────────────────────────────────────
@@ -55,7 +55,7 @@ function getClientUrl(req) {
 // ── Create Square Payment Link ────────────────────────────────────────────────
 async function createPaymentLink({ name, amount, metadata, redirectUrl, buyerEmail }) {
   const squareClient = getSquare();
-  const { result } = await squareClient.checkoutApi.createPaymentLink({
+  const { data } = await squareClient.checkout.paymentLinks.create({
     idempotencyKey: uuidv4(),
     order: {
       locationId: process.env.SQUARE_LOCATION_ID,
@@ -81,8 +81,8 @@ async function createPaymentLink({ name, amount, metadata, redirectUrl, buyerEma
     ...(buyerEmail && { prePopulatedData: { buyerEmail } }),
   });
   return {
-    url:     result.paymentLink.url,
-    orderId: result.paymentLink.orderId,
+    url:     data.paymentLink.url,
+    orderId: data.paymentLink.orderId,
   };
 }
 
@@ -514,8 +514,8 @@ router.post('/webhooks/stripe', async (req, res) => {
 
     try {
       const squareClient = getSquare();
-      const { result: orderResult } = await squareClient.ordersApi.retrieveOrder(payment.order_id);
-      const metadata = orderResult.order?.metadata || {};
+      const { data: orderData } = await squareClient.orders.get({ orderId: payment.order_id });
+      const metadata = orderData.order?.metadata || {};
       if (metadata.type?.startsWith('golf_')) {
         await handleGolfWebhook({ order_id: payment.order_id, metadata });
       }
