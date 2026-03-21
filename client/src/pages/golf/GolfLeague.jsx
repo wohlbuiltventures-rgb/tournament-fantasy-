@@ -1885,17 +1885,21 @@ function prizeForRank(rank, total, p1, p2, p3) {
 }
 
 function StandingsTab({ leagueId, league, currentUserId }) {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(null);
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded]   = useState(null);
   const rowRefs = useRef({});
 
-  useEffect(() => {
-    api.get(`/golf/leagues/${leagueId}/standings`)
+  const fetchStandings = (opts = {}) => {
+    if (opts.refresh) setRefreshing(true);
+    return api.get(`/golf/leagues/${leagueId}/standings`)
       .then(r => setData(r.data))
       .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [leagueId]);
+      .finally(() => { setLoading(false); setRefreshing(false); });
+  };
+
+  useEffect(() => { fetchStandings(); }, [leagueId]); // eslint-disable-line
 
   if (loading) return <div className="py-10 text-center text-gray-500 text-sm">Loading standings…</div>;
 
@@ -1996,7 +2000,7 @@ function StandingsTab({ leagueId, league, currentUserId }) {
                   : (pts > 0 ? '+' : '') + pts.toFixed(1)
                 : '—'}
             </div>
-            <div style={{ color: '#4b5563', fontSize: 10 }}>{isTotalStrokes ? 'to par' : 'pts'}</div>
+            <div style={{ color: '#4b5563', fontSize: 10 }}>{isTotalStrokes ? '' : 'pts'}</div>
           </div>
 
           {/* Chevron */}
@@ -2151,7 +2155,15 @@ function StandingsTab({ leagueId, league, currentUserId }) {
                 ) : (
                   <span style={{ color: '#4b5563', fontSize: 11 }}>Starts {tournament.start_date?.slice(0, 10)}</span>
                 )}
-                {isLive && <span style={{ color: '#374151', fontSize: 10 }}>Scores auto-update · refresh for latest</span>}
+                <button
+                  onClick={() => fetchStandings({ refresh: true })}
+                  disabled={refreshing}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1px solid #374151', color: refreshing ? '#4b5563' : '#9ca3af', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 8, cursor: refreshing ? 'default' : 'pointer', transition: 'border-color 0.15s, color 0.15s' }}
+                  onMouseEnter={e => { if (!refreshing) { e.currentTarget.style.borderColor = '#6b7280'; e.currentTarget.style.color = '#d1d5db'; } }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#374151'; e.currentTarget.style.color = refreshing ? '#4b5563' : '#9ca3af'; }}
+                >
+                  {refreshing ? '⟳' : '↻'} {refreshing ? 'Refreshing…' : 'Refresh Scores'}
+                </button>
               </div>
             </div>
           </div>

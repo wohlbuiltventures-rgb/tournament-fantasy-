@@ -247,7 +247,7 @@ const PICK_SHEET_FORMATS = [
     value: 'tiered',
     icon: '🏆',
     title: 'Tiered Draft',
-    description: 'Players grouped into tiers by betting odds. Members pick a set number from each tier. Classic office pool format — like the Masters.',
+    description: 'Players grouped into tiers by betting odds. Members pick a set number from each tier. Classic office pool format.',
     example: 'e.g. Tier 1 (favorites) pick 2 · Tier 2 pick 3 · Tier 3 pick 2',
     recommended: true,
   },

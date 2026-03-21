@@ -227,7 +227,7 @@ function LeagueCard({ league, userId, past = false }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'transparent', border: '1.5px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 14, fontWeight: 700, padding: '10px 24px', borderRadius: 8, transition: 'border-color 0.15s, background 0.15s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.background = 'transparent'; }}>
-            {past ? 'View Results' : 'Enter League'} <ChevronRight className="w-4 h-4" />
+            {past ? 'View Results' : 'View League'} <ChevronRight className="w-4 h-4" />
           </div>
         </div>
       </div>
