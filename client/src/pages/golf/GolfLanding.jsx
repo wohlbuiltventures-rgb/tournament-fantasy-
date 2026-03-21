@@ -580,6 +580,139 @@ export default function GolfLanding() {
       </Section>
 
       {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* Live PGA Scoreboard feature highlight                                */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      <Section className="max-w-4xl mx-auto px-4 py-16 sm:py-20">
+        <div className="text-center mb-10">
+          <div className="inline-block text-green-400 text-xs font-black uppercase tracking-widest mb-3">
+            Exclusive Feature
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-black text-white mb-3">
+            Live PGA Scoreboard. Built in.
+          </h2>
+          <p className="text-gray-400 text-base max-w-xl mx-auto">
+            See every player's round-by-round scores inside your pool. No tab-switching. No ESPN refreshing.{' '}
+            <span className="text-gray-500 italic">Splash Sports doesn't have this.</span>
+          </p>
+        </div>
+
+        {/* Browser mockup */}
+        <div style={{
+          background: '#0d1f0f',
+          border: '1px solid #1a3a1a',
+          borderRadius: 16,
+          overflow: 'hidden',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.5), 0 0 40px rgba(34,197,94,0.05)',
+          marginBottom: 24,
+        }}>
+          {/* Browser chrome */}
+          <div style={{ background: '#080f09', borderBottom: '1px solid #1a3a1a', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 5 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#1f2937' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#1f2937' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#1f2937' }} />
+            </div>
+            <div style={{ flex: 1, background: '#0a1509', borderRadius: 6, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: '#374151', fontSize: 11 }}>PGA Tour Live · Masters 2026 · Round 3</span>
+            </div>
+          </div>
+
+          {/* Tab bar */}
+          <div style={{ background: '#080f09', borderBottom: '1px solid #111827', padding: '0 16px', display: 'flex', gap: 0 }}>
+            {['Standings', 'My Picks', 'PGA Scoreboard', 'Messages'].map((tab, i) => (
+              <div key={tab} style={{
+                padding: '10px 14px',
+                fontSize: 12,
+                fontWeight: i === 2 ? 700 : 400,
+                color: i === 2 ? '#4ade80' : '#4b5563',
+                borderBottom: i === 2 ? '2px solid #22c55e' : '2px solid transparent',
+                cursor: 'default',
+                whiteSpace: 'nowrap',
+              }}>{tab}</div>
+            ))}
+          </div>
+
+          {/* Scoreboard table */}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
+              <thead>
+                <tr style={{ background: '#0a1509', borderBottom: '1px solid #111827' }}>
+                  <th style={{ padding: '8px 14px', textAlign: 'left', color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', width: 36 }}>Pos</th>
+                  <th style={{ padding: '8px 14px', textAlign: 'left', color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Player</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'center', color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Thru</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'center', color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Today</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'center', color: '#6b7280', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>R1</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'center', color: '#6b7280', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>R2</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'center', color: '#4ade80', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>R3</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'center', color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>R4</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'center', color: '#22c55e', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { pos: 1,  player: 'S. Scheffler',   pick: true,  thru: 'F',  today: '-7', r1: 67, r2: 65, r3: 65, r4: null, pts: '+62.5' },
+                  { pos: 2,  player: 'R. McIlroy',     pick: false, thru: 'F',  today: '-5', r1: 68, r2: 67, r3: 67, r4: null, pts: '+51.0' },
+                  { pos: 3,  player: 'C. Morikawa',    pick: true,  thru: '14', today: '-4', r1: 69, r2: 66, r3: null, r4: null, pts: '+44.0' },
+                  { pos: 4,  player: 'X. Schauffele',  pick: false, thru: '12', today: '-3', r1: 70, r2: 68, r3: null, r4: null, pts: '+39.5' },
+                  { pos: 5,  player: 'T. Fleetwood',   pick: true,  thru: '11', today: '-2', r1: 68, r2: 70, r3: null, r4: null, pts: '+33.0' },
+                  { pos: 6,  player: 'P. Cantlay',     pick: false, thru: '10', today: '-2', r1: 71, r2: 67, r3: null, r4: null, pts: '+31.5' },
+                  { pos: 7,  player: 'B. DeChambeau',  pick: false, thru: 'F',  today: '+1', r1: 72, r2: 69, r3: 70, r4: null, pts: '+18.0' },
+                  { pos: 8,  player: 'J. Thomas',      pick: true,  thru: '9',  today: 'E',  r1: 70, r2: 72, r3: null, r4: null, pts: '+14.5' },
+                ].map(({ pos, player, pick, thru, today, r1, r2, r3, r4, pts }, i) => (
+                  <tr key={player} style={{
+                    background: pick ? 'rgba(34,197,94,0.05)' : i % 2 === 0 ? '#080f09' : '#060d07',
+                    borderBottom: '1px solid #0f1a10',
+                  }}>
+                    <td style={{ padding: '9px 14px', color: '#6b7280', fontSize: 12, fontWeight: 600 }}>{pos}</td>
+                    <td style={{ padding: '9px 14px', fontSize: 12 }}>
+                      <span style={{ color: pick ? '#ffffff' : '#d1d5db', fontWeight: pick ? 700 : 400 }}>{player}</span>
+                      {pick && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 4, padding: '1px 5px', letterSpacing: '0.05em' }}>MY PICK</span>}
+                    </td>
+                    <td style={{ padding: '9px 10px', textAlign: 'center', color: thru === 'F' ? '#6b7280' : '#4ade80', fontSize: 12, fontWeight: thru !== 'F' ? 600 : 400 }}>{thru}</td>
+                    <td style={{ padding: '9px 10px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: today.startsWith('-') ? '#4ade80' : today === 'E' ? '#9ca3af' : '#f87171' }}>{today}</td>
+                    <td style={{ padding: '9px 10px', textAlign: 'center', color: '#6b7280', fontSize: 12 }}>{r1 ?? '—'}</td>
+                    <td style={{ padding: '9px 10px', textAlign: 'center', color: '#6b7280', fontSize: 12 }}>{r2 ?? '—'}</td>
+                    <td style={{ padding: '9px 10px', textAlign: 'center', color: '#9ca3af', fontSize: 12, fontWeight: 500 }}>{r3 ?? <span style={{ color: '#1f2937' }}>—</span>}</td>
+                    <td style={{ padding: '9px 10px', textAlign: 'center', color: '#1f2937', fontSize: 12 }}>{r4 ?? '—'}</td>
+                    <td style={{ padding: '9px 10px', textAlign: 'center', color: '#4ade80', fontSize: 12, fontWeight: 700 }}>{pts}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer bar */}
+          <div style={{ background: '#080f09', borderTop: '1px solid #111827', padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ color: '#374151', fontSize: 11 }}>Updated 4 min ago · 87 players</span>
+            <span style={{ color: '#374151', fontSize: 11 }}>Data via ESPN</span>
+          </div>
+        </div>
+
+        {/* Feature pills */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
+          {[
+            { icon: '⏱', label: 'Updated every 10 minutes' },
+            { icon: '📊', label: 'Round-by-round scoring' },
+            { icon: '🎯', label: 'Filter by your picks' },
+          ].map(({ icon, label }) => (
+            <div key={label} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              background: '#0a1a0f',
+              border: '1px solid #14532d55',
+              borderRadius: 999,
+              padding: '8px 16px',
+              color: '#9ca3af',
+              fontSize: 13,
+              fontWeight: 500,
+            }}>
+              <span>{icon}</span>
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* ──────────────────────────────────────────────────────────────────── */}
       {/* S5: Commissioner pain point section                                  */}
       {/* ──────────────────────────────────────────────────────────────────── */}
       <Section className="max-w-4xl mx-auto px-4 py-16 sm:py-20">
@@ -1039,29 +1172,6 @@ export default function GolfLanding() {
           <span style={{ color: '#374151', fontSize: 12 }}>© 2026 TourneyRun. All rights reserved.</span>
         </div>
       </footer>
-
-      {/* ──────────────────────────────────────────────────────────────────── */}
-      {/* S11: Final CTA                                                       */}
-      {/* ──────────────────────────────────────────────────────────────────── */}
-      <div className="border-t border-gray-800 py-16 sm:py-20 px-4 text-center">
-        <h2 className="text-2xl sm:text-3xl font-black text-white mb-3">Ready to tee off?</h2>
-        <p className="text-gray-400 mb-8">Create a private league and invite your crew. Free to play.</p>
-        {user ? (
-          <Link
-            to="/golf/create"
-            className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white font-bold px-8 py-4 rounded-full transition-all shadow-lg shadow-green-500/25 text-base sm:text-lg"
-          >
-            <Plus className="w-5 h-5" /> Create a Golf League
-          </Link>
-        ) : (
-          <Link
-            to="/register"
-            className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white font-bold px-8 py-4 rounded-full transition-all shadow-lg shadow-green-500/25 text-base sm:text-lg"
-          >
-            Create Free Account <ArrowRight className="w-5 h-5" />
-          </Link>
-        )}
-      </div>
 
       {/* ──────────────────────────────────────────────────────────────────── */}
       {/* Sticky mobile CTA bar (Masters countdown)                            */}
