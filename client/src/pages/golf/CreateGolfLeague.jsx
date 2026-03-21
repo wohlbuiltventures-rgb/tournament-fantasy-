@@ -1111,35 +1111,49 @@ export default function CreateGolfLeague() {
           </div>
         )}
 
-        {/* ── Pricing summary ── */}
-        <div style={{ background: '#0d1f12', border: '1px solid rgba(0,232,122,0.15)', borderRadius: 10, padding: '16px 20px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4ade80', marginBottom: 10 }}>Pricing</div>
-          {selectedFmt?.key === 'pool' ? (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 8, marginBottom: 12 }}>
-                {[
-                  { teams: 'Up to 10 teams', price: 'FREE' },
-                  { teams: 'Up to 20 teams', price: '$9.99' },
-                  { teams: 'Up to 60 teams', price: '$19.99' },
-                  { teams: 'Up to 100 teams', price: '$24.99' },
-                ].map(({ teams, price }) => (
-                  <div key={teams} style={{ background: 'rgba(0,232,122,0.04)', border: '1px solid rgba(0,232,122,0.1)', borderRadius: 7, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: price === 'FREE' ? '#00e87a' : '#fff' }}>{price}</div>
-                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{teams}</div>
-                  </div>
-                ))}
+        {/* ── Pricing transparency card ── */}
+        {selectedFmt?.key === 'pool' && (() => {
+          const tiers = [
+            { label: 'Up to 20 teams',  max: 20,  price: '$9.99 / tournament'  },
+            { label: 'Up to 60 teams',  max: 60,  price: '$14.99 / tournament' },
+            { label: 'Up to 100 teams', max: 100, price: '$24.99 / tournament' },
+            { label: '100+ teams',      max: Infinity, price: '$34.99 / tournament' },
+          ];
+          const selected = tiers.find(t => (form.max_teams || 0) <= t.max) || tiers[tiers.length - 1];
+          return (
+            <div style={{ background: '#0d1f12', border: '1px solid rgba(0,232,122,0.15)', borderRadius: 10, padding: '16px 20px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4ade80', marginBottom: 12 }}>
+                Platform Fee — Simple &amp; Transparent
               </div>
-            </>
-          ) : (
-            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#9ca3af' }}>
-              We take a flat <span style={{ color: '#00e87a', fontWeight: 700 }}>15% of the prize pool</span>. No subscriptions, no setup fees.
-            </p>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,232,122,0.06)', border: '1px solid rgba(0,232,122,0.18)', borderRadius: 7, padding: '9px 12px' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <span style={{ fontSize: 12, color: '#4ade80', fontWeight: 600 }}>Zero prize pool fees. Your $100 buy-in stays $100.</span>
-          </div>
-        </div>
+              <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 12 }}>
+                {tiers.map((tier, i) => {
+                  const isActive = tier === selected;
+                  return (
+                    <div key={tier.label} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      background: isActive ? 'rgba(0,232,122,0.08)' : 'transparent',
+                      borderBottom: i < tiers.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                      borderLeft: isActive ? '2px solid #00e87a' : '2px solid transparent',
+                      transition: 'background 0.15s',
+                    }}>
+                      <span style={{ fontSize: 13, color: isActive ? '#e5e7eb' : '#6b7280', fontWeight: isActive ? 600 : 400 }}>
+                        {tier.label}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: isActive ? '#00e87a' : '#374151' }}>
+                        {tier.price}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: 'rgba(0,232,122,0.06)', border: '1px solid rgba(0,232,122,0.18)', borderRadius: 7, padding: '9px 12px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><polyline points="20 6 9 17 4 12"/></svg>
+                <span style={{ fontSize: 12, color: '#4ade80', fontWeight: 600, lineHeight: 1.5 }}>Zero prize pool fees. Every dollar your group puts in stays in the prize pool.</span>
+              </div>
+            </div>
+          );
+        })()}
 
         <button
           type="submit"
