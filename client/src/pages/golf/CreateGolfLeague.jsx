@@ -118,76 +118,50 @@ function CardHeader({ icon: Icon, title }) {
 // ── Pool tier selector ────────────────────────────────────────────────────────
 
 const POOL_TIERS = [
-  { tier: 'standard', maxTeams: 20,  label: '20 teams',   price: null,  priceLabel: null,         included: true  },
-  { tier: 'standard', maxTeams: 40,  label: '40 teams',   price: null,  priceLabel: null,         included: true  },
-  { tier: 'standard', maxTeams: 60,  label: '60 teams',   price: null,  priceLabel: null,         included: true  },
-  { tier: 'large_100',maxTeams: 100, label: '100 teams',  price: 29.99, priceLabel: '$29.99/tournament', included: false },
-  { tier: 'enterprise',maxTeams:999, label: 'Enterprise', price: 39.99, priceLabel: '$39.99/tournament', included: false },
+  { tier: 'standard',   maxTeams: 20,  label: '20 teams',      price: 9.99,  priceLabel: '$9.99/tournament'  },
+  { tier: 'standard',   maxTeams: 40,  label: '40 teams',      price: 14.99, priceLabel: '$14.99/tournament' },
+  { tier: 'standard',   maxTeams: 60,  label: '60 teams',      price: 14.99, priceLabel: '$14.99/tournament' },
+  { tier: 'large_100',  maxTeams: 100, label: '100 teams',     price: 24.99, priceLabel: '$24.99/tournament' },
+  { tier: 'enterprise', maxTeams: 999, label: 'Enterprise 100+', price: 34.99, priceLabel: '$34.99/tournament' },
 ];
 
-const POOL_TIER_CALLOUTS = {
-  large_100:  '⚡ Large Pool — Up to 100 teams for $29.99/tournament. Standard pools (up to 60 teams) are always included.',
-  enterprise: '⚡ Enterprise Pool — Unlimited teams, priority support, $39.99/tournament. Perfect for company-wide tournaments and large charity events.',
-};
-
 function PoolTierSelector({ maxTeams, poolTier, onChange }) {
-  const selectedIdx = POOL_TIERS.findIndex(t => t.maxTeams === maxTeams && t.tier === poolTier);
-  const sel = selectedIdx >= 0 ? POOL_TIERS[selectedIdx] : POOL_TIERS[0];
-  const callout = POOL_TIER_CALLOUTS[sel.tier];
-
-  const includedTiers = POOL_TIERS.filter(t => t.included);
-  const paidTiers     = POOL_TIERS.filter(t => !t.included);
+  const sel = POOL_TIERS.find(t => t.maxTeams === maxTeams && t.tier === poolTier) || POOL_TIERS[0];
 
   function TierBtn({ t }) {
-    const isSelected = t.maxTeams === maxTeams && t.tier === poolTier;
+    const isSelected = t === sel;
     return (
       <button
         type="button"
-        onClick={() => onChange(t.maxTeams, t.tier, t.price ?? 19.99)}
-        className={`relative flex flex-col items-center rounded-xl border-2 px-1 py-3 text-center transition-all ${
-          isSelected
-            ? t.included
-              ? 'border-green-500/60 bg-green-500/8'
-              : 'border-amber-500/60 bg-amber-500/8'
-            : 'border-gray-700 bg-gray-800/30 hover:border-gray-600'
-        }`}
+        onClick={() => onChange(t.maxTeams, t.tier, t.price)}
+        style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '14px 10px', borderRadius: 10, textAlign: 'center', cursor: 'pointer',
+          border: isSelected ? '2px solid #00e87a' : '2px solid rgba(255,255,255,0.08)',
+          background: isSelected ? 'rgba(0,232,122,0.06)' : 'rgba(255,255,255,0.02)',
+          transition: 'border-color 0.15s, background 0.15s',
+        }}
+        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
+        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
       >
-        {!t.included && (
-          <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-amber-500/20 border border-amber-500/40 text-amber-400 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-            ⚡ Large
-          </span>
-        )}
-        <span className={`font-black text-sm leading-tight mt-1 ${isSelected ? (t.included ? 'text-white' : 'text-amber-300') : 'text-gray-300'}`}>
+        <span style={{ fontSize: 15, fontWeight: 800, color: isSelected ? '#fff' : '#9ca3af', lineHeight: 1.2 }}>
           {t.label}
         </span>
-        {t.included ? (
-          <span className="text-[10px] font-semibold text-green-500/80 mt-1">✓ Included</span>
-        ) : (
-          <span className="text-[10px] font-semibold text-amber-400/80 mt-1">{t.priceLabel}</span>
-        )}
+        <span style={{ fontSize: 11, fontWeight: 600, color: isSelected ? '#4ade80' : '#4b5563', marginTop: 4 }}>
+          {t.priceLabel}
+        </span>
       </button>
     );
   }
 
   return (
-    <div className="space-y-2">
-      {/* Included tiers (20 / 40 / 60) */}
-      <div className="grid grid-cols-3 gap-2">
-        {includedTiers.map((t, i) => <TierBtn key={i} t={t} />)}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+        {POOL_TIERS.slice(0, 3).map(t => <TierBtn key={t.maxTeams} t={t} />)}
       </div>
-      <p className="text-gray-600 text-xs">Commissioner Pro included — up to 60 teams · $19.99/tournament</p>
-
-      {/* Paid tiers (100 / Enterprise) */}
-      <div className="grid grid-cols-2 gap-2 pt-1">
-        {paidTiers.map((t, i) => <TierBtn key={i} t={t} />)}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8 }}>
+        {POOL_TIERS.slice(3).map(t => <TierBtn key={t.maxTeams} t={t} />)}
       </div>
-
-      {/* Callout for paid tiers */}
-      {callout && (
-        <div className="mt-1 flex items-start gap-2 bg-amber-500/8 border border-amber-500/20 rounded-xl px-4 py-3">
-          <p className="text-amber-300/80 text-xs leading-relaxed">{callout}</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -1111,46 +1085,16 @@ export default function CreateGolfLeague() {
           </div>
         )}
 
-        {/* ── Pricing transparency card ── */}
+        {/* ── Pricing summary line ── */}
         {selectedFmt?.key === 'pool' && (() => {
-          const tiers = [
-            { label: 'Up to 20 teams',  max: 20,  price: '$9.99 / tournament'  },
-            { label: 'Up to 60 teams',  max: 60,  price: '$14.99 / tournament' },
-            { label: 'Up to 100 teams', max: 100, price: '$24.99 / tournament' },
-            { label: '100+ teams',      max: Infinity, price: '$34.99 / tournament' },
-          ];
-          const selected = tiers.find(t => (form.max_teams || 0) <= t.max) || tiers[tiers.length - 1];
+          const tier = POOL_TIERS.find(t => t.maxTeams === form.max_teams && t.tier === form.pool_tier) || POOL_TIERS[0];
           return (
-            <div style={{ background: '#0d1f12', border: '1px solid rgba(0,232,122,0.15)', borderRadius: 10, padding: '16px 20px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4ade80', marginBottom: 12 }}>
-                Platform Fee — Simple &amp; Transparent
-              </div>
-              <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 12 }}>
-                {tiers.map((tier, i) => {
-                  const isActive = tier === selected;
-                  return (
-                    <div key={tier.label} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '10px 14px',
-                      background: isActive ? 'rgba(0,232,122,0.08)' : 'transparent',
-                      borderBottom: i < tiers.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                      borderLeft: isActive ? '2px solid #00e87a' : '2px solid transparent',
-                      transition: 'background 0.15s',
-                    }}>
-                      <span style={{ fontSize: 13, color: isActive ? '#e5e7eb' : '#6b7280', fontWeight: isActive ? 600 : 400 }}>
-                        {tier.label}
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: isActive ? '#00e87a' : '#374151' }}>
-                        {tier.price}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: 'rgba(0,232,122,0.06)', border: '1px solid rgba(0,232,122,0.18)', borderRadius: 7, padding: '9px 12px' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><polyline points="20 6 9 17 4 12"/></svg>
-                <span style={{ fontSize: 12, color: '#4ade80', fontWeight: 600, lineHeight: 1.5 }}>Zero prize pool fees. Every dollar your group puts in stays in the prize pool.</span>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,232,122,0.05)', border: '1px solid rgba(0,232,122,0.18)', borderRadius: 8, padding: '11px 14px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="20 6 9 17 4 12"/></svg>
+              <span style={{ fontSize: 13, color: '#d1fae5', lineHeight: 1.4 }}>
+                <span style={{ fontWeight: 700, color: '#4ade80' }}>Platform fee: {tier.priceLabel}</span>
+                {' · '}Zero prize pool fees{' · '}Your group keeps every dollar
+              </span>
             </div>
           );
         })()}
