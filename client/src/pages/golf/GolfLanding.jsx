@@ -262,7 +262,7 @@ export default function GolfLanding() {
             <span className="text-green-400">Done Right</span>
           </h1>
           <p className="text-gray-400 text-base sm:text-xl max-w-xl mx-auto mb-10 leading-relaxed">
-            Season-long fantasy. Office pools. Daily fantasy.<br className="hidden sm:block" /> Play one — or play them all.
+            Your golf pool shouldn't live in a spreadsheet. Auto-scoring, live standings, and picks in one place — from $9.99/tournament.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             {user ? (
@@ -311,6 +311,74 @@ export default function GolfLanding() {
           >
             How it works ↓
           </button>
+        </div>
+      </div>
+
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* Product mockup                                                       */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      <div className="px-4 pb-10 pt-2">
+        <div className="max-w-3xl mx-auto">
+          <div style={{
+            background: '#0d1f0f',
+            border: '1px solid #1a3a1a',
+            borderRadius: 16,
+            overflow: 'hidden',
+            boxShadow: '0 24px 80px rgba(0,0,0,0.5), 0 0 40px rgba(34,197,94,0.06)',
+          }}>
+            {/* Browser chrome */}
+            <div style={{ background: '#0a1a0f', borderBottom: '1px solid #1a3a1a', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 5 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#1f2937' }} />
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#1f2937' }} />
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#1f2937' }} />
+              </div>
+              <div style={{ flex: 1, background: '#111827', borderRadius: 6, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ color: '#374151', fontSize: 11 }}>tourneyrun.com/golf/league/masters-pool</span>
+              </div>
+            </div>
+            {/* Mockup content */}
+            <div style={{ padding: '20px 16px' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div>
+                  <div style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>The Masters Pool 2026</div>
+                  <div style={{ color: '#4ade80', fontSize: 11, marginTop: 2 }}>● Live · Round 3 in progress</div>
+                </div>
+                <div style={{ background: '#14532d33', border: '1px solid #22c55e33', borderRadius: 8, padding: '5px 12px', color: '#4ade80', fontSize: 12, fontWeight: 600 }}>Standings</div>
+              </div>
+              {/* Leaderboard rows */}
+              {[
+                { pos: 1,  name: 'Mike T.',    team: 'Scheffler, Rory, Lowry',     pts: '+142.5', delta: '+8.5',  highlight: true  },
+                { pos: 2,  name: 'Sarah K.',   team: 'Morikawa, Thomas, Clark',    pts: '+138.0', delta: '+3.0',  highlight: false },
+                { pos: 3,  name: 'Dave R.',    team: 'DeChambeau, Fleetwood, Kim', pts: '+131.5', delta: '-2.0',  highlight: false },
+                { pos: 4,  name: 'Jen W.',     team: 'Rory, Homa, Burns',          pts: '+129.0', delta: '+1.5',  highlight: false },
+                { pos: 5,  name: 'Chris B.',   team: 'Scheffler, Cantlay, Taylor', pts: '+122.5', delta: '-5.5',  highlight: false },
+              ].map(({ pos, name, team, pts, delta, highlight }) => (
+                <div key={pos} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '9px 12px',
+                  borderRadius: 8,
+                  background: highlight ? 'rgba(34,197,94,0.07)' : pos % 2 === 0 ? '#0a1509' : 'transparent',
+                  border: highlight ? '1px solid rgba(34,197,94,0.15)' : '1px solid transparent',
+                  marginBottom: 4,
+                }}>
+                  <div style={{ width: 22, textAlign: 'center', color: highlight ? '#4ade80' : '#6b7280', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{pos}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: highlight ? '#fff' : '#d1d5db', fontWeight: 600, fontSize: 13 }}>{name}</div>
+                    <div style={{ color: '#4b5563', fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ color: highlight ? '#4ade80' : '#9ca3af', fontWeight: 700, fontSize: 13 }}>{pts}</div>
+                    <div style={{ color: delta.startsWith('+') ? '#22c55e' : '#ef4444', fontSize: 11 }}>{delta} R3</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <p style={{ textAlign: 'center', color: '#374151', fontSize: 12, marginTop: 10, fontStyle: 'italic' }}>
+            Live standings. Updated after every round.
+          </p>
         </div>
       </div>
 
@@ -612,6 +680,54 @@ export default function GolfLanding() {
       </Section>
 
       {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* Ditch the spreadsheet — before/after                                 */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      <Section className="max-w-4xl mx-auto px-4 py-16 sm:py-20">
+        <div className="text-center mb-10">
+          <h2 className="text-2xl sm:text-3xl font-black text-white mb-3">
+            Ditch the spreadsheet.
+          </h2>
+          <p className="text-gray-400 text-base">
+            You've been managing your golf pool the hard way. There's a better one.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-5">
+          {/* Old way */}
+          <div style={{ background: '#0f0a0a', border: '1px solid #1f1010', borderRadius: 16, padding: '24px 20px' }}>
+            <div style={{ color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>The old way</div>
+            {[
+              'Manually track scores from Google',
+              'Update a shared Google Sheet every round',
+              'Text 40 people with standings',
+              'Argue about who picked who',
+              'Forget to send payouts',
+            ].map(item => (
+              <div key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+                <span style={{ color: '#ef4444', fontSize: 14, flexShrink: 0, marginTop: 1 }}>✗</span>
+                <span style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.4 }}>{item}</span>
+              </div>
+            ))}
+          </div>
+          {/* TourneyRun way */}
+          <div style={{ background: '#0a1a0f', border: '1px solid #14532d55', borderRadius: 16, padding: '24px 20px' }}>
+            <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>With TourneyRun</div>
+            {[
+              'ESPN syncs scores automatically after every round',
+              'Live standings always up to date — no work required',
+              'Standings emails sent to everyone automatically',
+              'Every pick logged and locked in the app',
+              'Payout tracking built right in',
+            ].map(item => (
+              <div key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+                <span style={{ color: '#4ade80', fontSize: 14, flexShrink: 0, marginTop: 1 }}>✓</span>
+                <span style={{ color: '#d1d5db', fontSize: 13, lineHeight: 1.4 }}>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      {/* ──────────────────────────────────────────────────────────────────── */}
       {/* S6: How it works                                                     */}
       {/* ──────────────────────────────────────────────────────────────────── */}
       <Section className="bg-gray-900/40 border-y border-gray-800 py-16 sm:py-20 px-4">
@@ -695,6 +811,55 @@ export default function GolfLanding() {
           </div>
         </div>
       </Section>
+
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* Masters CTA                                                          */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0a1a0f 0%, #0d2310 50%, #0a1a0f 100%)',
+        borderTop: '1px solid #14532d55',
+        borderBottom: '1px solid #14532d55',
+        padding: '56px 24px',
+        textAlign: 'center',
+      }}>
+        <div style={{ maxWidth: 600, margin: '0 auto' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 999, padding: '5px 14px', marginBottom: 20 }}>
+            <span style={{ color: '#eab308', fontSize: 14 }}>★</span>
+            <span style={{ color: '#eab308', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Major Tournament</span>
+          </div>
+          <h2 style={{ color: '#fff', fontSize: 'clamp(26px, 5vw, 40px)', fontWeight: 900, lineHeight: 1.15, marginBottom: 14 }}>
+            The Masters is April 10th.
+          </h2>
+          <p style={{ color: '#9ca3af', fontSize: 16, lineHeight: 1.6, marginBottom: 8 }}>
+            The biggest event in golf. All points × 1.5 for Masters week.
+          </p>
+          <p style={{ color: '#6b7280', fontSize: 14, marginBottom: 32 }}>
+            Set up your pool in 5 minutes. First picks start Sunday night.
+          </p>
+          <Link
+            to="/golf/create?format=pool"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              background: '#16a34a',
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: 15,
+              padding: '14px 32px',
+              borderRadius: 999,
+              textDecoration: 'none',
+              boxShadow: '0 0 32px rgba(34,197,94,0.25)',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
+            onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}
+          >
+            Create Your Masters Pool →
+          </Link>
+          <div style={{ marginTop: 16, color: '#374151', fontSize: 12 }}>
+            Free to create · From $9.99/tournament for pools
+          </div>
+        </div>
+      </div>
 
       {/* ──────────────────────────────────────────────────────────────────── */}
       {/* S8: Schedule preview                                                 */}
