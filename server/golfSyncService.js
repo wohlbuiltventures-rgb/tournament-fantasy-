@@ -296,26 +296,29 @@ async function syncTournamentScores(tournamentId, { par = 72, silent = false } =
   );
   console.log(`[golf-sync] ESPN_STATUS: "${espnStatusName}" for ${tournament.name}`);
 
-  // Check if round 4 data exists among competitors (true tournament completion)
-  const hasR4 = competitors.some(c => {
-    const ls = c.linescores || [];
-    return ls.length >= 4 || ls.some(l => (l.period === 4 || l.period?.number === 4) && l.value != null);
-  });
+  // Current round number from ESPN (1–4). STATUS_FINAL fires after every round,
+  // so we use period >= 4 as the definitive "all rounds complete" signal.
+  const currentPeriod = event?.competitions?.[0]?.status?.period ?? 0;
+  console.log(`[golf-sync] ESPN period: ${currentPeriod}`);
+
+  const isTrulyComplete =
+    (espnStatusName === 'STATUS_FINAL' || espnStatusName === 'STATUS_PLAY_COMPLETE') &&
+    currentPeriod >= 4;
 
   let newTournamentStatus = null;
-  if ((espnStatusName === 'STATUS_FINAL' || espnStatusName === 'STATUS_PLAY_COMPLETE') && hasR4) {
+  if (isTrulyComplete) {
     newTournamentStatus = 'completed';
-  } else if (espnStatusName === 'STATUS_FINAL' && !hasR4) {
-    // Per-round STATUS_FINAL (e.g. after R2) — tournament still in progress
+  } else if (espnStatusName === 'STATUS_FINAL' && currentPeriod < 4) {
+    // Per-round STATUS_FINAL (after R1/R2/R3) — tournament still running
     newTournamentStatus = 'active';
-    console.log(`[golf-sync] STATUS_FINAL but no R4 data — treating as active (mid-tournament round end)`);
+    console.log(`[golf-sync] STATUS_FINAL at period ${currentPeriod} — mid-tournament, keeping active`);
   } else if (espnStatusName === 'STATUS_IN_PROGRESS' || espnStatusName === 'STATUS_ACTIVE') {
     newTournamentStatus = 'active';
   } else if (espnStatusName === 'STATUS_SCHEDULED') {
     newTournamentStatus = 'scheduled';
   }
   const isCompleted = newTournamentStatus === 'completed';
-  if (!silent) console.log(`[golf-sync] → tournament status: ${newTournamentStatus || '(no change)'}, hasR4: ${hasR4}`);
+  if (!silent) console.log(`[golf-sync] → tournament status: ${newTournamentStatus || '(no change)'}, period: ${currentPeriod}`);
 
   const allPlayers = db.prepare('SELECT * FROM golf_players WHERE is_active = 1').all();
   const notMatched = [];
