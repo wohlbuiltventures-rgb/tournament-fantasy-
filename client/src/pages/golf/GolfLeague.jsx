@@ -3067,7 +3067,7 @@ export default function GolfLeague() {
                 if (ts === 'completed')
                   return <Link to={`/golf/league/${id}?tab=standings`} className={ctaClass}>Final Results <ChevronRight className="w-4 h-4" /></Link>;
                 if (ts === 'active')
-                  return <Link to={`/golf/league/${id}?tab=standings`} className={ctaClass}>View Leaderboard <ChevronRight className="w-4 h-4" /></Link>;
+                  return <Link to={`/golf/league/${id}?tab=standings`} className={ctaClass}>Pool Standings <ChevronRight className="w-4 h-4" /></Link>;
                 return <Link to={`/golf/league/${id}?tab=standings`} className={ctaClass}>View Standings <ChevronRight className="w-4 h-4" /></Link>;
               })()
             : (league.draft_status !== 'completed' && (
