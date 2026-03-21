@@ -17,8 +17,16 @@ const PROMO_MEMBER_THRESHOLD = 6;
 const AMOUNTS = {
   office_pool: 0.99,
   season_pass: 4.99,
-  comm_pro:    19.99,
 };
+
+// Pool creation pricing by max-teams tier
+function getPriceForMaxTeams(maxTeams) {
+  if (maxTeams <= 20)  return { amount: 9.99,  label: 'Up to 20 teams' };
+  if (maxTeams <= 40)  return { amount: 14.99, label: 'Up to 40 teams' };
+  if (maxTeams <= 60)  return { amount: 14.99, label: 'Up to 60 teams' };
+  if (maxTeams <= 100) return { amount: 24.99, label: 'Up to 100 teams' };
+  return                      { amount: 34.99, label: 'Enterprise 100+' };
+}
 
 // ── Square client factory ─────────────────────────────────────────────────────
 function getSquare() {
@@ -203,13 +211,31 @@ router.post('/payments/create-checkout-session', authMiddleware, async (req, res
 
     const clientUrl = getClientUrl(req);
 
+    // Determine base price — comm_pro uses tier pricing from league's max_teams
+    let baseAmount, lineItemName;
+    if (type === 'comm_pro') {
+      if (!leagueId) return res.status(400).json({ error: 'leagueId required for pool creation' });
+      const league = db.prepare('SELECT name, max_teams FROM golf_leagues WHERE id = ?').get(leagueId);
+      if (!league) return res.status(404).json({ error: 'League not found' });
+      const { amount, label } = getPriceForMaxTeams(league.max_teams || 20);
+      baseAmount   = amount;
+      lineItemName = `TourneyRun Pool · ${label} — ${league.name}`;
+    } else {
+      baseAmount   = AMOUNTS[type];
+      lineItemName = type === 'season_pass'
+        ? 'TourneyRun Golf Season Pass — 2026'
+        : tournamentId
+          ? `Golf Pool Entry — ${db.prepare('SELECT name FROM golf_tournaments WHERE id = ?').get(tournamentId)?.name || 'Tournament'}`
+          : 'Golf Pool Entry';
+    }
+
     // Check referral credit balance
     const creditRow = db.prepare(
       'SELECT balance FROM golf_referral_credits WHERE user_id = ? AND season = ?'
     ).get(userId, SEASON);
     const creditBalance  = creditRow?.balance || 0;
-    const creditToApply  = Math.min(creditBalance, AMOUNTS[type]);
-    const finalAmount    = Math.max(0, AMOUNTS[type] - creditToApply);
+    const creditToApply  = Math.min(creditBalance, baseAmount);
+    const finalAmount    = Math.max(0, baseAmount - creditToApply);
 
     const metadata = {
       type:         `golf_${type}`,
@@ -227,14 +253,6 @@ router.post('/payments/create-checkout-session', authMiddleware, async (req, res
       return res.json({ free: true });
     }
 
-    const productNames = {
-      season_pass: 'TourneyRun Golf Season Pass — 2026',
-      office_pool: tournamentId
-        ? `Golf Pool Entry — ${db.prepare('SELECT name FROM golf_tournaments WHERE id = ?').get(tournamentId)?.name || 'Tournament'}`
-        : 'Golf Pool Entry',
-      comm_pro: 'TourneyRun Commissioner Pro — 2026',
-    };
-
     const user = db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
 
     const redirectUrl = (type === 'comm_pro' && leagueId)
@@ -242,7 +260,7 @@ router.post('/payments/create-checkout-session', authMiddleware, async (req, res
       : `${clientUrl}/golf/payment/success?type=${type}`;
 
     const { url, orderId: squareOrderId } = await createPaymentLink({
-      name:       productNames[type] + (creditToApply > 0 ? ` (−$${creditToApply.toFixed(2)} credit)` : ''),
+      name:       lineItemName + (creditToApply > 0 ? ` (−$${creditToApply.toFixed(2)} credit)` : ''),
       amount:     finalAmount,
       metadata,
       redirectUrl,
