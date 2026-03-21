@@ -2596,12 +2596,13 @@ function ReferralSection() {
 
 // ── Hole-by-hole scorecard helpers ─────────────────────────────────────────────
 
-function holeSym(score, par) {
-  if (score == null || par == null) return { text: '·', color: '#374151' };
-  const diff = score - par;
+function holeSym(strokes, toparStr) {
+  if (strokes == null || toparStr == null) return { text: '·', color: '#374151' };
+  const diff = toparStr === 'E' ? 0 : parseInt(toparStr, 10);
+  if (isNaN(diff)) return { text: '·', color: '#374151' };
   if (diff <= -2) return { text: '◎', color: '#f59e0b', title: 'Eagle or better' };
   if (diff === -1) return { text: '●', color: '#00e87a', title: 'Birdie' };
-  if (diff === 0)  return { text: String(score), color: '#e5e7eb', title: 'Par' };
+  if (diff === 0)  return { text: String(strokes), color: '#e5e7eb', title: 'Par' };
   if (diff === 1)  return { text: '□', color: '#f59e0b', title: 'Bogey' };
   return { text: '■', color: '#ef4444', title: 'Double bogey+' };
 }
@@ -2623,12 +2624,11 @@ function HoleScorecard({ holes, currentRound }) {
 
   function renderNine(nineHoles) {
     return nineHoles.map(h => {
-      const { text, color } = holeSym(h.score, h.par);
+      const { text, color, title } = holeSym(h.strokes, h.topar);
       return (
         <div key={h.hole} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 22 }}>
           <div style={hdrStyle}>{h.hole}</div>
-          {h.par != null && <div style={{ ...cellStyle, color: '#374151', fontSize: 9 }}>{h.par}</div>}
-          <div style={{ ...cellStyle, color, fontWeight: 700, fontSize: 13 }} title={holeSym(h.score, h.par).title}>{text}</div>
+          <div style={{ ...cellStyle, color, fontWeight: 700, fontSize: 13 }} title={title}>{text}</div>
         </div>
       );
     });
@@ -2933,7 +2933,7 @@ function PGALiveTab({ leagueId, league }) {
                   <div style={{ color: '#4b5563', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                     Round {c.currentRound || maxRound} — Hole by Hole
                   </div>
-                  <HoleScorecard holes={c.holes} currentRound={c.currentRound} />
+                  <HoleScorecard holes={(c.rounds?.find(r => r.round === c.currentRound) ?? c.rounds?.[c.rounds.length - 1])?.holes} currentRound={c.currentRound} />
                 </div>
               )}
             </div>

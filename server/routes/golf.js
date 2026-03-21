@@ -584,13 +584,22 @@ router.get('/leagues/:id/pga-live', authMiddleware, async (req, res) => {
       const today = completedRounds[currentRound - 1] ?? null;
       const thru = comp.status?.thruHole ?? null;
 
-      // Hole-by-hole scores for the current round (nested linescores, if ESPN provides them)
-      const currentRoundLs = ls[Math.max(0, currentRound - 1)];
-      const holes = (currentRoundLs?.linescores || []).map(h => ({
-        hole:  h.period || h.number || null,
-        score: h.value  != null ? Number(h.value) : null,
-        par:   h.par    != null ? Number(h.par)   : null,
-      })).filter(h => h.hole != null);
+      // Hole-by-hole scores for all rounds that have hole data
+      const rounds = ls
+        .filter(roundLs => roundLs?.linescores?.length > 0)
+        .map(roundLs => ({
+          round:   roundLs.period,
+          topar:   roundLs.displayValue,
+          strokes: roundLs.value != null ? Number(roundLs.value) : null,
+          holes:   roundLs.linescores
+            .map(h => ({
+              hole:    h.period,
+              strokes: h.value   != null ? Number(h.value) : null,
+              topar:   h.scoreType?.displayValue ?? null,
+            }))
+            .filter(h => h.hole != null)
+            .sort((a, b) => a.hole - b.hole),
+        }));
 
       // Flag / country
       const flagHref = comp.athlete?.flag?.href || '';
@@ -606,7 +615,7 @@ router.get('/leagues/:id/pga-live', authMiddleware, async (req, res) => {
         flagHref, countryAlt, currentRound,
         status: isWD ? 'wd' : isCut ? 'cut' : isMDF ? 'mdf' : 'active',
         isCut, isWD, isMDF,
-        holes,
+        rounds,
       };
     });
 
