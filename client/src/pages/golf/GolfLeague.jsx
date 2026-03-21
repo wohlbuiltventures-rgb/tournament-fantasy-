@@ -2977,7 +2977,8 @@ export default function GolfLeague() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get('tab') || 'overview';
+  const _rawTab = searchParams.get('tab') || 'overview';
+  const tab = _rawTab === 'pga-scoreboard' ? 'pga-live' : _rawTab;
 
   const [league, setLeague] = useState(null);
   const [members, setMembers] = useState([]);
