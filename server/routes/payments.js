@@ -25,7 +25,7 @@ function getSquare() {
   if (!accessToken) throw new Error('SQUARE_ACCESS_TOKEN not set');
   const { SquareClient } = require('square');
   const environment = process.env.SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
-  return new SquareClient({ accessToken, environment });
+  return new SquareClient({ token: accessToken, environment });
 }
 
 // ── Webhook signature verification ───────────────────────────────────────────
