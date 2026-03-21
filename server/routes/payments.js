@@ -56,7 +56,7 @@ function getClientUrl(req) {
 // Returns { url, orderId }
 async function createPaymentLink({ lineItems, metadata, redirectUrl, buyerEmail, referenceId }) {
   const squareClient = getSquare();
-  const { data } = await squareClient.checkout.paymentLinks.create({
+  const response = await squareClient.checkout.paymentLinks.create({
     idempotencyKey: require('uuid').v4(),
     order: {
       locationId: process.env.SQUARE_LOCATION_ID,
@@ -85,8 +85,8 @@ async function createPaymentLink({ lineItems, metadata, redirectUrl, buyerEmail,
     }),
   });
   return {
-    url:     data.paymentLink.url,
-    orderId: data.paymentLink.orderId,
+    url:     response.paymentLink.url,
+    orderId: response.paymentLink.orderId,
   };
 }
 
@@ -444,8 +444,8 @@ router.post('/webhook', async (req, res) => {
     try {
       // Retrieve the full order to get metadata
       const squareClient = getSquare();
-      const { data: orderData } = await squareClient.orders.get({ orderId: payment.order_id });
-      const order    = orderData.order;
+      const orderResponse = await squareClient.orders.get({ orderId: payment.order_id });
+      const order    = orderResponse.order;
       const metadata = order.metadata || {};
 
       console.log(`[square-webhook] order=${payment.order_id} type=${metadata.type}`);

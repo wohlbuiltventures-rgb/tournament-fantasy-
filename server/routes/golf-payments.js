@@ -54,7 +54,7 @@ function getClientUrl(req) {
 // ── Create Square Payment Link ────────────────────────────────────────────────
 async function createPaymentLink({ name, amount, metadata, redirectUrl, buyerEmail }) {
   const squareClient = getSquare();
-  const { data } = await squareClient.checkout.paymentLinks.create({
+  const response = await squareClient.checkout.paymentLinks.create({
     idempotencyKey: uuidv4(),
     order: {
       locationId: process.env.SQUARE_LOCATION_ID,
@@ -80,8 +80,8 @@ async function createPaymentLink({ name, amount, metadata, redirectUrl, buyerEma
     ...(buyerEmail && { prePopulatedData: { buyerEmail } }),
   });
   return {
-    url:     data.paymentLink.url,
-    orderId: data.paymentLink.orderId,
+    url:     response.paymentLink.url,
+    orderId: response.paymentLink.orderId,
   };
 }
 
@@ -513,8 +513,8 @@ router.post('/webhooks/stripe', async (req, res) => {
 
     try {
       const squareClient = getSquare();
-      const { data: orderData } = await squareClient.orders.get({ orderId: payment.order_id });
-      const metadata = orderData.order?.metadata || {};
+      const orderResponse = await squareClient.orders.get({ orderId: payment.order_id });
+      const metadata = orderResponse.order?.metadata || {};
       if (metadata.type?.startsWith('golf_')) {
         await handleGolfWebhook({ order_id: payment.order_id, metadata });
       }
