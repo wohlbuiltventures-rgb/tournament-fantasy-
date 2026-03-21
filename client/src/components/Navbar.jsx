@@ -117,6 +117,7 @@ export default function Navbar() {
               { to: '/golf/faq',       label: 'FAQ'        },
               { to: '/golf#how-it-works', label: 'How to Play', isAnchor: true },
             ] : [
+              { to: '/',                     label: 'Home'     },
               { to: '/basketball/dashboard', label: 'Dashboard' },
               { to: '/basketball/games',     label: 'Games', live: true },
               { to: '/basketball/strategy',  label: 'Strategy' },
@@ -281,6 +282,7 @@ export default function Navbar() {
                     <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#7c3aed22', border: '1px solid #7c3aed55', color: '#a78bfa', fontSize: 10, fontWeight: 600, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials}</span>
                     <span>{user.display_name || user.username}</span>
                   </Link>
+                  <Link to="/" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Home</Link>
                   <Link to="/basketball/dashboard" className="block px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>Dashboard</Link>
                   <Link to="/basketball/games" className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" onClick={() => setMenuOpen(false)}>
                     {hasLiveGames && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f97316', flexShrink: 0, animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite' }} />}

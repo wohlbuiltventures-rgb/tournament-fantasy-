@@ -10,6 +10,7 @@ function userInitials(user) {
 }
 
 const NAV_LINKS = [
+  { to: '/',               label: 'Home'       },
   { to: '/golf/dashboard', label: 'My Leagues' },
   { to: '/golf/strategy',  label: 'Strategy'   },
   { to: '/golf/faq',       label: 'FAQ'        },
@@ -212,7 +213,12 @@ export default function GolfNavbar() {
                 </span>
                 <span>{user.display_name || user.username}</span>
               </Link>
-              {NAV_LINKS.map(({ to, label }) => (
+              <Link to="/" onClick={() => setMenuOpen(false)}
+                style={{ display: 'block', padding: '8px 12px', borderRadius: 8, color: '#d1d5db', textDecoration: 'none', fontSize: 14 }}
+              >
+                Home
+              </Link>
+              {NAV_LINKS.filter(l => l.to !== '/').map(({ to, label }) => (
                 <Link key={to} to={to} onClick={() => setMenuOpen(false)}
                   style={{ display: 'block', padding: '8px 12px', borderRadius: 8, color: isActive(to) ? '#4ade80' : '#d1d5db', textDecoration: 'none', fontSize: 14 }}
                 >

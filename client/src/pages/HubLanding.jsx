@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 // ── CSS Animations ────────────────────────────────────────────────────────────
@@ -89,6 +89,14 @@ function useHubFavicon() {
 function MyLeaguesDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = () => {
+    setOpen(false);
+    logout();
+    navigate('/');
+  };
 
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -141,6 +149,15 @@ function MyLeaguesDropdown() {
               {label}
             </Link>
           ))}
+          <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+          <button
+            onClick={handleSignOut}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', color: '#6b7280', fontSize: 13, fontWeight: 500, borderRadius: 6, background: 'transparent', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#fff'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6b7280'; }}
+          >
+            Sign Out
+          </button>
         </div>
       )}
     </div>
@@ -165,7 +182,7 @@ function Ticker() {
   const content = [...TICKER_EVENTS, ...TICKER_EVENTS].join('   ·   ');
   return (
     <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', padding: '14px 0', borderTop: '0.5px solid rgba(255,255,255,0.05)', borderBottom: '0.5px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.2)' }}>
-      <span style={{ display: 'inline-block', animation: 'hub-ticker 40s linear infinite', color: 'rgba(255,255,255,0.25)', fontSize: 12, fontWeight: 600, letterSpacing: '0.03em' }}>
+      <span style={{ display: 'inline-block', animation: 'hub-ticker 80s linear infinite', color: 'rgba(255,255,255,0.25)', fontSize: 12, fontWeight: 600, letterSpacing: '0.03em' }}>
         {content}&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;{content}
       </span>
     </div>
@@ -434,11 +451,6 @@ export default function HubLanding() {
                       <span style={{ fontSize: 24 }}>🏀</span>
                       <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.06em', color: '#fff' }}>COLLEGE BASKETBALL</span>
                     </div>
-                    <span style={{
-                      fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase',
-                      background: 'rgba(249,115,22,0.12)', color: '#fb923c', border: '1px solid rgba(249,115,22,0.3)',
-                      padding: '4px 10px', borderRadius: 100,
-                    }}>2026 · SOON</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {[
