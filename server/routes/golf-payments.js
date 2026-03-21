@@ -64,7 +64,7 @@ async function createPaymentLink({ name, amount, metadata, redirectUrl, buyerEma
         name,
         quantity: '1',
         basePriceMoney: {
-          amount:   Math.round(amount * 100),
+          amount:   BigInt(Math.round(amount * 100)),
           currency: 'USD',
         },
       }],
