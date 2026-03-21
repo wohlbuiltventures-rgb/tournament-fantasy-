@@ -505,9 +505,14 @@ router.post('/webhooks/stripe', async (req, res) => {
   let event;
   try { event = JSON.parse(rawBody); } catch { return res.status(400).send('Invalid JSON'); }
 
-  if (event.type === 'payment.completed') {
+  if (event.type === 'payment.updated') {
     const payment = event.data?.object?.payment;
     if (!payment?.order_id) return res.json({ received: true });
+    // Only fulfill when Square has fully captured the payment
+    if (payment.status !== 'COMPLETED') {
+      console.log(`[golf-square-webhook] Ignoring payment.updated with status=${payment.status}`);
+      return res.json({ received: true });
+    }
 
     try {
       const squareClient = getSquare();

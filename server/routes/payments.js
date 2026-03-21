@@ -401,7 +401,7 @@ router.get('/smart-draft-credits', authMiddleware, (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/payments/webhook
 // Square webhook — raw body required (configured in index.js).
-// Square sends payment.completed events when a Payment Link is paid.
+// Square sends payment.updated events; we only act when payment.status === 'COMPLETED'.
 // ---------------------------------------------------------------------------
 router.post('/webhook', async (req, res) => {
   const signatureHeader = req.headers['x-square-hmacsha256-signature'];
@@ -432,10 +432,15 @@ router.post('/webhook', async (req, res) => {
 
   console.log(`[square-webhook] event=${event.type}`);
 
-  if (event.type === 'payment.completed') {
+  if (event.type === 'payment.updated') {
     const payment = event.data?.object?.payment;
     if (!payment?.order_id) {
       console.warn('[square-webhook] No order_id on payment event');
+      return res.json({ received: true });
+    }
+    // Only fulfill when Square has fully captured the payment
+    if (payment.status !== 'COMPLETED') {
+      console.log(`[square-webhook] Ignoring payment.updated with status=${payment.status}`);
       return res.json({ received: true });
     }
 
