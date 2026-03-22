@@ -510,7 +510,8 @@ function AmbassadorCodes() {
   const [expanded, setExpanded]         = useState(null); // code id → uses array
   const [expandedUses, setExpandedUses] = useState({});   // id → uses[]
   const [showCreate, setShowCreate]     = useState(false);
-  const [qrModal, setQrModal]           = useState(null); // { id, code, url }
+  const [qrModal, setQrModal]           = useState(null); // { id, code, referralUrl, blobUrl }
+  const [qrLoading, setQrLoading]       = useState(false);
   const [err, setErr]                   = useState('');
   const [saving, setSaving]             = useState(false);
   const [form, setForm] = useState({
@@ -573,9 +574,20 @@ function AmbassadorCodes() {
     } catch (_) {}
   }
 
-  function openQr(c) {
-    const url = `${BASE_URL}/golf/create?promo=${encodeURIComponent(c.code)}`;
-    setQrModal({ id: c.id, code: c.code, url });
+  async function openQr(c) {
+    const referralUrl = `${BASE_URL}/golf/create?promo=${encodeURIComponent(c.code)}`;
+    setQrModal({ id: c.id, code: c.code, referralUrl, blobUrl: null });
+    setQrLoading(true);
+    try {
+      // Fetch via axios so the JWT auth header is sent
+      const res = await api.get(`/golf/admin/promo-codes/${c.id}/qr`, { responseType: 'blob' });
+      const blobUrl = URL.createObjectURL(res.data);
+      setQrModal(m => m ? { ...m, blobUrl } : null);
+    } catch (e) {
+      setErr('Failed to load QR code');
+    } finally {
+      setQrLoading(false);
+    }
   }
 
   const discountLabel = c => c.discount_type === 'free'
@@ -688,29 +700,31 @@ function AmbassadorCodes() {
       {/* QR code modal */}
       {qrModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-          onClick={e => { if (e.target === e.currentTarget) setQrModal(null); }}
+          onClick={e => { if (e.target === e.currentTarget) { if (qrModal.blobUrl) URL.revokeObjectURL(qrModal.blobUrl); setQrModal(null); } }}
         >
           <div style={{ background: '#0a1a0f', border: '1px solid #14532d', borderRadius: 20, padding: 32, width: '100%', maxWidth: 380, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 6px', color: '#fff', fontSize: 18, fontWeight: 800 }}>Card Assets — {qrModal.code}</h3>
-            <p style={{ color: '#6b7280', fontSize: 12, margin: '0 0 20px', wordBreak: 'break-all' }}>{qrModal.url}</p>
-            <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, display: 'inline-block' }}>
-              <img
-                src={`/api/golf/admin/promo-codes/${qrModal.id}/qr`}
-                alt={`QR for ${qrModal.code}`}
-                style={{ width: 200, height: 200, display: 'block' }}
-              />
+            <p style={{ color: '#6b7280', fontSize: 12, margin: '0 0 20px', wordBreak: 'break-all' }}>{qrModal.referralUrl}</p>
+            <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, display: 'inline-block', minWidth: 200, minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {qrLoading && <span style={{ color: '#6b7280', fontSize: 13 }}>Generating…</span>}
+              {!qrLoading && qrModal.blobUrl && (
+                <img src={qrModal.blobUrl} alt={`QR for ${qrModal.code}`} style={{ width: 200, height: 200, display: 'block' }} />
+              )}
+              {!qrLoading && !qrModal.blobUrl && <span style={{ color: '#f87171', fontSize: 13 }}>Failed to load</span>}
             </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              <a
-                href={`/api/golf/admin/promo-codes/${qrModal.id}/qr`}
-                download={`qr-${qrModal.code}.png`}
-                style={{ background: '#16a34a', color: '#fff', textDecoration: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700 }}
-              >Download QR PNG</a>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {qrModal.blobUrl && (
+                <a
+                  href={qrModal.blobUrl}
+                  download={`qr-${qrModal.code}.png`}
+                  style={{ background: '#16a34a', color: '#fff', textDecoration: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700 }}
+                >Download QR PNG</a>
+              )}
               <button
-                onClick={() => { navigator.clipboard.writeText(qrModal.url); }}
+                onClick={() => { navigator.clipboard.writeText(qrModal.referralUrl); }}
                 style={{ background: 'transparent', color: '#6b7280', border: '1px solid #1a3320', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
               >Copy URL</button>
-              <button onClick={() => setQrModal(null)}
+              <button onClick={() => { if (qrModal.blobUrl) URL.revokeObjectURL(qrModal.blobUrl); setQrModal(null); }}
                 style={{ background: 'transparent', color: '#6b7280', border: '1px solid #1a3320', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
               >Close</button>
             </div>

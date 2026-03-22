@@ -551,7 +551,6 @@ router.get('/admin/promo-codes/:id/qr', superadmin, async (req, res) => {
       margin: 2,
     });
     res.set('Content-Type', 'image/png');
-    res.set('Content-Disposition', `attachment; filename="qr-${promo.code}.png"`);
     res.send(png);
   } catch (err) {
     console.error('[golf-admin] promo-codes qr:', err);
