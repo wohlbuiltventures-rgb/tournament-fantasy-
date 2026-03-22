@@ -346,7 +346,7 @@ function CountdownBlock() {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Landing() {
-  useDocTitle('TourneyRun — Player Pool Fantasy');
+  useDocTitle('College Basketball Fantasy | TourneyRun');
   const { user } = useAuth();
   const navigate = useNavigate();
 

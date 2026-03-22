@@ -467,7 +467,7 @@ const DEFAULT_FORM = {
 };
 
 export default function CreateGolfLeague() {
-  useDocTitle('Create Golf League | TourneyRun');
+  useDocTitle('Create a Golf Pool | TourneyRun');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 

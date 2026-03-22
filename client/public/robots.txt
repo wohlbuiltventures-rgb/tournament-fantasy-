@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+
+# Private league pages and authenticated flows
+Disallow: /golf/league/
+Disallow: /golf/create
+Disallow: /golf/dashboard
+Disallow: /golf/join
+Disallow: /basketball/dashboard
+Disallow: /basketball/create-league
+Disallow: /basketball/join-league
+Disallow: /basketball/league/
+Disallow: /profile
+Disallow: /api/
+Disallow: /golf/admin
+Disallow: /basketball/admin
+
+Sitemap: https://www.tourneyrun.app/sitemap.xml

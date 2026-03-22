@@ -209,7 +209,7 @@ function TournamentBadge({ status, isMajor }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function GolfLanding() {
-  useDocTitle('Fantasy Golf | TourneyRun');
+  useDocTitle('Fantasy Golf & Office Pools | TourneyRun');
   const { user } = useAuth();
   const howItWorksRef = useRef(null);
   const [tournaments, setTournaments] = useState([]);
