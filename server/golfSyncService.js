@@ -2,6 +2,10 @@ const https = require('https');
 const db = require('./db');
 const { v4: uuidv4 } = require('uuid');
 
+// Socket.io instance — injected from index.js after server starts
+let _io = null;
+function setIo(io) { _io = io; }
+
 // ── HTTP helper ─────────────────────────────────────────────────────────────────
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
@@ -380,6 +384,43 @@ let _syncInterval = null;
 let _lastSyncTime = null;
 let _lastSyncResult = null;
 
+// ── Push pool standings to connected clients via websocket ─────────────────────
+function pushPoolStandings(tournamentId) {
+  if (!_io) return;
+  try {
+    const poolLeagues = db.prepare(`
+      SELECT gl.id, gl.name, gl.scoring_style
+      FROM golf_leagues gl
+      WHERE gl.format_type = 'pool'
+        AND gl.status = 'lobby'
+        AND gl.pool_tournament_id = ?
+    `).all(tournamentId);
+
+    for (const league of poolLeagues) {
+      const standings = db.prepare(`
+        SELECT glm.id as member_id, glm.team_name, u.username,
+               COALESCE(SUM(gs.fantasy_points), 0) as total_points
+        FROM golf_league_members glm
+        JOIN users u ON u.id = glm.user_id
+        LEFT JOIN golf_weekly_lineups wl ON wl.member_id = glm.id
+        LEFT JOIN golf_scores gs ON gs.player_id = wl.player_id AND gs.tournament_id = ?
+        WHERE glm.golf_league_id = ?
+        GROUP BY glm.id
+        ORDER BY total_points DESC
+      `).all(tournamentId, league.id);
+
+      _io.to(`golf_pool_${league.id}`).emit('pool_standings_update', {
+        leagueId: league.id,
+        tournamentId,
+        standings,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  } catch (e) {
+    console.error('[golf-sync] pushPoolStandings error:', e.message);
+  }
+}
+
 async function runAutoSync() {
   const now = new Date();
   const dow = now.getDay(); // 0=Sun, 4=Thu, 5=Fri, 6=Sat
@@ -402,6 +443,9 @@ async function runAutoSync() {
       const result = await syncTournamentScores(tournament.id, { silent: false });
       _lastSyncTime = new Date().toISOString();
       _lastSyncResult = { ...result, tournamentName: tournament.name };
+      if (result.synced > 0) {
+        pushPoolStandings(tournament.id);
+      }
     } catch (e) {
       console.error(`[golf-sync] Auto-sync error for ${tournament.name}:`, e.message);
     }
@@ -451,4 +495,4 @@ async function backfillCompleted() {
   }
 }
 
-module.exports = { syncTournamentScores, scheduleAutoSync, getSyncStatus, backfillCompleted };
+module.exports = { syncTournamentScores, scheduleAutoSync, getSyncStatus, backfillCompleted, setIo };

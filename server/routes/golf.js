@@ -241,6 +241,7 @@ router.post('/leagues', authMiddleware, (req, res) => {
       scoring_style = 'tourneyrun',
       pool_tier = 'standard',
       comm_pro_price = 19.99,
+      pool_tournament_id = null,
       // Buy-in
       payment_methods = '[]',
       payout_places = '[]',
@@ -292,6 +293,8 @@ router.post('/leagues', authMiddleware, (req, res) => {
     const poolTiersJson       = typeof pool_tiers      === 'string' ? pool_tiers      : JSON.stringify(pool_tiers);
     const pickSheetFmt        = ['tiered', 'salary_cap'].includes(pick_sheet_format) ? pick_sheet_format : 'tiered';
 
+    const poolTournamentIdFinal = pool_tournament_id || null;
+
     db.prepare(`
       INSERT INTO golf_leagues (
         id, name, commissioner_id, invite_code, status, max_teams,
@@ -302,8 +305,9 @@ router.post('/leagues', authMiddleware, (req, res) => {
         pool_tier, comm_pro_price,
         payment_methods, payout_places,
         pick_sheet_format, pool_tiers, pool_salary_cap, pool_cap_unit,
-        auction_budget, faab_weekly_budget, draft_type, bid_timer_seconds
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2026, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        auction_budget, faab_weekly_budget, draft_type, bid_timer_seconds,
+        pool_tournament_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2026, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, name, req.user.id, invite_code, 'pending_payment', parseInt(max_teams) || 8,
       parseFloat(buy_in_amount) || 0, payment_instructions, p1, p2, p3,
@@ -316,7 +320,8 @@ router.post('/leagues', authMiddleware, (req, res) => {
       paymentMethodsFinal, payoutPlacesFinal,
       pickSheetFmt, poolTiersJson, parseInt(pool_salary_cap) || 50000, parseInt(pool_cap_unit) || 50000,
       parseInt(auction_budget) || 1000, parseInt(faab_weekly_budget) || 100,
-      dtFinal, parseInt(bid_timer_seconds) || 30
+      dtFinal, parseInt(bid_timer_seconds) || 30,
+      poolTournamentIdFinal
     );
 
     // Persist pool_tiers to normalized table when Pool format

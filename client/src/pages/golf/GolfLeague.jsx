@@ -6,6 +6,7 @@ import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
 import BallLoader from '../../components/BallLoader';
 import GolfPaymentModal from '../../components/golf/GolfPaymentModal';
+import socket, { connectSocket } from '../../socket';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -3005,6 +3006,24 @@ export default function GolfLeague() {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Live standings push for pool leagues
+  useEffect(() => {
+    if (!league || league.format_type !== 'pool' || !user) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    connectSocket(token);
+    socket.emit('join_golf_pool', { leagueId: id, token });
+    function onStandingsUpdate({ leagueId, standings }) {
+      if (leagueId !== id) return;
+      setMembers(prev => prev.map(m => {
+        const updated = standings.find(s => s.member_id === m.id);
+        return updated ? { ...m, season_points: updated.total_points } : m;
+      }));
+    }
+    socket.on('pool_standings_update', onStandingsUpdate);
+    return () => { socket.off('pool_standings_update', onStandingsUpdate); };
+  }, [league?.format_type, id, user]); // eslint-disable-line
 
   if (loading) return <BallLoader />;
 

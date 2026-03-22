@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Flag, DollarSign, Trophy, Settings, Check, Zap } from 'lucide-react';
 import api from '../../api';
@@ -50,12 +50,13 @@ const FORMATS = [
 
 const SCORING_STYLES = [
   {
-    value: 'tourneyrun',
-    icon: '⚡',
-    title: 'TourneyRun Style',
-    subtitle: 'Eagle +8 · Birdie +3 · Par +0.5 · Bogey −0.5 · Double+ −2  ·  Majors 1.5×',
-    description: 'Points per shot, every hole matters',
-    recommended: true,
+    value: 'stroke_play',
+    icon: '🏌️',
+    title: 'Classic Stroke Play',
+    subtitle: 'Raw total strokes across all picked golfers — lowest score wins',
+    description: 'Total strokes, no adjustments',
+    recommended: false,
+    isNew: false,
   },
   {
     value: 'total_score',
@@ -64,14 +65,16 @@ const SCORING_STYLES = [
     subtitle: 'Combined strokes vs par across all picked golfers',
     description: 'Classic golf — lowest combined score wins',
     recommended: false,
+    isNew: false,
   },
   {
-    value: 'stroke_play',
-    icon: '🏌️',
-    title: 'Stroke Play',
-    subtitle: 'Raw total strokes across all picked golfers — no par adjustment',
-    description: 'Total strokes, no adjustments',
+    value: 'tourneyrun',
+    icon: '⚡',
+    title: 'TourneyRun Style',
+    subtitle: 'Eagle +8 · Birdie +3 · Par +0.5 · Bogey −0.5 · Double+ −2',
+    description: 'Points per shot, every hole matters',
     recommended: false,
+    isNew: true,
   },
 ];
 
@@ -196,9 +199,9 @@ function ScoringStyleSelector({ value, onChange }) {
                 <span className={`font-bold text-sm ${value === s.value ? 'text-white' : 'text-gray-300'}`}>
                   {s.title}
                 </span>
-                {s.recommended && (
+                {s.isNew && (
                   <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-green-500/20 border border-green-500/30 text-green-400">
-                    Recommended
+                    NEW
                   </span>
                 )}
               </div>
@@ -432,8 +435,9 @@ const DEFAULT_FORM = {
     { place: 3, pct: 10 },
   ],
   // Pool
+  pool_tournament_id: '',
   picks_per_team: 8,
-  scoring_style: 'tourneyrun',
+  scoring_style: 'stroke_play',
   pool_tier: 'standard',
   comm_pro_price: 19.99,
   pick_sheet_format: 'tiered',
@@ -479,6 +483,14 @@ export default function CreateGolfLeague() {
   }));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [tournaments, setTournaments] = useState([]);
+
+  useEffect(() => {
+    api.get('/golf/tournaments').then(res => {
+      const upcoming = (res.data.tournaments || []).filter(t => t.status !== 'completed');
+      setTournaments(upcoming);
+    }).catch(() => {});
+  }, []);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -496,6 +508,10 @@ export default function CreateGolfLeague() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (format === 'pool' && !form.pool_tournament_id) {
+      setError('Please select a tournament for this pool.');
+      return;
+    }
     const hasBuyIn = parseFloat(form.buy_in_amount) > 0;
     if (hasBuyIn && payoutTotal !== 100) {
       setError('Payout percentages must add up to 100%');
@@ -631,6 +647,27 @@ export default function CreateGolfLeague() {
           <Card>
             <CardHeader icon={Settings} title="⚙️ Pool Settings" />
             <div className="space-y-6">
+
+              {/* Tournament Picker */}
+              <div>
+                <label className="label mb-1.5">Which tournament is this pool for? *</label>
+                <select
+                  className="input text-sm"
+                  value={form.pool_tournament_id}
+                  onChange={e => set('pool_tournament_id', e.target.value)}
+                  required
+                >
+                  <option value="">— Select a tournament —</option>
+                  {tournaments.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}{t.start_date ? ` · ${new Date(t.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}{t.is_major ? ' (Major)' : ''}
+                    </option>
+                  ))}
+                </select>
+                {tournaments.length === 0 && (
+                  <p className="text-gray-600 text-xs mt-1.5">Loading tournaments…</p>
+                )}
+              </div>
 
               {/* Max Teams */}
               <div>

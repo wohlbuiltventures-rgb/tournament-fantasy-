@@ -108,6 +108,15 @@ app.get('*', (req, res) => {
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
 
+  // Join golf pool room for live standings updates
+  socket.on('join_golf_pool', ({ leagueId, token }) => {
+    try {
+      if (!token) return;
+      jwt.verify(token, process.env.JWT_SECRET);
+      socket.join(`golf_pool_${leagueId}`);
+    } catch (_) {}
+  });
+
   // Join draft room
   socket.on('join_draft_room', ({ leagueId, token }) => {
     try {
@@ -479,7 +488,8 @@ const { startPoolLockScheduler } = require('./golfPoolLockService');
 startPoolLockScheduler();
 
 // Golf score auto-sync — 10 min intervals Thu–Sun during active tournaments
-const { scheduleAutoSync, backfillCompleted } = require('./golfSyncService');
+const { scheduleAutoSync, backfillCompleted, setIo: setGolfSyncIo } = require('./golfSyncService');
+setGolfSyncIo(io);
 scheduleAutoSync();
 setTimeout(backfillCompleted, 15 * 1000); // backfill after server is up
 

@@ -1,31 +1,53 @@
 const nodemailer = require('nodemailer');
 
-// Warn on startup if SMTP is not configured — emails will fail silently otherwise
-if (!process.env.MAIL_HOST || !process.env.MAIL_USER || !process.env.MAIL_PASS) {
-  console.warn('[mailer] WARNING: MAIL_HOST, MAIL_USER, or MAIL_PASS is not set — password reset emails will fail');
+// Warn on startup if neither Resend nor SMTP is configured
+if (!process.env.RESEND_API_KEY && (!process.env.MAIL_HOST || !process.env.MAIL_USER || !process.env.MAIL_PASS)) {
+  console.warn('[mailer] WARNING: No email provider configured — set RESEND_API_KEY or MAIL_HOST/MAIL_USER/MAIL_PASS');
 }
 
-function getTransport() {
+// Send email via Resend REST API (primary) or nodemailer SMTP (fallback)
+async function sendEmail({ from, to, subject, text, html }) {
+  const resendKey = process.env.RESEND_API_KEY;
+
+  if (resendKey) {
+    const body = JSON.stringify({ from, to, subject, ...(text ? { text } : {}), html });
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+      body,
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Resend error ${res.status}: ${errText}`);
+    }
+    return;
+  }
+
+  // Fallback: nodemailer SMTP
   const { MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASS } = process.env;
   if (!MAIL_HOST || !MAIL_USER || !MAIL_PASS) {
-    throw new Error('Email is not configured on this server (MAIL_HOST, MAIL_USER, MAIL_PASS required)');
+    throw new Error('Email is not configured on this server (RESEND_API_KEY or MAIL_HOST/MAIL_USER/MAIL_PASS required)');
   }
-  return nodemailer.createTransport({
+  const transport = nodemailer.createTransport({
     host: MAIL_HOST,
     port: parseInt(MAIL_PORT || '587', 10),
     secure: parseInt(MAIL_PORT || '587', 10) === 465,
     auth: { user: MAIL_USER, pass: MAIL_PASS },
-    connectionTimeout: 8000,  // abort if SMTP server doesn't respond in 8s
+    connectionTimeout: 8000,
     greetingTimeout: 8000,
     socketTimeout: 8000,
   });
+  await transport.sendMail({ from, to, subject, text, html });
+}
+
+function getFrom(name = 'TourneyRun') {
+  const addr = process.env.MAIL_FROM || process.env.MAIL_USER || 'noreply@tourneyrun.app';
+  return `"${name}" <${addr}>`;
 }
 
 async function sendPasswordReset(toEmail, resetUrl) {
-  const transport = getTransport();
-  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
-  await transport.sendMail({
-    from: `"TourneyRun" <${from}>`,
+  await sendEmail({
+    from: getFrom('TourneyRun'),
     to: toEmail,
     subject: 'Reset your TourneyRun password',
     text: `You requested a password reset.\n\nClick the link below to set a new password (expires in 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.`,
@@ -48,14 +70,12 @@ async function sendPasswordReset(toEmail, resetUrl) {
 }
 
 async function sendWelcome(toEmail, username) {
-  const transport = getTransport();
-  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
   const baseUrl = process.env.CLIENT_URL
     ? process.env.CLIENT_URL.replace(/\/$/, '')
     : 'https://tourneyrun.com';
 
-  await transport.sendMail({
-    from: `"TourneyRun" <${from}>`,
+  await sendEmail({
+    from: getFrom('TourneyRun'),
     to: toEmail,
     subject: 'Welcome to TourneyRun 🏀',
     text: `Hey ${username},\n\nYou're in. Now create a league, draft your players, and win some money. The 2026 Tournament starts March 20th — don't sleep on it.\n\nCreate a League: ${baseUrl}/create-league\nJoin a League: ${baseUrl}/join-league\n\nHow it works:\n• Draft real college basketball players\n• Score points every time they score\n• Win your league's prize pool\n\nGood luck out there. May your players stay healthy and your seeds hold.\n— The TourneyRun Team`,
@@ -173,8 +193,6 @@ async function sendWelcome(toEmail, username) {
 }
 
 async function sendGolfPaymentConfirmation(toEmail, username, type, meta) {
-  const transport = getTransport();
-  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
   const baseUrl = process.env.CLIENT_URL
     ? process.env.CLIENT_URL.replace(/\/$/, '')
     : 'https://tourneyrun.app';
@@ -194,8 +212,8 @@ async function sendGolfPaymentConfirmation(toEmail, username, type, meta) {
   const subject = subjects[type] || '⛳ TourneyRun Golf — Payment confirmed';
   const body    = bodies[type]   || 'Your payment was successful.';
 
-  await transport.sendMail({
-    from: `"TourneyRun Golf" <${from}>`,
+  await sendEmail({
+    from: getFrom('TourneyRun Golf'),
     to: toEmail,
     subject,
     html: `
@@ -227,7 +245,7 @@ async function sendGolfPaymentConfirmation(toEmail, username, type, meta) {
             </a>
           </div>
           <p style="margin:0;font-size:11px;color:#166534;text-align:center;">
-            TourneyRun · Skill-based golf fantasy · Payments by Stripe<br>
+            TourneyRun · Skill-based golf fantasy · Payments by Square<br>
             Not available in WA, ID, MT, NV, LA
           </p>
         </td></tr>
@@ -240,14 +258,12 @@ async function sendGolfPaymentConfirmation(toEmail, username, type, meta) {
 }
 
 async function sendCommProUnlocked(toEmail, username, leagueName) {
-  const transport = getTransport();
-  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
   const baseUrl = process.env.CLIENT_URL
     ? process.env.CLIENT_URL.replace(/\/$/, '')
     : 'https://tourneyrun.app';
 
-  await transport.sendMail({
-    from: `"TourneyRun Golf" <${from}>`,
+  await sendEmail({
+    from: getFrom('TourneyRun Golf'),
     to: toEmail,
     subject: '🏆 You unlocked Commissioner Pro — free for 2026!',
     html: `
@@ -286,8 +302,6 @@ async function sendCommProUnlocked(toEmail, username, leagueName) {
 }
 
 async function sendGolfPoolLive(toEmail, { username, leagueName, leagueId, spotsOpen, tournamentName }) {
-  const transport = getTransport();
-  const from = process.env.MAIL_FROM || process.env.MAIL_USER;
   const leagueUrl = `https://www.tourneyrun.app/golf/league/${leagueId}`;
 
   const tournamentLine = tournamentName
@@ -299,8 +313,8 @@ async function sendGolfPoolLive(toEmail, { username, leagueName, leagueId, spots
        </td></tr>`
     : '';
 
-  await transport.sendMail({
-    from: `"TourneyRun Golf" <${from}>`,
+  await sendEmail({
+    from: getFrom('TourneyRun Golf'),
     to: toEmail,
     subject: `Your TourneyRun pool is live! 🏌️`,
     text: `Hey ${username},\n\nYour pool "${leagueName}" is live and ready for players.\n\nInvite link: ${leagueUrl}\nOpen spots: ${spotsOpen}${tournamentName ? `\nTournament: ${tournamentName}` : ''}\n\nShare the invite link with your group and get picks in before Thursday.\n\n— The TourneyRun Team`,
