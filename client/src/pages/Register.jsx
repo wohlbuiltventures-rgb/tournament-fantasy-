@@ -11,6 +11,7 @@ export default function Register() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sdSession = searchParams.get('smartdraft_session');
+  const thenUrl   = searchParams.get('then');
 
   const [form, setForm]     = useState({ email: '', username: '', password: '', confirmPassword: '' });
   const [checks, setChecks] = useState({ terms: false, age: false, state: false });
@@ -39,6 +40,8 @@ export default function Register() {
       if (sdSession) {
         try { await api.post('/payments/claim-credit', { session_id: sdSession }); } catch {}
         navigate('/basketball/create-league?smartdraft=1');
+      } else if (thenUrl) {
+        navigate(thenUrl);
       } else {
         navigate('/basketball/dashboard');
       }

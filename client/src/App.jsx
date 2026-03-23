@@ -154,7 +154,7 @@ export default function App() {
               <Route path="/golf" element={<GolfLanding />} />
               <Route path="/golf/dashboard" element={<ProtectedRoute><GolfDashboard /></ProtectedRoute>} />
               <Route path="/golf/create" element={<ProtectedRoute><CreateGolfLeague /></ProtectedRoute>} />
-              <Route path="/golf/join" element={<ProtectedRoute><JoinGolfLeague /></ProtectedRoute>} />
+              <Route path="/golf/join" element={<JoinGolfLeague />} />
               <Route path="/golf/league/:id" element={<ProtectedRoute><GolfLeague /></ProtectedRoute>} />
               <Route path="/golf/league/:id/draft" element={<ProtectedRoute><GolfDraft /></ProtectedRoute>} />
               <Route path="/golf/league/:id/auction" element={<ProtectedRoute><GolfAuctionDraft /></ProtectedRoute>} />

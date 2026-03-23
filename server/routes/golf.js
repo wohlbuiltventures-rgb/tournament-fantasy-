@@ -351,6 +351,27 @@ router.post('/leagues', authMiddleware, (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
+// Public league preview — no auth required (used by invite link landing page)
+router.get('/leagues/preview/:code', (req, res) => {
+  try {
+    const league = db.prepare(`
+      SELECT gl.id, gl.name, gl.format_type, gl.max_teams, gl.buy_in_amount,
+             gl.payout_first, gl.payout_second, gl.payout_third, gl.picks_per_team,
+             gl.pool_tournament_id,
+             gt.name AS pool_tournament_name,
+             gt.start_date AS pool_tournament_start,
+             gt.end_date AS pool_tournament_end,
+             gt.course AS pool_tournament_course,
+             (SELECT COUNT(*) FROM golf_league_members WHERE golf_league_id = gl.id) AS member_count
+      FROM golf_leagues gl
+      LEFT JOIN golf_tournaments gt ON gt.id = gl.pool_tournament_id
+      WHERE gl.invite_code = ?
+    `).get(req.params.code.toUpperCase());
+    if (!league) return res.status(404).json({ error: 'Invalid invite code' });
+    res.json({ league });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
 router.post('/leagues/join', authMiddleware, (req, res) => {
   try {
     const { invite_code, team_name } = req.body;
