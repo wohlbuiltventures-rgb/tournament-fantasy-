@@ -2,7 +2,7 @@ const db = require('./db');
 const { v4: uuidv4 } = require('uuid');
 
 // ── Golf Tables ────────────────────────────────────────────────────────────────
-db.exec(`
+try { db.exec(`
   CREATE TABLE IF NOT EXISTS golf_leagues (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -146,10 +146,10 @@ db.exec(`
     FOREIGN KEY (member_id) REFERENCES golf_league_members(id),
     FOREIGN KEY (player_id) REFERENCES golf_players(id)
   );
-`);
+`); } catch (e) { console.log('[golf-db] startup task skipped:', e.message); }
 
 // ── Auction tables ─────────────────────────────────────────────────────────────
-db.exec(`
+try { db.exec(`
   CREATE TABLE IF NOT EXISTS golf_auction_sessions (
     id TEXT PRIMARY KEY,
     league_id TEXT NOT NULL UNIQUE,
@@ -191,7 +191,7 @@ db.exec(`
     FOREIGN KEY (league_id) REFERENCES golf_leagues(id),
     FOREIGN KEY (member_id) REFERENCES golf_league_members(id)
   );
-`);
+`); } catch (e) { console.log('[golf-db] startup task skipped:', e.message); }
 
 // ── Schema migrations (idempotent ALTER TABLE) ─────────────────────────────────
 const _golfColMigrations = [
@@ -509,24 +509,26 @@ const GOLF_PLAYERS = [
 ];
 
 // Force-replace players whenever the list changes (check count + sentinel player)
-const existingCount = db.prepare('SELECT COUNT(*) as c FROM golf_players').get().c;
-const hasGotterup = db.prepare("SELECT COUNT(*) as c FROM golf_players WHERE name = 'Chris Gotterup'").get().c;
-if (existingCount !== GOLF_PLAYERS.length || hasGotterup === 0) {
-  db.transaction(() => {
-    // Remove roster/lineup/draft/core refs before dropping players
-    db.prepare('DELETE FROM golf_weekly_lineups').run();
-    db.prepare('DELETE FROM golf_rosters').run();
-    db.prepare('DELETE FROM golf_draft_picks').run();
-    db.prepare('DELETE FROM golf_core_players').run();
-    db.prepare('DELETE FROM golf_auction_bids').run();
-    db.prepare('DELETE FROM golf_faab_bids').run();
-    db.prepare('DELETE FROM golf_scores').run();
-    db.prepare('DELETE FROM golf_players').run();
-    const ins = db.prepare(`INSERT INTO golf_players (id, name, country, world_ranking, owgr_points, salary, is_active) VALUES (?, ?, ?, ?, 0, ?, 1)`);
-    for (const p of GOLF_PLAYERS) ins.run(uuidv4(), p.name, p.country, p.world_ranking, p.salary);
-  })();
-  console.log('[golf-db] Reseeded', GOLF_PLAYERS.length, 'golf players (5-tier system)');
-}
+try {
+  const existingCount = db.prepare('SELECT COUNT(*) as c FROM golf_players').get().c;
+  const hasGotterup = db.prepare("SELECT COUNT(*) as c FROM golf_players WHERE name = 'Chris Gotterup'").get().c;
+  if (existingCount !== GOLF_PLAYERS.length || hasGotterup === 0) {
+    db.transaction(() => {
+      // Remove roster/lineup/draft/core refs before dropping players
+      db.prepare('DELETE FROM golf_weekly_lineups').run();
+      db.prepare('DELETE FROM golf_rosters').run();
+      db.prepare('DELETE FROM golf_draft_picks').run();
+      db.prepare('DELETE FROM golf_core_players').run();
+      db.prepare('DELETE FROM golf_auction_bids').run();
+      db.prepare('DELETE FROM golf_faab_bids').run();
+      db.prepare('DELETE FROM golf_scores').run();
+      db.prepare('DELETE FROM golf_players').run();
+      const ins = db.prepare(`INSERT INTO golf_players (id, name, country, world_ranking, owgr_points, salary, is_active) VALUES (?, ?, ?, ?, 0, ?, 1)`);
+      for (const p of GOLF_PLAYERS) ins.run(uuidv4(), p.name, p.country, p.world_ranking, p.salary);
+    })();
+    console.log('[golf-db] Reseeded', GOLF_PLAYERS.length, 'golf players (5-tier system)');
+  }
+} catch (e) { console.log('[golf-db] startup task skipped:', e.message); }
 
 // ── Seed golf_tournaments (2026 Signature / Major schedule) ───────────────────
 const TOURNAMENTS_2026 = [
@@ -546,22 +548,24 @@ const TOURNAMENTS_2026 = [
 ];
 
 // Force-replace tournaments if the new schedule isn't seeded yet
-const hasPebble = db.prepare("SELECT COUNT(*) as c FROM golf_tournaments WHERE name = 'AT&T Pebble Beach Pro-Am'").get().c;
-if (hasPebble === 0) {
-  db.prepare("DELETE FROM golf_tournaments WHERE season_year = 2026").run();
-  db.prepare("DELETE FROM golf_tournaments WHERE season_year = 2025").run();
-  const insT = db.prepare(`
-    INSERT OR IGNORE INTO golf_tournaments
-      (id, name, course, start_date, end_date, season_year, is_major, is_signature, status, purse, prize_money)
-    VALUES (?, ?, ?, ?, ?, 2026, ?, ?, ?, ?, ?)
-  `);
-  db.transaction(() => {
-    for (const t of TOURNAMENTS_2026) {
-      insT.run(uuidv4(), t.name, t.course, t.start_date, t.end_date, t.is_major, t.is_signature, t.forceStatus, t.prize_money, t.prize_money);
-    }
-  })();
-  console.log('[golf-db] Seeded', TOURNAMENTS_2026.length, '2026 signature/major tournaments');
-}
+try {
+  const hasPebble = db.prepare("SELECT COUNT(*) as c FROM golf_tournaments WHERE name = 'AT&T Pebble Beach Pro-Am'").get().c;
+  if (hasPebble === 0) {
+    db.prepare("DELETE FROM golf_tournaments WHERE season_year = 2026").run();
+    db.prepare("DELETE FROM golf_tournaments WHERE season_year = 2025").run();
+    const insT = db.prepare(`
+      INSERT OR IGNORE INTO golf_tournaments
+        (id, name, course, start_date, end_date, season_year, is_major, is_signature, status, purse, prize_money)
+      VALUES (?, ?, ?, ?, ?, 2026, ?, ?, ?, ?, ?)
+    `);
+    db.transaction(() => {
+      for (const t of TOURNAMENTS_2026) {
+        insT.run(uuidv4(), t.name, t.course, t.start_date, t.end_date, t.is_major, t.is_signature, t.forceStatus, t.prize_money, t.prize_money);
+      }
+    })();
+    console.log('[golf-db] Seeded', TOURNAMENTS_2026.length, '2026 signature/major tournaments');
+  }
+} catch (e) { console.log('[golf-db] startup task skipped:', e.message); }
 
 // ── Golf user profile fields ───────────────────────────────────────────────────
 try { db.exec("ALTER TABLE users ADD COLUMN gender TEXT DEFAULT NULL"); }         catch (e) {}
