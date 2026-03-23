@@ -277,18 +277,6 @@ try {
   `).run();
 } catch (e) { console.error('[golf-db] Valspar status fix error:', e.message); }
 
-// ── Delete Valspar test league (pending_payment, never used) ─────────────────
-try {
-  const _valsparLeague = db.prepare("SELECT id FROM golf_leagues WHERE id LIKE 'c209f6ee%' AND status = 'pending_payment'").get();
-  if (_valsparLeague) {
-    const lid = _valsparLeague.id;
-    db.prepare("DELETE FROM pool_tier_players WHERE league_id = ?").run(lid);
-    db.prepare("DELETE FROM pool_tiers WHERE league_id = ?").run(lid);
-    db.prepare("DELETE FROM pool_picks WHERE league_id = ?").run(lid);
-    db.prepare("DELETE FROM golf_league_members WHERE golf_league_id = ?").run(lid);
-    db.prepare("DELETE FROM golf_leagues WHERE id = ?").run(lid);
-  }
-} catch (e) { console.error('[golf-db] Valspar test league cleanup error:', e.message); }
 
 // ── Houston Open 2026 — seed tournament row if not present ────────────────────
 try {
