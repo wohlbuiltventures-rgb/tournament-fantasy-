@@ -448,20 +448,18 @@ const DEFAULT_FORM = {
   ],
   // Pool
   pool_tournament_id: '',
-  picks_per_team: 8,
+  picks_per_team: 4,
   scoring_style: 'stroke_play',
   pool_tier: 'standard',
   comm_pro_price: 19.99,
   pick_sheet_format: 'tiered',
   pool_tiers: [
-    { tier: 1, odds_min: '1:1',   odds_max: '12:1',   picks: 1, approxPlayers: 3  },
-    { tier: 2, odds_min: '14:1',  odds_max: '25:1',   picks: 1, approxPlayers: 5  },
-    { tier: 3, odds_min: '28:1',  odds_max: '50:1',   picks: 1, approxPlayers: 10 },
-    { tier: 4, odds_min: '55:1',  odds_max: '100:1',  picks: 1, approxPlayers: 17 },
-    { tier: 5, odds_min: '110:1', odds_max: '200:1',  picks: 1, approxPlayers: 25 },
-    { tier: 6, odds_min: '250:1', odds_max: '',        picks: 1, approxPlayers: null },
+    { tier: 1, odds_min: '1:1',   odds_max: '25:1',  picks: 1, approxPlayers: 8  },
+    { tier: 2, odds_min: '28:1',  odds_max: '120:1', picks: 1, approxPlayers: 20 },
+    { tier: 3, odds_min: '125:1', odds_max: '300:1', picks: 1, approxPlayers: 35 },
+    { tier: 4, odds_min: '300:1', odds_max: '',       picks: 1, approxPlayers: null },
   ],
-  pool_drop_count: 2,
+  pool_drop_count: 0,
   pool_salary_cap: 50000,
   pool_cap_unit: 50000,
   // DK
@@ -521,7 +519,7 @@ export default function CreateGolfLeague() {
       setTiersAutoBalanced(false);
       return;
     }
-    const tierCount = form.pool_tiers.length || 6;
+    const tierCount = form.pool_tiers.length || 4;
     api.get(`/golf/tournaments/${form.pool_tournament_id}/suggested-tiers?count=${tierCount}`)
       .then(res => {
         const suggested = res.data.tiers.map((t, i) => ({

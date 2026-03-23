@@ -997,4 +997,55 @@ try {
   }
 } catch (e) { console.log('[golf-db] startup task skipped:', e.message); }
 
+// ── Restructure Houston Open to 4 odds-based tiers + picks_per_team=4 ────────
+// T1 Elite:       odds_decimal ≤ 26   (8:1 – 25:1)
+// T2 Contenders:  odds_decimal ≤ 121  (30:1 – 120:1)
+// T3 Longshots:   odds_decimal ≤ 301  (125:1 – 300:1)
+// T4 The Field:   odds_decimal > 301  (300:1+)
+// Runs once — guarded by pool_tiers.length !== 4
+try {
+  const _4T_ID = 'ff568722-fbe9-4695-86a8-a31287c22841';
+  const _4tL   = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(_4T_ID);
+  if (_4tL && _4tL.pool_tournament_id) {
+    let _4tCfg = [];
+    try { _4tCfg = JSON.parse(_4tL.pool_tiers || '[]'); } catch (_) {}
+    if (_4tCfg.length !== 4) {
+      console.log('[golf-db] Houston Open: restructuring to 4 odds-based tiers...');
+      const _4tPlayers = db.prepare(
+        'SELECT * FROM pool_tier_players WHERE league_id = ? AND tournament_id = ?'
+      ).all(_4T_ID, _4tL.pool_tournament_id);
+
+      function _t4(dec) {
+        if (dec <= 26)  return 1;   // 8:1 – 25:1
+        if (dec <= 121) return 2;   // 30:1 – 120:1
+        if (dec <= 301) return 3;   // 125:1 – 300:1
+        return 4;                   // 300:1+
+      }
+
+      let _tc = [0, 0, 0, 0];
+      const _upd4 = db.prepare(
+        'UPDATE pool_tier_players SET tier_number = ? WHERE league_id = ? AND tournament_id = ? AND player_id = ?'
+      );
+      db.transaction(() => {
+        for (const _p of _4tPlayers) {
+          const _t = _t4(_p.odds_decimal || 999);
+          _upd4.run(_t, _4T_ID, _4tL.pool_tournament_id, _p.player_id);
+          _tc[_t - 1]++;
+        }
+      })();
+
+      const _cfg4 = [
+        { tier: 1, odds_min: '8:1',   odds_max: '25:1',  picks: 1, approxPlayers: _tc[0] },
+        { tier: 2, odds_min: '30:1',  odds_max: '120:1', picks: 1, approxPlayers: _tc[1] },
+        { tier: 3, odds_min: '125:1', odds_max: '300:1', picks: 1, approxPlayers: _tc[2] },
+        { tier: 4, odds_min: '300:1', odds_max: '',       picks: 1, approxPlayers: _tc[3] },
+      ];
+      db.prepare('UPDATE golf_leagues SET pool_tiers = ?, picks_per_team = ?, pool_drop_count = 0 WHERE id = ?')
+        .run(JSON.stringify(_cfg4), 4, _4T_ID);
+
+      console.log(`[golf-db] Houston Open 4 tiers: T1=${_tc[0]} T2=${_tc[1]} T3=${_tc[2]} T4=${_tc[3]}, picks_per_team=4`);
+    }
+  }
+} catch (e) { console.log('[golf-db] startup task skipped:', e.message); }
+
 module.exports = db;

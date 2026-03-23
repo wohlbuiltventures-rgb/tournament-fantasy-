@@ -624,7 +624,7 @@ router.post('/leagues/:id/tiers/auto-balance', authMiddleware, (req, res) => {
 
     let tiersConfig = [];
     try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
-    const tierCount = tiersConfig.length || 6;
+    const tierCount = tiersConfig.length || 4;
 
     const rawPlayers = db.prepare(`
       SELECT ptp.*, gp.odds_display AS gp_odds_display, gp.odds_decimal AS gp_odds_decimal,
