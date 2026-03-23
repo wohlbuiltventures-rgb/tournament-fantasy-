@@ -526,6 +526,171 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
   }
 });
 
+// ── GET /tournaments/:id/suggested-tiers?count=6 ─────────────────────────────
+// Returns auto-balanced tier boundaries based on the tournament's actual field.
+// Divides players evenly by odds (favorites → longshots) across `count` tiers.
+
+router.get('/tournaments/:id/suggested-tiers', authMiddleware, (req, res) => {
+  try {
+    const tierCount = Math.max(1, Math.min(10, parseInt(req.query.count) || 6));
+    const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(req.params.id);
+    if (!tourn) return res.status(404).json({ error: 'Tournament not found' });
+
+    const fieldCount = db.prepare('SELECT COUNT(*) as cnt FROM golf_tournament_fields WHERE tournament_id = ?')
+      .get(req.params.id).cnt;
+
+    const rawPlayers = fieldCount > 0
+      ? db.prepare(`
+          SELECT gp.*, tf.odds_display AS tf_odds_display, tf.odds_decimal AS tf_odds_decimal
+          FROM golf_players gp
+          INNER JOIN golf_tournament_fields tf ON tf.player_id = gp.id AND tf.tournament_id = ?
+        `).all(req.params.id)
+      : db.prepare('SELECT * FROM golf_players WHERE is_active = 1').all();
+
+    const players = rawPlayers.map(p => {
+      const od = p.tf_odds_display || p.odds_display;
+      const dec = p.tf_odds_decimal || p.odds_decimal;
+      const gen = (!od || !dec) ? rankToOdds(p.world_ranking) : null;
+      return {
+        id: p.id,
+        name: p.name,
+        odds_display: od || gen.odds_display,
+        odds_decimal: dec || gen.odds_decimal,
+      };
+    }).sort((a, b) => (a.odds_decimal || 999) - (b.odds_decimal || 999));
+
+    if (!players.length) return res.status(404).json({ error: 'No players found' });
+
+    const total = players.length;
+    const baseSize = Math.floor(total / tierCount);
+    const remainder = total % tierCount;
+    const tiers = [];
+    let offset = 0;
+
+    for (let i = 0; i < tierCount; i++) {
+      const size = baseSize + (i < remainder ? 1 : 0);
+      const group = players.slice(offset, offset + size);
+      offset += size;
+      tiers.push({
+        tier:          i + 1,
+        odds_min:      group[0]?.odds_display || '',
+        odds_max:      i < tierCount - 1 ? (group[group.length - 1]?.odds_display || '') : '',
+        picks:         1,
+        approxPlayers: group.length,
+        sample:        group.slice(0, 3).map(p => p.name),
+      });
+    }
+
+    res.json({ tiers, field_size: total, source: fieldCount > 0 ? 'tournament_field' : 'world_rankings' });
+  } catch (err) {
+    console.error('[golf-pool] suggested-tiers error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── POST /leagues/:id/tiers/auto-balance ─────────────────────────────────────
+// Rebalances pool_tier_players into equal-sized tier groups sorted by odds.
+// Body: { preview: true } returns a dry-run without writing changes.
+
+router.post('/leagues/:id/tiers/auto-balance', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
+    if (league.format_type !== 'pool') return res.status(400).json({ error: 'Pool leagues only' });
+    if (!league.pool_tournament_id) return res.status(400).json({ error: 'No tournament linked' });
+
+    let tiersConfig = [];
+    try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
+    const tierCount = tiersConfig.length || 6;
+
+    const rawPlayers = db.prepare(`
+      SELECT ptp.*, gp.odds_display AS gp_odds_display, gp.odds_decimal AS gp_odds_decimal,
+             tf.odds_display AS tf_odds_display, tf.odds_decimal AS tf_odds_decimal
+      FROM pool_tier_players ptp
+      LEFT JOIN golf_players gp ON gp.id = ptp.player_id
+      LEFT JOIN golf_tournament_fields tf ON tf.player_id = ptp.player_id AND tf.tournament_id = ptp.tournament_id
+      WHERE ptp.league_id = ? AND ptp.tournament_id = ?
+    `).all(league.id, league.pool_tournament_id);
+
+    if (!rawPlayers.length) return res.status(400).json({ error: 'No players assigned to this league yet' });
+
+    const players = rawPlayers.map(p => {
+      const od  = p.tf_odds_display  || p.gp_odds_display  || p.odds_display;
+      const dec = p.tf_odds_decimal  || p.gp_odds_decimal  || p.odds_decimal;
+      const gen = (!od || !dec) ? rankToOdds(p.world_ranking || 200) : null;
+      return {
+        ...p,
+        _od:  od  || gen.odds_display,
+        _dec: dec || gen.odds_decimal,
+      };
+    }).sort((a, b) => (a._dec || 999) - (b._dec || 999));
+
+    const total    = players.length;
+    const baseSize = Math.floor(total / tierCount);
+    const remainder = total % tierCount;
+    const newTiers = [];
+    let offset = 0;
+
+    for (let i = 0; i < tierCount; i++) {
+      const size  = baseSize + (i < remainder ? 1 : 0);
+      const group = players.slice(offset, offset + size);
+      offset += size;
+      const oldTier = tiersConfig.find(t => t.tier === i + 1) || {};
+      newTiers.push({
+        tier:          i + 1,
+        odds_min:      group[0]?._od || '',
+        odds_max:      i < tierCount - 1 ? (group[group.length - 1]?._od || '') : '',
+        picks:         oldTier.picks || 1,
+        approxPlayers: group.length,
+        players:       group,
+      });
+    }
+
+    if (req.body.preview) {
+      return res.json({
+        preview: true,
+        field_size: total,
+        tiers: newTiers.map(t => ({
+          tier:    t.tier,
+          odds_min: t.odds_min,
+          odds_max: t.odds_max,
+          picks:   t.picks,
+          count:   t.approxPlayers,
+          sample:  t.players.slice(0, 3).map(p => p.player_name),
+        })),
+      });
+    }
+
+    // Persist: update league's pool_tiers config + re-tier all players
+    const newTiersConfig = newTiers.map(({ tier, odds_min, odds_max, picks, approxPlayers }) =>
+      ({ tier, odds_min, odds_max, picks, approxPlayers }));
+
+    db.prepare('UPDATE golf_leagues SET pool_tiers = ? WHERE id = ?')
+      .run(JSON.stringify(newTiersConfig), league.id);
+
+    const updTP = db.prepare(
+      'UPDATE pool_tier_players SET tier_number = ?, odds_display = ?, odds_decimal = ? WHERE league_id = ? AND tournament_id = ? AND player_id = ?'
+    );
+    db.transaction(() => {
+      for (const tier of newTiers) {
+        for (const p of tier.players) {
+          updTP.run(tier.tier, p._od, p._dec, league.id, league.pool_tournament_id, p.player_id);
+        }
+      }
+    })();
+
+    res.json({
+      ok: true,
+      field_size: total,
+      tiers: newTiersConfig.map(t => ({ ...t, count: t.approxPlayers })),
+    });
+  } catch (err) {
+    console.error('[golf-pool] auto-balance error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── POST /leagues/:id/picks/remind ───────────────────────────────────────────
 
 router.post('/leagues/:id/picks/remind', authMiddleware, (req, res) => {

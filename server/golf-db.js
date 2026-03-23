@@ -750,6 +750,10 @@ try {
   `);
 } catch (e) { console.error('[golf-db] golf_tournament_fields table error:', e.message); }
 
+// Add odds columns to golf_tournament_fields if they were added after initial deploy
+try { db.exec(`ALTER TABLE golf_tournament_fields ADD COLUMN odds_display TEXT`); } catch (_) {}
+try { db.exec(`ALTER TABLE golf_tournament_fields ADD COLUMN odds_decimal REAL`); } catch (_) {}
+
 try {
   db.exec(`
     CREATE TABLE IF NOT EXISTS golf_waitlist (

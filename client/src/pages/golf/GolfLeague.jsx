@@ -2724,12 +2724,15 @@ function ScheduleTab({ leagueId, isComm }) {
 
 // ── Tab: Commissioner Hub ──────────────────────────────────────────────────────
 
-function CommissionerTab({ leagueId, leagueName, members }) {
+function CommissionerTab({ leagueId, leagueName, members, league }) {
   const [promoData, setPromoData]   = useState(null);
   const [isPaid, setIsPaid]         = useState(false);
   const [showGate, setShowGate]     = useState(false);
   const [gateChecked, setGateChecked] = useState(false);
   const [copied, setCopied]         = useState('');
+  const [balancePreview, setBalancePreview] = useState(null); // { tiers, field_size }
+  const [balancing, setBalancing]   = useState(false);
+  const [balanceDone, setBalanceDone] = useState(false);
 
   useEffect(() => {
     // Check payment status + run migration promo check simultaneously
@@ -2860,6 +2863,81 @@ function CommissionerTab({ leagueId, leagueName, members }) {
               Download standings CSV
             </button>
           </div>
+
+          {/* Auto-Balance Tiers (pool format only) */}
+          {league?.format_type === 'pool' && league?.pool_tournament_id && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+              <h4 className="text-white text-sm font-bold mb-1">⚖️ Auto-Balance Tiers</h4>
+              <p className="text-gray-500 text-xs mb-3">
+                Divide the field into equal-sized tier groups sorted by odds. Good if T1 has 3 players and T6 has 80.
+              </p>
+
+              {/* Preview modal */}
+              {balancePreview && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+                  onClick={() => setBalancePreview(null)}>
+                  <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: 20, padding: 24, maxWidth: 400, width: '100%' }}
+                    onClick={e => e.stopPropagation()}>
+                    <h3 className="text-white font-bold text-base mb-1">Rebalance Preview</h3>
+                    <p className="text-gray-500 text-xs mb-3">{balancePreview.field_size} players across {balancePreview.tiers.length} tiers</p>
+                    <div className="space-y-1.5 mb-4">
+                      {balancePreview.tiers.map(t => (
+                        <div key={t.tier} style={{ background: '#1f2937', borderRadius: 8, padding: '8px 12px' }}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-white text-sm font-semibold">T{t.tier}</span>
+                            <span className="text-gray-400 text-xs">{t.count} players</span>
+                          </div>
+                          <div className="text-gray-500 text-xs">
+                            {t.odds_min}{t.odds_max ? ` – ${t.odds_max}` : '+'}
+                            {t.sample?.length > 0 && <span className="ml-2 text-gray-600">({t.sample.join(', ')}…)</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        disabled={balancing}
+                        onClick={async () => {
+                          setBalancing(true);
+                          try {
+                            await api.post(`/golf/leagues/${leagueId}/tiers/auto-balance`, {});
+                            setBalancePreview(null);
+                            setBalanceDone(true);
+                            setTimeout(() => setBalanceDone(false), 4000);
+                          } catch { /* silent */ }
+                          setBalancing(false);
+                        }}
+                        className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-sm py-2.5 rounded-xl transition-colors"
+                      >
+                        {balancing ? 'Applying…' : 'Confirm'}
+                      </button>
+                      <button onClick={() => setBalancePreview(null)}
+                        className="bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold text-sm px-4 py-2.5 rounded-xl transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {balanceDone && <p className="text-green-400 text-xs mb-2">✓ Tiers rebalanced!</p>}
+
+              <button
+                disabled={balancing}
+                onClick={async () => {
+                  setBalancing(true);
+                  try {
+                    const r = await api.post(`/golf/leagues/${leagueId}/tiers/auto-balance`, { preview: true });
+                    setBalancePreview(r.data);
+                  } catch { /* silent */ }
+                  setBalancing(false);
+                }}
+                className="text-sm bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                {balancing ? 'Loading…' : 'Preview Rebalance'}
+              </button>
+            </div>
+          )}
 
           {/* Referral link */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
@@ -3573,7 +3651,7 @@ export default function GolfLeague() {
         <PGALiveTab leagueId={id} league={league} />
       )}
       {tab === 'commissioner' && isComm && (
-        <CommissionerTab leagueId={id} leagueName={league.name} members={members} />
+        <CommissionerTab leagueId={id} leagueName={league.name} members={members} league={league} />
       )}
     </div>
   );

@@ -778,6 +778,17 @@ router.post('/admin/dev/sync-pool-tiers', superadmin, (req, res) => {
 // Body: { tournament_id } (required)
 
 router.post('/admin/dev/sync-espn-field', superadmin, async (req, res) => {
+  const https = require('https');
+  function espnFetch(url) {
+    return new Promise((resolve) => {
+      https.get(url, resp => {
+        let body = '';
+        resp.on('data', chunk => body += chunk);
+        resp.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve(null); } });
+      }).on('error', () => resolve(null));
+    });
+  }
+
   try {
     const { tournament_id } = req.body;
     if (!tournament_id) return res.status(400).json({ error: 'tournament_id required' });
@@ -786,42 +797,83 @@ router.post('/admin/dev/sync-espn-field', superadmin, async (req, res) => {
     if (!tourn) return res.status(404).json({ error: 'Tournament not found' });
     if (!tourn.espn_event_id) return res.status(400).json({ error: 'Tournament has no espn_event_id' });
 
-    // Fetch from ESPN scoreboard
-    const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=${tourn.espn_event_id}`;
-    const espnData = await new Promise((resolve, reject) => {
-      const https = require('https');
-      https.get(espnUrl, (resp) => {
-        let body = '';
-        resp.on('data', chunk => body += chunk);
-        resp.on('end', () => {
-          try { resolve(JSON.parse(body)); } catch (e) { reject(new Error('ESPN JSON parse error')); }
-        });
-      }).on('error', reject);
-    });
+    const eid = tourn.espn_event_id;
 
-    const events = espnData.events || [];
+    // ── Step 1: Fetch ESPN scoreboard for entry list ──────────────────────────
+    const espnData = await espnFetch(`https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=${eid}`);
+    const events = espnData?.events || [];
     if (!events.length) return res.status(502).json({ error: 'No events returned from ESPN' });
 
     const competitors = (events[0].competitions || []).flatMap(c => c.competitors || []);
     if (!competitors.length) return res.status(502).json({ error: 'No competitors found in ESPN response' });
 
-    // Upsert into golf_tournament_fields + golf_players
-    const _getGP  = db.prepare('SELECT * FROM golf_players WHERE name = ? LIMIT 1');
-    const _insGP  = db.prepare('INSERT OR IGNORE INTO golf_players (id, name, is_active, world_ranking) VALUES (?, ?, 1, ?)');
-    const _insTF  = db.prepare(`
+    // Build espnId → American odds map from scoreboard (sometimes included)
+    const scoreboardOdds = {};
+    for (const c of competitors) {
+      if (c.athlete?.id && c.moneyLine != null) {
+        scoreboardOdds[String(c.athlete.id)] = c.moneyLine;
+      }
+    }
+
+    // ── Step 2: Fetch ESPN odds endpoint for sportsbook odds ──────────────────
+    let oddsMap = {}; // espn player id → { odds_display, odds_decimal }
+    try {
+      const oddsData = await espnFetch(
+        `https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/${eid}/competitions/${eid}/odds`
+      );
+      const items = oddsData?.items || [];
+      // Find item with futures (player-level odds)
+      for (const item of items) {
+        const futures = item.futures || [];
+        if (!futures.length) continue;
+        for (const f of futures) {
+          const espnPlayerId = String(f.athlete?.id || '');
+          const american = parseInt(f.value || f.current?.moneyLine || 0);
+          if (!espnPlayerId || american <= 0) continue;
+          // Convert American odds (+1500) to display ("15:1") and decimal (16.0)
+          const ratio = american / 100;
+          const nice = ratio < 5   ? Math.round(ratio * 4) / 4 :
+                       ratio < 20  ? Math.round(ratio * 2) / 2 :
+                       ratio < 100 ? Math.round(ratio / 5) * 5 :
+                                     Math.round(ratio / 25) * 25;
+          oddsMap[espnPlayerId] = { odds_display: `${nice}:1`, odds_decimal: nice + 1 };
+        }
+        break; // use first provider with futures
+      }
+    } catch (oddsErr) {
+      console.warn('[admin] ESPN odds fetch non-fatal:', oddsErr.message);
+    }
+
+    // Also merge scoreboard odds for any not already in oddsMap
+    for (const [espnId, american] of Object.entries(scoreboardOdds)) {
+      if (!oddsMap[espnId] && american > 0) {
+        const ratio = american / 100;
+        const nice = ratio < 5   ? Math.round(ratio * 4) / 4 :
+                     ratio < 20  ? Math.round(ratio * 2) / 2 :
+                     ratio < 100 ? Math.round(ratio / 5) * 5 :
+                                   Math.round(ratio / 25) * 25;
+        oddsMap[espnId] = { odds_display: `${nice}:1`, odds_decimal: nice + 1 };
+      }
+    }
+
+    // ── Step 3: Upsert golf_tournament_fields + golf_players ──────────────────
+    const _getGP = db.prepare('SELECT * FROM golf_players WHERE name = ? LIMIT 1');
+    const _insGP = db.prepare('INSERT OR IGNORE INTO golf_players (id, name, is_active, world_ranking) VALUES (?, ?, 1, ?)');
+    const _insTF = db.prepare(`
       INSERT OR REPLACE INTO golf_tournament_fields
-        (id, tournament_id, player_name, player_id, espn_player_id, world_ranking)
-      VALUES (?, ?, ?, ?, ?, ?)
+        (id, tournament_id, player_name, player_id, espn_player_id, world_ranking, odds_display, odds_decimal)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    const _updGP = db.prepare('UPDATE golf_players SET odds_display = ?, odds_decimal = ? WHERE id = ?');
 
     db.prepare('DELETE FROM golf_tournament_fields WHERE tournament_id = ?').run(tournament_id);
 
     const fieldPlayers = [];
     db.transaction(() => {
       for (const c of competitors) {
-        const name     = c.athlete?.displayName || c.athlete?.fullName;
-        const espnId   = String(c.athlete?.id || '');
-        const ranking  = c.athlete?.ranking ? parseInt(c.athlete.ranking) : null;
+        const name    = c.athlete?.displayName || c.athlete?.fullName;
+        const espnId  = String(c.athlete?.id || '');
+        const ranking = c.athlete?.ranking ? parseInt(c.athlete.ranking) : null;
         if (!name) continue;
 
         let gp = _getGP.get(name);
@@ -831,12 +883,21 @@ router.post('/admin/dev/sync-espn-field', superadmin, async (req, res) => {
         }
         if (!gp) continue;
 
-        _insTF.run(uuidv4(), tournament_id, name, gp.id, espnId, ranking || gp.world_ranking || 200);
-        fieldPlayers.push({ name, espnId, world_ranking: ranking || gp.world_ranking });
+        const playerOdds = oddsMap[espnId] || null;
+        _insTF.run(
+          uuidv4(), tournament_id, name, gp.id, espnId,
+          ranking || gp.world_ranking || 200,
+          playerOdds?.odds_display || null,
+          playerOdds?.odds_decimal || null
+        );
+        // Update global player record with current-week odds if available
+        if (playerOdds) _updGP.run(playerOdds.odds_display, playerOdds.odds_decimal, gp.id);
+
+        fieldPlayers.push({ name, espnId, world_ranking: ranking || gp.world_ranking, ...playerOdds });
       }
     })();
 
-    // Rebuild pool_tier_players for any pool leagues pointing at this tournament
+    // ── Step 4: Rebuild pool_tier_players (now with updated odds) ─────────────
     const affectedLeagues = db.prepare(
       "SELECT * FROM golf_leagues WHERE format_type = 'pool' AND pool_tournament_id = ? AND status != 'archived'"
     ).all(tournament_id);
@@ -858,17 +919,18 @@ router.post('/admin/dev/sync-espn-field', superadmin, async (req, res) => {
         .run(league.id, tournament_id);
 
       const allTF = db.prepare(`
-        SELECT gp.* FROM golf_players gp
+        SELECT gp.*, tf.odds_display AS tf_od, tf.odds_decimal AS tf_dec
+        FROM golf_players gp
         INNER JOIN golf_tournament_fields tf ON tf.player_id = gp.id AND tf.tournament_id = ?
-        ORDER BY gp.world_ranking ASC
+        ORDER BY COALESCE(tf.odds_decimal, gp.odds_decimal, 999) ASC
       `).all(tournament_id);
 
       let count = 0;
       db.transaction(() => {
         for (const p of allTF) {
-          const gen = (!p.odds_display || !p.odds_decimal) ? _rankToOdds(p.world_ranking || 200) : null;
-          const odds_display = p.odds_display || gen.odds_display;
-          const odds_decimal = p.odds_decimal || gen.odds_decimal;
+          const gen = (!p.tf_od && !p.odds_display) ? _rankToOdds(p.world_ranking || 200) : null;
+          const odds_display = p.tf_od  || p.odds_display  || gen.odds_display;
+          const odds_decimal = p.tf_dec || p.odds_decimal  || gen.odds_decimal;
           let tierNum = tiersConfig[tiersConfig.length - 1]?.tier || 1;
           for (const t of tiersConfig) {
             if (odds_decimal >= _oddsToDecimal(t.odds_min) && odds_decimal <= _oddsToDecimal(t.odds_max)) { tierNum = t.tier; break; }
@@ -881,7 +943,8 @@ router.post('/admin/dev/sync-espn-field', superadmin, async (req, res) => {
       rebuildResults.push({ league: league.name, players_assigned: count });
     }
 
-    res.json({ ok: true, tournament: tourn.name, espn_event_id: tourn.espn_event_id, field_size: fieldPlayers.length, leagues_rebuilt: rebuildResults });
+    const oddsCount = Object.keys(oddsMap).length;
+    res.json({ ok: true, tournament: tourn.name, espn_event_id: eid, field_size: fieldPlayers.length, odds_fetched: oddsCount, leagues_rebuilt: rebuildResults });
   } catch (err) {
     console.error('[admin] sync-espn-field error:', err);
     res.status(500).json({ error: err.message });

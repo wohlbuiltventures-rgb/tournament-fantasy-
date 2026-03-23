@@ -499,6 +499,7 @@ export default function CreateGolfLeague() {
   const [promoCode, setPromoCode] = useState(searchParams.get('promo') || '');
   const [promoStatus, setPromoStatus] = useState(null); // null | { valid, label, discountType, discountValue } | { error }
   const [promoChecking, setPromoChecking] = useState(false);
+  const [tiersAutoBalanced, setTiersAutoBalanced] = useState(false);
 
   useEffect(() => {
     api.get('/golf/tournaments').then(res => {
@@ -512,6 +513,28 @@ export default function CreateGolfLeague() {
   useEffect(() => {
     if (promoCode && format === 'pool') validatePromo(promoCode);
   }, []); // eslint-disable-line
+
+  // Auto-balance tier suggestions when tournament is selected
+  useEffect(() => {
+    if (format !== 'pool' || !form.pool_tournament_id) {
+      setTiersAutoBalanced(false);
+      return;
+    }
+    const tierCount = form.pool_tiers.length || 6;
+    api.get(`/golf/tournaments/${form.pool_tournament_id}/suggested-tiers?count=${tierCount}`)
+      .then(res => {
+        const suggested = res.data.tiers.map((t, i) => ({
+          tier:          t.tier,
+          odds_min:      t.odds_min,
+          odds_max:      t.odds_max,
+          picks:         form.pool_tiers[i]?.picks ?? 1,
+          approxPlayers: t.approxPlayers,
+        }));
+        set('pool_tiers', suggested);
+        setTiersAutoBalanced(true);
+      })
+      .catch(() => setTiersAutoBalanced(false));
+  }, [form.pool_tournament_id]); // eslint-disable-line
 
   async function validatePromo(code) {
     if (!code.trim()) { setPromoStatus(null); return; }
@@ -744,10 +767,17 @@ export default function CreateGolfLeague() {
                 {form.pick_sheet_format === 'tiered' && (
                   <div className="mt-4">
                     <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2.5">Tier Setup</p>
-                    <p className="text-gray-600 text-xs mb-3">Customize your tiers. Members will pick from each.</p>
+                    {tiersAutoBalanced ? (
+                      <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/25 rounded-lg px-3 py-2 mb-3">
+                        <span className="text-green-400 text-xs">⚖️</span>
+                        <p className="text-green-400 text-xs font-medium">Tiers auto-balanced for this tournament's field. Adjust before launching.</p>
+                      </div>
+                    ) : (
+                      <p className="text-gray-600 text-xs mb-3">Customize your tiers. Members will pick from each.</p>
+                    )}
                     <TierConfigEditor
                       tiers={form.pool_tiers}
-                      onChange={v => set('pool_tiers', v)}
+                      onChange={v => { set('pool_tiers', v); setTiersAutoBalanced(false); }}
                     />
                   </div>
                 )}

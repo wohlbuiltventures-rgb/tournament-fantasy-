@@ -1023,7 +1023,9 @@ function DevToolsTab() {
     if (action === 'syncEspnField' && r.field_size != null) {
       return (
         <div style={{ marginTop: 8 }}>
-          <div style={{ color: '#4ade80', fontSize: 12, lineHeight: 1.6 }}>✓ {r.tournament}: {r.field_size} players</div>
+          <div style={{ color: '#4ade80', fontSize: 12, lineHeight: 1.6 }}>
+            ✓ {r.tournament}: {r.field_size} players{r.odds_fetched ? `, ${r.odds_fetched} odds` : ''}
+          </div>
           {(r.leagues_rebuilt || []).map((row, i) => (
             <div key={i} style={{ color: row.skipped ? '#fbbf24' : '#60a5fa', fontSize: 12, lineHeight: 1.6, paddingLeft: 10 }}>
               {row.skipped ? `⚠ ${row.league}: ${row.skipped}` : `↳ ${row.league}: ${row.players_assigned} assigned`}
