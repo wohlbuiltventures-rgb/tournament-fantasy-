@@ -749,4 +749,78 @@ try {
   console.error('[golf-db] Waitlist table migration error:', e.message);
 }
 
+// ── Auto-assign tier players for pool leagues missing them ────────────────────
+// Runs at startup for any pool league that has pool_tournament_id set but no
+// pool_tier_players rows yet (e.g. newly-pointed leagues or fresh deploys).
+try {
+  function _oddsToDecimal(str) {
+    if (!str) return 999;
+    const parts = String(str).split(':');
+    if (parts.length !== 2) return 999;
+    const n = parseFloat(parts[0]), d = parseFloat(parts[1]);
+    if (isNaN(n) || isNaN(d) || d === 0) return 999;
+    return n / d + 1;
+  }
+  function _rankToOddsLocal(rank) {
+    const r = rank || 9999;
+    const bands = [
+      { minRank: 1,   maxRank: 5,    minOdds: 8,   maxOdds: 15   },
+      { minRank: 6,   maxRank: 15,   minOdds: 18,  maxOdds: 33   },
+      { minRank: 16,  maxRank: 30,   minOdds: 35,  maxOdds: 80   },
+      { minRank: 31,  maxRank: 60,   minOdds: 90,  maxOdds: 150  },
+      { minRank: 61,  maxRank: 100,  minOdds: 175, maxOdds: 400  },
+      { minRank: 101, maxRank: 9999, minOdds: 500, maxOdds: 2000 },
+    ];
+    const band = bands.find(b => r >= b.minRank && r <= b.maxRank) || bands[bands.length - 1];
+    const bandSize = Math.max(1, band.maxRank - band.minRank);
+    const pos = Math.min(1, (r - band.minRank) / bandSize);
+    const rawOdds = Math.round(band.minOdds + pos * (band.maxOdds - band.minOdds));
+    const nice = rawOdds < 20 ? Math.round(rawOdds / 2) * 2 :
+                 rawOdds < 100 ? Math.round(rawOdds / 5) * 5 :
+                 Math.round(rawOdds / 25) * 25;
+    return { odds_display: `${nice}:1`, odds_decimal: nice + 1 };
+  }
+  function _pickTier(odds_decimal, tiersConfig) {
+    const dec = odds_decimal || 999;
+    for (const t of tiersConfig) {
+      if (dec >= _oddsToDecimal(t.odds_min) && dec <= _oddsToDecimal(t.odds_max)) return t.tier;
+    }
+    return tiersConfig[tiersConfig.length - 1]?.tier || 1;
+  }
+
+  const _poolLeagues = db.prepare(
+    "SELECT * FROM golf_leagues WHERE format_type = 'pool' AND pool_tournament_id IS NOT NULL AND status != 'archived'"
+  ).all();
+
+  const _insTP = db.prepare(`
+    INSERT OR REPLACE INTO pool_tier_players
+      (id, league_id, tournament_id, player_id, player_name, tier_number,
+       odds_display, odds_decimal, world_ranking, salary, manually_overridden)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+  `);
+
+  for (const _league of _poolLeagues) {
+    const _existing = db.prepare(
+      'SELECT COUNT(*) as cnt FROM pool_tier_players WHERE league_id = ? AND tournament_id = ?'
+    ).get(_league.id, _league.pool_tournament_id);
+    if (_existing.cnt > 0) continue;
+
+    let _tiersConfig = [];
+    try { _tiersConfig = JSON.parse(_league.pool_tiers || '[]'); } catch (_) {}
+    if (!_tiersConfig.length) continue;
+
+    const _players = db.prepare('SELECT * FROM golf_players WHERE is_active = 1 ORDER BY world_ranking ASC').all();
+    db.transaction(() => {
+      for (const _p of _players) {
+        const _gen = (!_p.odds_display || !_p.odds_decimal) ? _rankToOddsLocal(_p.world_ranking) : null;
+        const _od = _p.odds_display || _gen.odds_display;
+        const _dec = _p.odds_decimal || _gen.odds_decimal;
+        const _tier = _pickTier(_dec, _tiersConfig);
+        _insTP.run(uuidv4(), _league.id, _league.pool_tournament_id, _p.id, _p.name, _tier, _od, _dec, _p.world_ranking, 0);
+      }
+    })();
+    console.log(`[golf-db] Auto-assigned tier players for league ${_league.id} (${_league.name})`);
+  }
+} catch (e) { console.error('[golf-db] Auto-assign tier players error:', e.message); }
+
 module.exports = db;

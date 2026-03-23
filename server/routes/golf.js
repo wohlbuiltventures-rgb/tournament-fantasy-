@@ -544,6 +544,11 @@ router.get('/leagues/:id/pga-live', authMiddleware, async (req, res) => {
       `).all(req.params.id, req.user.id).map(r => r.player_name);
     }
 
+    // Pre-tournament: skip ESPN fetch entirely for scheduled (not-yet-started) tournaments
+    if (tourn && tourn.status === 'scheduled') {
+      return res.json({ competitors: [], tournament: tourn, my_pick_names: myPickNames, isScheduled: true });
+    }
+
     const eventId = tourn?.espn_event_id;
     if (!eventId) {
       return res.json({ competitors: [], tournament: tourn, my_pick_names: myPickNames, no_event: true });
