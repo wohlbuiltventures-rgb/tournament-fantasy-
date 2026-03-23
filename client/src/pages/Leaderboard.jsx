@@ -147,7 +147,7 @@ function SgBonusCard({ sgLeader, sgBoard, bonus }) {
                   )}
                 </div>
               </div>
-              <svg className="shrink-0" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6-6 6 6"/><path d="M4 15h16v4H4z"/><path d="M4 11l2 4h12l2-4"/></svg>
+              <span style={{ fontSize: '2rem' }}>👑</span>
             </div>
           </div>
 
