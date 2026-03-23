@@ -307,6 +307,24 @@ try {
   }
 } catch (e) { console.error('[golf-db] COLLIN promo code seed error:', e.message); }
 
+// ── Fix league ff568722: point to Houston Open, unlock picks ─────────────────
+// League was created pointing to Valspar (wrong tournament). Picks were
+// auto-locked when Valspar's lock_time passed. Reassign to Houston Open and
+// reset picks_locked + picks_lock_time so the countdown recomputes correctly.
+try {
+  const _hou = db.prepare("SELECT id FROM golf_tournaments WHERE name LIKE '%Houston Open%'").get();
+  if (_hou) {
+    db.prepare(`
+      UPDATE golf_leagues
+      SET pool_tournament_id = ?,
+          picks_locked       = 0,
+          picks_lock_time    = NULL
+      WHERE id = 'ff568722-fbe9-4695-86a8-a31287c22841'
+        AND (pool_tournament_id != ? OR picks_locked = 1)
+    `).run(_hou.id, _hou.id);
+  }
+} catch (e) { console.error('[golf-db] League ff568722 tournament fix error:', e.message); }
+
 // ── Beta Group 1.0 — status, scoring_style, and test prize pool ───────────────
 try {
   db.prepare(`
