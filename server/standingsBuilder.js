@@ -126,15 +126,27 @@ function buildStandings(leagueId) {
         ORDER BY g.game_date ASC
       `).all(player.player_id);
 
-      // Projected ETP = season_ppg × games_remaining
+      // Projected ETP = current_pts + (alive_players × tourney_ppg × games_remaining)
       // games_remaining: First Four teams can play up to 7 games total;
       // all others up to 6. Subtract games already played (game_log rows).
       // Eliminated players always get 0.
+      //
+      // Rate uses ACTUAL tournament points-per-game, not season PPG.
+      // This correctly reflects upset teams — an 11-seed that's scored well
+      // in the tournament projects forward from their actual pace, not seed odds.
       const totalPossible  = player.is_first_four ? 7 : 6;
+      const gamesPlayed    = gameLog.length;
       const gamesRemaining = player.is_eliminated
         ? 0
-        : Math.max(0, totalPossible - gameLog.length);
-      const projEtp = Math.round(player.season_ppg * gamesRemaining * 10) / 10;
+        : Math.max(0, totalPossible - gamesPlayed);
+
+      // tourney_ppg: points scored in this tournament ÷ games played.
+      // Fall back to season_ppg only if the player hasn't played yet.
+      const tourneyPpg = gamesPlayed > 0
+        ? (stats?.total_points ?? 0) / gamesPlayed
+        : player.season_ppg;
+
+      const projEtp = Math.round(tourneyPpg * gamesRemaining * 10) / 10;
 
       return {
         player_id:     player.player_id,
@@ -144,6 +156,7 @@ function buildStandings(leagueId) {
         seed:          player.seed,
         is_eliminated:  player.is_eliminated,
         season_ppg:     player.season_ppg,
+        tourney_ppg:    Math.round(tourneyPpg * 10) / 10,
         region:         player.region,
         is_first_four:  player.is_first_four,
         jersey_number:  player.jersey_number || '',
