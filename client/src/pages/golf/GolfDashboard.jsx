@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Ticket, Plus, Flag, ChevronRight, Users, Calendar, Trophy, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api';
@@ -137,7 +137,8 @@ function NextTournamentBanner({ tournament }) {
 
 // ── League Card ────────────────────────────────────────────────────────────────
 
-function LeagueCard({ league, userId, past = false }) {
+function LeagueCard({ league, userId, picksStatus, past = false }) {
+  const navigate = useNavigate();
   const isComm = league.commissioner_id === userId;
   const meta   = getMeta(league.format_type);
 
@@ -224,6 +225,29 @@ function LeagueCard({ league, userId, past = false }) {
 
         {/* CTA row */}
         <div className="mt-auto pt-1">
+          {/* Pool picks CTA */}
+          {isPool && !past && picksStatus && (() => {
+            const { submitted, picks_locked } = picksStatus;
+            const target = `/golf/league/${league.id}?tab=roster`;
+            if (picks_locked) return (
+              <button
+                onClick={e => { e.preventDefault(); navigate(target); }}
+                style={{ width: '100%', background: 'transparent', border: '1px solid #374151', color: '#9ca3af', fontSize: 13, fontWeight: 600, padding: '8px', borderRadius: 8, cursor: 'pointer', marginBottom: 6 }}
+              >🔒 View My Picks</button>
+            );
+            if (submitted) return (
+              <button
+                onClick={e => { e.preventDefault(); navigate(target); }}
+                style={{ width: '100%', background: 'transparent', border: '1.5px solid #00e87a', color: '#00e87a', fontSize: 13, fontWeight: 700, padding: '8px', borderRadius: 8, cursor: 'pointer', marginBottom: 6 }}
+              >✅ View / Edit Picks</button>
+            );
+            return (
+              <button
+                onClick={e => { e.preventDefault(); navigate(target); }}
+                style={{ width: '100%', background: '#00e87a', border: 'none', color: '#001a0d', fontSize: 13, fontWeight: 700, padding: '8px', borderRadius: 8, cursor: 'pointer', marginBottom: 6 }}
+              >✏️ Make Picks</button>
+            );
+          })()}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: 'transparent', border: '1.5px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 14, fontWeight: 700, padding: '10px 24px', borderRadius: 8, transition: 'border-color 0.15s, background 0.15s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.background = 'transparent'; }}>
@@ -259,13 +283,26 @@ export default function GolfDashboard() {
   const [nextTournament, setNextTournament] = useState(null);
   const [loading, setLoading]           = useState(true);
   const [pastOpen, setPastOpen]         = useState(false);
+  const [poolPicksMap, setPoolPicksMap] = useState({});
 
   useEffect(() => {
     Promise.all([
       api.get('/golf/leagues'),
       api.get('/golf/tournaments'),
     ]).then(([lr, tr]) => {
-      setLeagues(lr.data.leagues || []);
+      const leaguesList = lr.data.leagues || [];
+      setLeagues(leaguesList);
+      // Fetch picks status for each active pool league
+      leaguesList
+        .filter(l => l.format_type === 'pool' && l.pool_tournament_id)
+        .forEach(l => {
+          api.get(`/golf/leagues/${l.id}/my-roster`)
+            .then(r => setPoolPicksMap(prev => ({
+              ...prev,
+              [l.id]: { submitted: r.data.submitted, picks_locked: r.data.picks_locked },
+            })))
+            .catch(() => {});
+        });
       const tournaments = tr.data.tournaments || [];
       const live = tournaments.find(t => t.status === 'active');
       if (live) { setNextTournament(live); return; }
@@ -384,7 +421,7 @@ export default function GolfDashboard() {
           <SectionHeader label="Active Leagues" count={activeLeagues.length} />
           <div className="grid gap-4 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {activeLeagues.map(l => (
-              <LeagueCard key={l.id} league={l} userId={user?.id} />
+              <LeagueCard key={l.id} league={l} userId={user?.id} picksStatus={poolPicksMap[l.id]} />
             ))}
           </div>
         </div>

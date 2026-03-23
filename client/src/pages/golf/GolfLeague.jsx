@@ -55,7 +55,16 @@ const FORMAT_META = {
 function OverviewTab({ league, members, user, isComm, navigate }) {
   const inviteUrl = `${window.location.origin}/golf/join?code=${league.invite_code}`;
   const [copied, setCopied] = useState(false);
+  const [picksStatus, setPicksStatus] = useState(null);
   const fmt = FORMAT_META[league.format_type] || FORMAT_META.tourneyrun;
+
+  useEffect(() => {
+    if (league.format_type === 'pool' && league.pool_tournament_id) {
+      api.get(`/golf/leagues/${league.id}/my-roster`)
+        .then(r => setPicksStatus({ submitted: r.data.submitted, picks_locked: r.data.picks_locked }))
+        .catch(() => {});
+    }
+  }, [league.id, league.format_type, league.pool_tournament_id]); // eslint-disable-line
 
   function copyInvite() {
     navigator.clipboard.writeText(inviteUrl).then(() => {
@@ -168,27 +177,58 @@ function OverviewTab({ league, members, user, isComm, navigate }) {
         </div>
       </div>
 
-      {/* Pool mode: picks CTA for members (only if open) */}
-      {league.format_type === 'pool' && league.pool_tournament_id && !league.picks_locked && (
-        <div style={{ background: 'rgba(0,232,122,0.06)', border: '1px solid rgba(0,232,122,0.2)', borderRadius: 16, padding: '20px' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <Flag className="w-4 h-4" style={{ color: '#00e87a' }} />
-            <span style={{ color: '#00e87a', fontWeight: 700, fontSize: 14 }}>Make Your Picks</span>
-            {league.pool_tournament_name && (
-              <span className="text-gray-500 text-xs ml-auto">{league.pool_tournament_name}</span>
-            )}
+      {/* Pool mode: picks CTA */}
+      {league.format_type === 'pool' && league.pool_tournament_id && picksStatus && (() => {
+        const { submitted, picks_locked } = picksStatus;
+        const picksTarget = `?tab=roster`;
+        if (picks_locked) return (
+          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid #374151', borderRadius: 16, padding: '20px' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <span style={{ fontSize: 16 }}>🔒</span>
+              <span style={{ color: '#9ca3af', fontWeight: 700, fontSize: 14 }}>Picks Locked</span>
+              {league.pool_tournament_name && <span className="text-gray-600 text-xs ml-auto">{league.pool_tournament_name}</span>}
+            </div>
+            <p className="text-gray-500 text-sm mb-4">The tournament has started. Your picks are locked in.</p>
+            <button
+              onClick={() => navigate(picksTarget)}
+              style={{ width: '100%', background: 'transparent', border: '1px solid #374151', color: '#9ca3af', fontWeight: 700, fontSize: 14, padding: '12px 24px', borderRadius: 8, cursor: 'pointer' }}
+            >🔒 View My Picks</button>
           </div>
-          <p className="text-gray-400 text-sm mb-4">Select your golfers before picks lock. Use the Roster tab or click below.</p>
-          <button
-            onClick={() => navigate(`/golf/league/${league.id}/picks`)}
-            style={{ width: '100%', background: '#00e87a', color: '#001a0d', fontWeight: 700, fontSize: 14, padding: '12px 24px', borderRadius: 8, border: 'none', cursor: 'pointer', transition: 'background 0.15s, transform 0.15s' }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#00cc6a'; e.currentTarget.style.transform = 'scale(1.01)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#00e87a'; e.currentTarget.style.transform = 'scale(1)'; }}
-          >
-            Select Your Players →
-          </button>
-        </div>
-      )}
+        );
+        if (submitted) return (
+          <div style={{ background: 'rgba(0,232,122,0.04)', border: '1px solid rgba(0,232,122,0.25)', borderRadius: 16, padding: '20px' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <span style={{ fontSize: 16 }}>✅</span>
+              <span style={{ color: '#00e87a', fontWeight: 700, fontSize: 14 }}>Picks Submitted</span>
+              {league.pool_tournament_name && <span className="text-gray-500 text-xs ml-auto">{league.pool_tournament_name}</span>}
+            </div>
+            <p className="text-gray-400 text-sm mb-4">You're locked in! You can still edit your picks before tee time.</p>
+            <button
+              onClick={() => navigate(picksTarget)}
+              style={{ width: '100%', background: 'transparent', border: '1.5px solid #00e87a', color: '#00e87a', fontWeight: 700, fontSize: 14, padding: '12px 24px', borderRadius: 8, cursor: 'pointer', transition: 'background 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,232,122,0.08)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            >✅ View / Edit Picks →</button>
+          </div>
+        );
+        return (
+          <div style={{ background: 'rgba(0,232,122,0.06)', border: '1px solid rgba(0,232,122,0.2)', borderRadius: 16, padding: '20px' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Flag className="w-4 h-4" style={{ color: '#00e87a' }} />
+              <span style={{ color: '#00e87a', fontWeight: 700, fontSize: 14 }}>Make Your Picks</span>
+              {league.pool_tournament_name && <span className="text-gray-500 text-xs ml-auto">{league.pool_tournament_name}</span>}
+            </div>
+            <p className="text-gray-400 text-sm mb-1">Pick {league.picks_per_team || 8} golfers before tee time Thursday.</p>
+            <p className="text-gray-600 text-xs mb-4">Picks can be changed until the tournament starts.</p>
+            <button
+              onClick={() => navigate(picksTarget)}
+              style={{ width: '100%', background: '#00e87a', color: '#001a0d', fontWeight: 700, fontSize: 14, padding: '12px 24px', borderRadius: 8, border: 'none', cursor: 'pointer', transition: 'background 0.15s, transform 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#00cc6a'; e.currentTarget.style.transform = 'scale(1.01)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#00e87a'; e.currentTarget.style.transform = 'scale(1)'; }}
+            >📋 Make Your Picks →</button>
+          </div>
+        );
+      })()}
 
       {/* Commissioner actions */}
       {isComm && (
