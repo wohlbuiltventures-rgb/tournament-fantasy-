@@ -520,6 +520,7 @@ if (existingCount !== GOLF_PLAYERS.length || hasGotterup === 0) {
     db.prepare('DELETE FROM golf_core_players').run();
     db.prepare('DELETE FROM golf_auction_bids').run();
     db.prepare('DELETE FROM golf_faab_bids').run();
+    db.prepare('DELETE FROM golf_scores').run();
     db.prepare('DELETE FROM golf_players').run();
     const ins = db.prepare(`INSERT INTO golf_players (id, name, country, world_ranking, owgr_points, salary, is_active) VALUES (?, ?, ?, ?, 0, ?, 1)`);
     for (const p of GOLF_PLAYERS) ins.run(uuidv4(), p.name, p.country, p.world_ranking, p.salary);
