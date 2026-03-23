@@ -158,13 +158,19 @@ function PoolTierSelector({ maxTeams, poolTier, onChange }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <style>{`@media (max-width:480px){.pool-tier-top{grid-template-columns:repeat(2,1fr)!important}}`}</style>
-      <div className="pool-tier-top" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-        {POOL_TIERS.slice(0, 3).map(t => <TierBtn key={t.maxTeams} t={t} />)}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8 }}>
-        {POOL_TIERS.slice(3).map(t => <TierBtn key={t.maxTeams} t={t} />)}
+    <div>
+      <style>{`
+        @media (max-width:480px) {
+          .max-teams-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .max-teams-grid .enterprise-card { grid-column: 1 / -1; }
+        }
+      `}</style>
+      <div className="max-teams-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+        {POOL_TIERS.map(t => (
+          <div key={t.maxTeams} className={t.tier === 'enterprise' ? 'enterprise-card' : ''}>
+            <TierBtn t={t} />
+          </div>
+        ))}
       </div>
     </div>
   );
