@@ -676,6 +676,7 @@ router.get('/admin/dev/db-health', superadmin, (req, res) => {
     const tables = [
       'golf_leagues', 'golf_league_members', 'golf_players',
       'golf_tournaments', 'golf_scores', 'golf_rosters',
+      'pool_tier_players', 'pool_picks',
       'golf_season_passes', 'golf_pool_entries', 'golf_comm_pro',
       'golf_referral_codes', 'golf_referral_credits',
     ];
@@ -692,6 +693,74 @@ router.get('/admin/dev/db-health', superadmin, (req, res) => {
     ).get()?.t || null;
     res.json({ counts, lastSync, uptime: process.uptime() });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── POST /admin/dev/sync-pool-tiers ──────────────────────────────────────────
+// Re-assign pool_tier_players for one or all pool leagues.
+// Accepts optional body.league_id; if omitted, runs for all pool leagues
+// that have pool_tournament_id set.
+
+router.post('/admin/dev/sync-pool-tiers', superadmin, (req, res) => {
+  try {
+    const filter = req.body.league_id
+      ? 'AND id = ?'
+      : '';
+    const args = req.body.league_id ? [req.body.league_id] : [];
+    const leagues = db.prepare(
+      `SELECT * FROM golf_leagues WHERE format_type = 'pool' AND pool_tournament_id IS NOT NULL AND status != 'archived' ${filter}`
+    ).all(...args);
+
+    if (!leagues.length) return res.status(404).json({ error: 'No matching pool leagues with tournament assigned' });
+
+    const insPlayer = db.prepare(`
+      INSERT OR REPLACE INTO pool_tier_players
+        (id, league_id, tournament_id, player_id, player_name, tier_number,
+         odds_display, odds_decimal, world_ranking, salary, manually_overridden)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+    `);
+
+    const results = [];
+    for (const league of leagues) {
+      const tid = league.pool_tournament_id;
+
+      let tiersConfig = [];
+      try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
+      if (!tiersConfig.length) {
+        results.push({ league: league.name, skipped: 'no tier config' });
+        continue;
+      }
+
+      // Clear non-manually-overridden rows so we get a clean re-assign
+      db.prepare('DELETE FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND manually_overridden = 0')
+        .run(league.id, tid);
+
+      const players = db.prepare('SELECT * FROM golf_players WHERE is_active = 1 ORDER BY world_ranking ASC').all();
+      let count = 0;
+
+      db.transaction(() => {
+        for (const p of players) {
+          const gen = (!p.odds_display || !p.odds_decimal) ? _rankToOdds(p.world_ranking) : null;
+          const odds_display = p.odds_display || gen.odds_display;
+          const odds_decimal = p.odds_decimal || gen.odds_decimal;
+          // Pick tier using league's own tier config
+          const dec = odds_decimal || 999;
+          let tierNum = tiersConfig[tiersConfig.length - 1]?.tier || 1;
+          for (const t of tiersConfig) {
+            if (dec >= _oddsToDecimal(t.odds_min) && dec <= _oddsToDecimal(t.odds_max)) { tierNum = t.tier; break; }
+          }
+          insPlayer.run(uuidv4(), league.id, tid, p.id, p.name, tierNum, odds_display, odds_decimal, p.world_ranking);
+          count++;
+        }
+      })();
+
+      results.push({ league: league.name, tournament_id: tid, players_assigned: count });
+    }
+
+    res.json({ ok: true, results });
+  } catch (err) {
+    console.error('[admin] sync-pool-tiers error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.post('/admin/sandbox/auction-draft', superadmin, (req, res) => {

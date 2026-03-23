@@ -816,7 +816,7 @@ try {
         const _od = _p.odds_display || _gen.odds_display;
         const _dec = _p.odds_decimal || _gen.odds_decimal;
         const _tier = _pickTier(_dec, _tiersConfig);
-        _insTP.run(uuidv4(), _league.id, _league.pool_tournament_id, _p.id, _p.name, _tier, _od, _dec, _p.world_ranking, 0);
+        _insTP.run(uuidv4(), _league.id, _league.pool_tournament_id, _p.id, _p.name, _tier, _od, _dec, _p.world_ranking);
       }
     })();
     console.log(`[golf-db] Auto-assigned tier players for league ${_league.id} (${_league.name})`);

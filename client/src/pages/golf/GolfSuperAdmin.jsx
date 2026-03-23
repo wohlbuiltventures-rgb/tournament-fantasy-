@@ -983,10 +983,11 @@ function DevToolsTab() {
     setResults(r => ({ ...r, [action]: null }));
     try {
       let res;
-      if (action === 'sync')    res = await api.post(`/golf/admin/dev/sync/${selectedT}`);
-      if (action === 'email')   res = await api.post('/golf/admin/dev/test-email');
-      if (action === 'sandbox') res = await api.post('/golf/admin/sandbox/auction-draft');
-      if (action === 'valspar') res = await api.post('/golf/admin/dev/create-valspar-test-pool');
+      if (action === 'sync')       res = await api.post(`/golf/admin/dev/sync/${selectedT}`);
+      if (action === 'email')      res = await api.post('/golf/admin/dev/test-email');
+      if (action === 'sandbox')    res = await api.post('/golf/admin/sandbox/auction-draft');
+      if (action === 'valspar')    res = await api.post('/golf/admin/dev/create-valspar-test-pool');
+      if (action === 'syncTiers')  res = await api.post('/golf/admin/dev/sync-pool-tiers');
       setResults(r => ({ ...r, [action]: res?.data }));
       if (action === 'sandbox' && res?.data?.url) navigate(res.data.url);
       if (action === 'valspar' && res?.data?.success) setValsparModal(res.data);
@@ -1007,6 +1008,17 @@ function DevToolsTab() {
     const r = results[action];
     if (!r) return null;
     if (r.error) return <div style={{ color: '#f87171', fontSize: 12, marginTop: 6 }}>⚠ {r.error}</div>;
+    if (action === 'syncTiers' && r.results) {
+      return (
+        <div style={{ marginTop: 8 }}>
+          {r.results.map((row, i) => (
+            <div key={i} style={{ color: row.skipped ? '#fbbf24' : '#4ade80', fontSize: 12, lineHeight: 1.6 }}>
+              {row.skipped ? `⚠ ${row.league}: ${row.skipped}` : `✓ ${row.league}: ${row.players_assigned} players`}
+            </div>
+          ))}
+        </div>
+      );
+    }
     return <div style={{ color: '#4ade80', fontSize: 12, marginTop: 6 }}>✓ {r.message || r.sentTo || 'Done'}</div>;
   }
 
@@ -1136,6 +1148,15 @@ function DevToolsTab() {
             style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             {loading.email ? 'Sending…' : 'Send Test Email'}
           </button>
+        )}
+        {toolCard('⛳🔄', 'Re-Sync Pool Tiers',
+          'Re-assigns players to tiers for all active pool leagues. Run this if picks show 0 players after a new tournament is linked.',
+          'syncTiers',
+          <button onClick={() => run('syncTiers')} disabled={loading.syncTiers}
+            style={{ background: loading.syncTiers ? '#065f46' : '#059669', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: loading.syncTiers ? 'not-allowed' : 'pointer' }}>
+            {loading.syncTiers ? 'Syncing…' : 'Re-Sync Tiers →'}
+          </button>,
+          '#071a0f', '#05966933'
         )}
         {toolCard('🗄️', 'DB Health Check',
           'Current row counts for all golf tables.',
