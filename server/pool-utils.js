@@ -35,7 +35,7 @@ function applyDropScoring(picks, dropCount) {
   });
 
   if (dropCount <= 0) {
-    const counting = enriched.filter(p => p._hasRounds && !p._iMC);
+    const counting = enriched.filter(p => p._hasRounds && !p._isMC);
     return {
       picks: enriched,
       team_score:     counting.reduce((s, p) => s + p.player_total, 0),
