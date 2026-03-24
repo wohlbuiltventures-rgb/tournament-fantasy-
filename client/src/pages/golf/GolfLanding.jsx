@@ -31,18 +31,8 @@ function useFadeIn(threshold = 0.1) {
 }
 
 function Section({ children, className = '', style = {} }) {
-  const [ref, visible] = useFadeIn();
   return (
-    <div
-      ref={ref}
-      className={className}
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(24px)',
-        transition: 'opacity 0.55s ease, transform 0.55s ease',
-        ...style,
-      }}
-    >
+    <div className={className} style={style}>
       {children}
     </div>
   );
@@ -512,53 +502,6 @@ export default function GolfLanding() {
       {/* ──────────────────────────────────────────────────────────────────── */}
       {/* S3: The Hook                                                         */}
       {/* ──────────────────────────────────────────────────────────────────── */}
-      <Section className="max-w-4xl mx-auto px-4 py-16 sm:py-20">
-        <h2 className="text-3xl sm:text-4xl font-black text-white text-center mb-4">
-          Tired of losing your entry on hole 1?
-        </h2>
-        <p className="text-gray-400 text-center text-base sm:text-lg max-w-2xl mx-auto mb-12 leading-relaxed">
-          TourneyRun is season-long fantasy golf — draft once, earn points every weekend all 13 events.
-        </p>
-
-        <div className="grid sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
-          {[
-            {
-              icon: <XCircle className="w-5 h-5 text-red-400 shrink-0" />,
-              label: 'Daily DFS',
-              sub: 'DraftKings / FanDuel',
-              desc: 'Pay every single week',
-              cls: 'border-red-900/30 bg-red-950/20',
-            },
-            {
-              icon: <XCircle className="w-5 h-5 text-orange-400 shrink-0" />,
-              label: 'Bracket pools',
-              sub: 'Pick-the-winner format',
-              desc: 'Busted by Sunday',
-              cls: 'border-orange-900/30 bg-orange-950/20',
-            },
-            {
-              icon: <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />,
-              label: 'TourneyRun',
-              sub: 'Season-long, salary cap',
-              desc: 'One draft, all season long',
-              cls: 'border-green-800/40 bg-green-950/20 ring-1 ring-green-500/20',
-              highlight: true,
-            },
-          ].map(({ icon, label, sub, desc, cls, highlight }) => (
-            <div key={label} className={`rounded-2xl border p-5 ${cls}`}>
-              <div className="flex items-center gap-2 mb-2">
-                {icon}
-                <div>
-                  <div className={`font-bold text-sm ${highlight ? 'text-green-300' : 'text-white'}`}>{label}</div>
-                  <div className="text-gray-600 text-[11px]">{sub}</div>
-                </div>
-              </div>
-              <p className={`text-sm ${highlight ? 'text-green-400' : 'text-gray-500'}`}>{desc}</p>
-            </div>
-          ))}
-        </div>
-      </Section>
-
       {/* ──────────────────────────────────────────────────────────────────── */}
       {/* S4: Pick your format                                                 */}
       {/* ──────────────────────────────────────────────────────────────────── */}
@@ -625,36 +568,12 @@ export default function GolfLanding() {
                   ))}
                 </ul>
                 <div className="mt-4 pt-3 border-t border-yellow-900/30">
-                  {poolNotifyStatus === 'done' ? (
-                    <p style={{ color: '#4ade80', fontSize: 12, fontWeight: 600 }}>✓ You're on the list!</p>
-                  ) : (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <input
-                        type="email"
-                        placeholder="your@email.com"
-                        value={poolEmail}
-                        onChange={e => setPoolEmail(e.target.value)}
-                        style={{ flex: 1, background: '#111', border: '1px solid #374151', borderRadius: 8, color: '#d1d5db', fontSize: 12, padding: '7px 10px', outline: 'none', minWidth: 0 }}
-                      />
-                      <button
-                        disabled={poolNotifyStatus === 'loading'}
-                        onClick={async () => {
-                          if (!poolEmail) return;
-                          setPoolStatus('loading');
-                          try {
-                            await api.post('/golf/waitlist', { email: poolEmail, format: 'golf_pool' });
-                            setPoolStatus('done');
-                          } catch {
-                            setPoolStatus('err');
-                            setTimeout(() => setPoolStatus('idle'), 3000);
-                          }
-                        }}
-                        style={{ background: '#f59e0b', color: '#451a03', fontWeight: 700, fontSize: 12, border: 'none', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                      >
-                        {poolNotifyStatus === 'loading' ? '…' : poolNotifyStatus === 'err' ? 'Try again' : 'Notify Me'}
-                      </button>
-                    </div>
-                  )}
+                  <Link
+                    to="/golf/create"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f59e0b', color: '#451a03', fontWeight: 700, fontSize: 13, padding: '9px 18px', borderRadius: 8, textDecoration: 'none' }}
+                  >
+                    Start a Pool <ArrowRight size={14} />
+                  </Link>
                 </div>
               </div>
             </div>
@@ -1103,7 +1022,7 @@ export default function GolfLanding() {
               {[
                 { feature: 'Live scoring',                      us: '✅ Included free',      them: '❌ Paid upgrade only',   highlight: true  },
                 { feature: 'Auto standings email after every round', us: '✅ Automatic',     them: '❌ Manual',              highlight: false },
-                { feature: 'Commissioner price',                us: '✅ $19.99 total',        them: '❌ $30–$110 per league', highlight: true  },
+                { feature: 'Commissioner price',                us: '✅ $9.99/tournament',    them: '❌ $30–$110 per league', highlight: true  },
                 { feature: 'Mobile-first design',               us: '✅ Modern & fast',       them: '❌ Desktop only, dated', highlight: false },
                 { feature: 'ESPN auto-sync',                    us: '✅ Built in',            them: '⚠️ Varies',             highlight: true  },
                 { feature: 'FAAB waiver wire',                  us: '✅ Full support',        them: '⚠️ Some do',            highlight: false },
