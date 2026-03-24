@@ -1154,4 +1154,32 @@ try {
   }
 } catch (e) { console.log('[golf-db] manual odds migration skipped:', e.message); }
 
+// ── Houston Open additional DraftKings odds corrections ───────────────────────
+try {
+  const _HOU_LEAGUE = 'ff568722-fbe9-4695-86a8-a31287c22841';
+  const _mwl = db.prepare("SELECT odds_display FROM pool_tier_players WHERE player_name = 'Min Woo Lee' AND league_id = ?").get(_HOU_LEAGUE);
+  if (_mwl && _mwl.odds_display !== '15:1') {
+    const MANUAL2 = [
+      { name: 'Min Woo Lee',      tier: 1, odds_display: '15:1',  odds_decimal: 16  },
+      { name: 'Chris Gotterup',   tier: 1, odds_display: '20:1',  odds_decimal: 21  },
+      { name: 'Nicolai Hojgaard', tier: 2, odds_display: '33:1',  odds_decimal: 34  },
+      { name: 'Harry Hall',       tier: 2, odds_display: '35:1',  odds_decimal: 36  },
+      { name: 'Sungjae Im',       tier: 3, odds_display: '57:1',  odds_decimal: 58  },
+      { name: 'Ryan Fox',         tier: 3, odds_display: '72:1',  odds_decimal: 73  },
+      { name: 'J.T. Poston',      tier: 3, odds_display: '88:1',  odds_decimal: 89  },
+      { name: 'Gary Woodland',    tier: 4, odds_display: '115:1', odds_decimal: 116 },
+      { name: 'S.H. Kim',         tier: 4, odds_display: '135:1', odds_decimal: 136 },
+    ];
+    const _updTP = db.prepare('UPDATE pool_tier_players SET tier_number = ?, odds_display = ?, odds_decimal = ? WHERE player_name = ? AND league_id = ?');
+    const _updGP = db.prepare('UPDATE golf_players SET odds_display = ?, odds_decimal = ? WHERE name = ?');
+    db.transaction(() => {
+      for (const m of MANUAL2) {
+        _updTP.run(m.tier, m.odds_display, m.odds_decimal, m.name, _HOU_LEAGUE);
+        _updGP.run(m.odds_display, m.odds_decimal, m.name);
+      }
+    })();
+    console.log('[golf-db] Houston Open DK odds batch 2 applied for', MANUAL2.length, 'players');
+  }
+} catch (e) { console.log('[golf-db] DK odds batch 2 skipped:', e.message); }
+
 module.exports = db;
