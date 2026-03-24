@@ -110,9 +110,23 @@ function buildStandings(leagueId) {
       `).get(player.player_id, today);
 
       // Full game log (round, opponent, points per game played)
+      // round_code: prefer ps.round (set by espnPoller roundNameToCode), fall back to
+      // normalizing g.round_name (admin-entered stats skip the round column).
       const gameLog = db.prepare(`
         SELECT
-          COALESCE(NULLIF(ps.round, ''), g.round_name) AS round_code,
+          COALESCE(
+            NULLIF(ps.round, ''),
+            CASE lower(g.round_name)
+              WHEN 'first four'   THEN 'First Four'
+              WHEN 'first round'  THEN 'R64'
+              WHEN 'second round' THEN 'R32'
+              WHEN 'sweet 16'     THEN 'S16'
+              WHEN 'elite 8'      THEN 'E8'
+              WHEN 'final four'   THEN 'F4'
+              WHEN 'championship' THEN 'NCG'
+              ELSE g.round_name
+            END
+          ) AS round_code,
           COALESCE(
             NULLIF(ps.opponent, ''),
             CASE WHEN g.team1 = p2.team THEN g.team2 ELSE g.team1 END
@@ -125,6 +139,10 @@ function buildStandings(leagueId) {
         WHERE ps.player_id = ?
         ORDER BY g.game_date ASC
       `).all(player.player_id);
+
+      if (gameLog.length > 0 && player.player_id === allPicks[0]?.player_id) {
+        console.log(`[standings] round debug player=${player.name} game_log=`, JSON.stringify(gameLog.map(g => ({ round: g.round_code, pts: g.points }))));
+      }
 
       // Projected ETP = current_pts + (alive_players × tourney_ppg × games_remaining)
       // games_remaining: First Four teams can play up to 7 games total;

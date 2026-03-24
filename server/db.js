@@ -212,6 +212,28 @@ try { db.exec("ALTER TABLE player_stats ADD COLUMN round TEXT DEFAULT ''"); } ca
 try { db.exec("ALTER TABLE player_stats ADD COLUMN opponent TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE player_stats ADD COLUMN played_at DATETIME"); } catch (e) {}
 
+// Backfill player_stats.round for any rows inserted before the column existed
+// (admin score entry didn't populate it; also handles rows from espnPoller before the fix)
+try {
+  db.exec(`
+    UPDATE player_stats SET round = (
+      CASE lower(g.round_name)
+        WHEN 'first four'   THEN 'First Four'
+        WHEN 'first round'  THEN 'R64'
+        WHEN 'second round' THEN 'R32'
+        WHEN 'sweet 16'     THEN 'S16'
+        WHEN 'elite 8'      THEN 'E8'
+        WHEN 'final four'   THEN 'F4'
+        WHEN 'championship' THEN 'NCG'
+        ELSE g.round_name
+      END
+    )
+    FROM games g
+    WHERE player_stats.game_id = g.id
+      AND (player_stats.round IS NULL OR player_stats.round = '')
+  `);
+} catch (e) { console.log('[db] round backfill skipped:', e.message); }
+
 // ── Injury designations (2026 tournament) ────────────────────────────────────
 // Runs on every startup — survives Railway redeploys. Commissioner can clear any flag.
 const INJURY_DATA = [

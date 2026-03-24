@@ -53,15 +53,29 @@ router.post('/games/:gameId/stats', authMiddleware, (req, res) => {
     const game = db.prepare('SELECT * FROM games WHERE id = ?').get(req.params.gameId);
     if (!game) return res.status(404).json({ error: 'Game not found' });
 
+    // Derive round code from game.round_name so chips display correctly
+    function roundNameToCode(n) {
+      const s = (n || '').toLowerCase();
+      if (s.includes('first four'))   return 'First Four';
+      if (s.includes('first round'))  return 'R64';
+      if (s.includes('second round')) return 'R32';
+      if (s.includes('sweet 16'))     return 'S16';
+      if (s.includes('elite 8'))      return 'E8';
+      if (s.includes('final four'))   return 'F4';
+      if (s.includes('championship')) return 'NCG';
+      return n || '';
+    }
+    const roundCode = roundNameToCode(game.round_name);
+
     const insertOrReplace = db.prepare(`
-      INSERT INTO player_stats (id, game_id, player_id, points)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(game_id, player_id) DO UPDATE SET points = excluded.points
+      INSERT INTO player_stats (id, game_id, player_id, points, round)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(game_id, player_id) DO UPDATE SET points = excluded.points, round = COALESCE(NULLIF(player_stats.round,''), excluded.round)
     `);
 
     const insertMany = db.transaction(() => {
       for (const s of stats) {
-        insertOrReplace.run(uuidv4(), req.params.gameId, s.player_id, s.points || 0);
+        insertOrReplace.run(uuidv4(), req.params.gameId, s.player_id, s.points || 0, roundCode);
       }
     });
 
