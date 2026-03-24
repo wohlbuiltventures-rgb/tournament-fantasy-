@@ -817,6 +817,9 @@ router.post('/admin/dev/sync-espn-field', superadmin, async (req, res) => {
 
     // ── Step 2: Fetch ESPN odds endpoint for sportsbook odds ──────────────────
     let oddsMap = {}; // espn player id → { odds_display, odds_decimal }
+    const nameOddsMap = {}; // full name (lowercase) → odds
+    const lastNameOddsMap = {}; // last name (lowercase) → odds  (unique last names only)
+    const lastNameCount = {}; // track ambiguity
     try {
       const oddsData = await espnFetch(
         `https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/${eid}/competitions/${eid}/odds`
@@ -829,14 +832,23 @@ router.post('/admin/dev/sync-espn-field', superadmin, async (req, res) => {
         for (const f of futures) {
           const espnPlayerId = String(f.athlete?.id || '');
           const american = parseInt(f.value || f.current?.moneyLine || 0);
-          if (!espnPlayerId || american <= 0) continue;
+          if (american <= 0) continue;
           // Convert American odds (+1500) to display ("15:1") and decimal (16.0)
           const ratio = american / 100;
           const nice = ratio < 5   ? Math.round(ratio * 4) / 4 :
                        ratio < 20  ? Math.round(ratio * 2) / 2 :
                        ratio < 100 ? Math.round(ratio / 5) * 5 :
                                      Math.round(ratio / 25) * 25;
-          oddsMap[espnPlayerId] = { odds_display: `${nice}:1`, odds_decimal: nice + 1 };
+          const oddsObj = { odds_display: `${nice}:1`, odds_decimal: nice + 1 };
+          if (espnPlayerId) oddsMap[espnPlayerId] = oddsObj;
+          // Build name-based fallback maps
+          const fName = (f.athlete?.displayName || f.athlete?.fullName || '').toLowerCase().trim();
+          if (fName) {
+            nameOddsMap[fName] = oddsObj;
+            const lastName = fName.split(' ').pop();
+            lastNameCount[lastName] = (lastNameCount[lastName] || 0) + 1;
+            lastNameOddsMap[lastName] = lastNameCount[lastName] === 1 ? oddsObj : null; // null = ambiguous
+          }
         }
         break; // use first provider with futures
       }
@@ -888,7 +900,13 @@ router.post('/admin/dev/sync-espn-field', superadmin, async (req, res) => {
         // Update country if we have it and the stored value isn't already a 2-letter code
         if (country) _updGPCountry.run(country, gp.id);
 
-        const playerOdds = oddsMap[espnId] || null;
+        // Try ESPN ID, then full name, then unique last name
+        const nameLower = name.toLowerCase();
+        const lastName  = nameLower.split(' ').pop();
+        const playerOdds = oddsMap[espnId]
+          || nameOddsMap[nameLower]
+          || lastNameOddsMap[lastName]   // null if last name is ambiguous
+          || null;
         _insTF.run(
           uuidv4(), tournament_id, name, gp.id, espnId,
           ranking || gp.world_ranking || 200,

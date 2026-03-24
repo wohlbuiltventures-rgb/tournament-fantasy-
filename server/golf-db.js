@@ -1125,4 +1125,19 @@ try {
   console.log('[golf-db] Country codes populated and propagated');
 } catch (e) { console.log('[golf-db] country migration skipped:', e.message); }
 
+// ── Manual odds / tier corrections ────────────────────────────────────────────
+// Koepka was a late ESPN entry and got default 525:1 / T4 — correct to T2
+try {
+  const _HOU_LEAGUE = 'ff568722-fbe9-4695-86a8-a31287c22841';
+  const koepkaGP = db.prepare("SELECT id, odds_display FROM golf_players WHERE name = 'Brooks Koepka'").get();
+  if (koepkaGP && koepkaGP.odds_display !== '28:1') {
+    db.prepare("UPDATE golf_players SET odds_display = '28:1', odds_decimal = 29, world_ranking = 26 WHERE name = 'Brooks Koepka'").run();
+    db.prepare(`
+      UPDATE pool_tier_players SET tier_number = 2, odds_display = '28:1', odds_decimal = 29
+      WHERE player_name = 'Brooks Koepka' AND league_id = ?
+    `).run(_HOU_LEAGUE);
+    console.log('[golf-db] Koepka odds corrected to 28:1, moved to T2');
+  }
+} catch (e) { console.log('[golf-db] Koepka fix skipped:', e.message); }
+
 module.exports = db;
