@@ -257,40 +257,40 @@ export default function GolfLanding() {
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
             2026 PGA Tour Season
           </div>
-          <h1 className="text-4xl sm:text-6xl font-black text-white leading-tight mb-4">
-            Fantasy Golf<br />
-            <span className="text-green-400">Done Right</span>
+          <h1 style={{ fontSize: 'clamp(48px,10vw,80px)', fontWeight: 900, lineHeight: 1.05, color: '#fff', marginBottom: 16, letterSpacing: '-0.03em', textTransform: 'uppercase' }}>
+            FANTASY GOLF.<br />
+            <span style={{ color: '#00e87a' }}>DONE RIGHT.</span>
           </h1>
-          <p className="text-gray-400 text-base sm:text-xl max-w-xl mx-auto mb-10 leading-relaxed">
+          <p className="text-gray-400 text-lg sm:text-xl max-w-xl mx-auto mb-12 leading-relaxed">
             Your golf pool shouldn't live in a spreadsheet. Auto-scoring, live standings, and picks in one place — from $9.99/tournament.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
             {user ? (
               <>
                 <Link
                   to="/golf/dashboard"
-                  className="inline-flex items-center justify-center gap-2 bg-green-500 hover:bg-green-400 text-white font-bold px-7 py-3.5 rounded-full transition-all shadow-lg shadow-green-500/25"
+                  className="inline-flex items-center justify-center gap-2 bg-green-500 hover:bg-green-400 text-white font-black px-10 py-4 rounded-full transition-all shadow-lg shadow-green-500/30 text-base"
                 >
-                  My Golf Leagues <ArrowRight className="w-4 h-4" />
+                  My Golf Leagues <ArrowRight className="w-5 h-5" />
                 </Link>
                 <Link
                   to="/golf/create"
-                  className="inline-flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 font-semibold px-7 py-3.5 rounded-full transition-all"
+                  className="inline-flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 font-bold px-10 py-4 rounded-full transition-all text-base"
                 >
-                  <Plus className="w-4 h-4" /> Create League
+                  <Plus className="w-5 h-5" /> Create League
                 </Link>
               </>
             ) : (
               <>
                 <Link
                   to="/register"
-                  className="inline-flex items-center justify-center gap-2 bg-green-500 hover:bg-green-400 text-white font-bold px-7 py-3.5 rounded-full transition-all shadow-lg shadow-green-500/25"
+                  className="inline-flex items-center justify-center gap-2 bg-green-500 hover:bg-green-400 text-white font-black px-10 py-4 rounded-full transition-all shadow-lg shadow-green-500/30 text-base"
                 >
-                  Get Started Free <ArrowRight className="w-4 h-4" />
+                  Get Started Free <ArrowRight className="w-5 h-5" />
                 </Link>
                 <Link
                   to="/login"
-                  className="inline-flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 font-semibold px-7 py-3.5 rounded-full transition-all"
+                  className="inline-flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 font-bold px-10 py-4 rounded-full transition-all text-base"
                 >
                   Sign In
                 </Link>
@@ -488,9 +488,12 @@ export default function GolfLanding() {
       </div>
 
       {/* Scoring strip */}
-      <div className="border-y border-gray-800 bg-gray-900/60 py-6 px-4">
+      <div className="border-y border-gray-800 bg-gray-900/60 py-8 px-4">
         <div className="max-w-3xl mx-auto">
-          <p className="text-center text-gray-500 text-xs uppercase tracking-widest font-bold mb-4">Scoring</p>
+          <p className="text-center text-gray-500 text-xs uppercase tracking-widest font-bold mb-2">TourneyRun Style Scoring</p>
+          <p className="text-center text-gray-600 text-sm max-w-lg mx-auto mb-6 leading-relaxed">
+            Unlike stroke play where one bad hole can end your week, TourneyRun scoring rewards every shot. Eagles and birdies build your lead, pars hold steady, and majors are worth 1.5× — so the biggest events matter most.
+          </p>
           <div className="flex justify-center gap-4 sm:gap-8 flex-wrap">
             {SCORING.map(s => (
               <div key={s.label} className="text-center">
@@ -656,30 +659,223 @@ export default function GolfLanding() {
               </div>
             </div>
 
-            {/* Card 3: Pick'em */}
-            <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 sm:p-6 hover:border-gray-700 transition-colors">
-              <div className="text-2xl mb-2">🎯</div>
-              <h3 className="text-white font-black text-base">Pick'em Pool</h3>
-              <p className="text-gray-400 text-xs mt-0.5 mb-4">Pick tournament winners weekly</p>
+            {/* Card 3: Daily Fantasy Pool */}
+            <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 sm:p-6 hover:border-green-500/30 transition-colors">
+              <div className="text-2xl mb-2">⛳</div>
+              <h3 className="text-white font-black text-base">Daily Fantasy Pool</h3>
+              <p className="text-gray-400 text-xs mt-0.5 mb-4">DFS-style picks without the salary cap hassle</p>
               <ul className="space-y-2 text-sm text-gray-400">
                 {[
-                  'Simple weekly winner picks',
-                  'Points for correct predictions',
-                  'Great for casual fans',
+                  'Pick your lineup each tournament',
+                  'Player pools with tiers and odds',
+                  'Score based on real tournament results',
+                  'New lineups every week — no season commitment',
+                  'Great for casual and competitive players',
                 ].map(item => (
                   <li key={item} className="flex items-start gap-2">
-                    <span className="shrink-0 mt-0.5">·</span>
+                    <span className="text-green-500 shrink-0 mt-0.5">✓</span>
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
               <div className="mt-4 pt-3 border-t border-gray-800">
-                <Link to="/golf/create?format=pool" className="text-[11px] font-bold text-green-400 hover:text-green-300 transition-colors uppercase tracking-widest">
-                  Start a Pool →
+                <Link
+                  to="/golf/create?format=pool"
+                  className="inline-flex items-center gap-1.5 text-[12px] font-bold text-green-400 hover:text-green-300 transition-colors uppercase tracking-widest"
+                >
+                  Start a Pool <ArrowRight className="w-3 h-3" />
                 </Link>
               </div>
             </div>
 
+          </div>
+        </div>
+      </Section>
+
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* Product Sections                                                     */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+
+      {/* Section A — Golf Office Pool */}
+      <Section style={{ background: '#0a1a0f' }} className="py-16 sm:py-24 px-4 border-b border-gray-800">
+        <div className="max-w-5xl mx-auto">
+          <div className="grid sm:grid-cols-2 gap-10 sm:gap-16 items-center">
+            <div>
+              <div style={{ display: 'inline-block', background: 'rgba(0,232,122,0.08)', border: '1px solid rgba(0,232,122,0.2)', borderRadius: 999, padding: '4px 14px', marginBottom: 16 }}>
+                <span style={{ color: '#00e87a', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>⛳ Office Pool</span>
+              </div>
+              <h2 style={{ color: '#fff', fontSize: 'clamp(28px,4vw,42px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 16, letterSpacing: '-0.02em' }}>
+                Run your office pool.<br />
+                <span style={{ color: '#00e87a' }}>Without the spreadsheet.</span>
+              </h2>
+              <p style={{ color: '#9ca3af', fontSize: 16, lineHeight: 1.7, marginBottom: 24 }}>
+                The easiest way to run a tournament pool with your friends, coworkers, or group chat.
+              </p>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {[
+                  'Players pick from tiered player pools sorted by odds',
+                  'Live standings auto-update after every round',
+                  'Commissioner controls — lock picks, manage entries',
+                  'No more Google Sheets, no more group texts',
+                  'Free to join — commissioner pays one flat fee',
+                ].map(item => (
+                  <li key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, color: '#d1d5db', fontSize: 14, lineHeight: 1.5 }}>
+                    <span style={{ color: '#00e87a', flexShrink: 0, marginTop: 1 }}>✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/golf/create?format=pool"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#00e87a', color: '#001a0d', fontWeight: 800, fontSize: 15, padding: '14px 28px', borderRadius: 999, textDecoration: 'none', transition: 'background 0.15s' }}
+              >
+                Run an Office Pool <ArrowRight size={16} />
+              </Link>
+            </div>
+            <div style={{ background: '#060d07', border: '1px solid #0f1a10', borderRadius: 20, padding: '24px 20px', boxShadow: '0 20px 60px rgba(0,0,0,0.4), 0 0 40px rgba(0,232,122,0.05)' }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>Houston Open Pool · Standings</div>
+                {[
+                  { name: 'BirdieMachine', pts: 47.5, picks: ['Scheffler 🇺🇸','Burns 🇺🇸','Lee 🇦🇺'], rank: 1 },
+                  { name: 'GolfGod2026',  pts: 38.0, picks: ['Koepka 🇺🇸','Fox 🇳🇿','Im 🇰🇷'],    rank: 2 },
+                  { name: 'FairwayMike',  pts: 31.5, picks: ['Knapp 🇺🇸','Gotterup 🇺🇸'],          rank: 3 },
+                ].map(({ name, pts, picks, rank }) => (
+                  <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: rank === 1 ? 'rgba(0,232,122,0.06)' : 'rgba(255,255,255,0.02)', border: `1px solid ${rank === 1 ? 'rgba(0,232,122,0.18)' : 'rgba(255,255,255,0.05)'}`, borderRadius: 10, marginBottom: 6 }}>
+                    <span style={{ color: rank === 1 ? '#00e87a' : '#4b5563', fontWeight: 800, fontSize: 13, width: 20 }}>{rank}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: rank === 1 ? '#fff' : '#d1d5db', fontWeight: 700, fontSize: 13 }}>{name}</div>
+                      <div style={{ color: '#4b5563', fontSize: 11, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{picks.join(' · ')}</div>
+                    </div>
+                    <span style={{ color: '#00e87a', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{pts}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                {['Live', 'Auto-sync', 'ESPN data'].map(tag => (
+                  <span key={tag} style={{ background: 'rgba(0,232,122,0.06)', border: '1px solid rgba(0,232,122,0.15)', borderRadius: 999, padding: '4px 10px', color: '#4ade80', fontSize: 10, fontWeight: 600 }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      {/* Section B — Daily Fantasy Pool */}
+      <Section style={{ background: '#0d1117' }} className="py-16 sm:py-24 px-4 border-b border-gray-800">
+        <div className="max-w-5xl mx-auto">
+          <div className="grid sm:grid-cols-2 gap-10 sm:gap-16 items-center">
+            <div style={{ order: 2 }}>
+              <div style={{ display: 'inline-block', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 999, padding: '4px 14px', marginBottom: 16 }}>
+                <span style={{ color: '#f59e0b', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>🏆 Daily Fantasy</span>
+              </div>
+              <h2 style={{ color: '#fff', fontSize: 'clamp(28px,4vw,42px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 16, letterSpacing: '-0.02em' }}>
+                DFS without<br />
+                <span style={{ color: '#00e87a' }}>the complexity.</span>
+              </h2>
+              <p style={{ color: '#9ca3af', fontSize: 16, lineHeight: 1.7, marginBottom: 24 }}>
+                New tournament, new picks. No salary cap math, no complicated rules. Just pick your golfers and compete.
+              </p>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {[
+                  'Tier-based picks — Elite, Contenders, Longshots, The Field',
+                  'Real DraftKings odds shown for every player',
+                  'Score based on actual tournament performance',
+                  'Start fresh every week — no season commitment',
+                  'Perfect for Masters, US Open, The Open',
+                ].map(item => (
+                  <li key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, color: '#d1d5db', fontSize: 14, lineHeight: 1.5 }}>
+                    <span style={{ color: '#00e87a', flexShrink: 0, marginTop: 1 }}>✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/golf/create?format=pool"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#00e87a', color: '#001a0d', fontWeight: 800, fontSize: 15, padding: '14px 28px', borderRadius: 999, textDecoration: 'none' }}
+              >
+                Start a Pool <ArrowRight size={16} />
+              </Link>
+            </div>
+            <div style={{ order: 1, background: '#060d07', border: '1px solid #0f1a10', borderRadius: 20, padding: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
+              <div style={{ color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>Houston Open · Tier 1 — Elite</div>
+              {[
+                { name: 'Scottie Scheffler', odds: '8:1',  flag: '🇺🇸', picked: true  },
+                { name: 'Min Woo Lee',       odds: '15:1', flag: '🇦🇺', picked: false },
+                { name: 'Sam Burns',         odds: '27:1', flag: '🇺🇸', picked: true  },
+                { name: 'Chris Gotterup',    odds: '20:1', flag: '🇺🇸', picked: false },
+              ].map(({ name, odds, flag, picked }) => (
+                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: picked ? 'rgba(0,232,122,0.06)' : 'rgba(255,255,255,0.02)', border: `1px solid ${picked ? 'rgba(0,232,122,0.2)' : 'rgba(255,255,255,0.05)'}`, borderRadius: 10, marginBottom: 6 }}>
+                  <span style={{ fontSize: 20 }}>{flag}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: '#f1f5f9', fontWeight: picked ? 700 : 400, fontSize: 13 }}>{name}</div>
+                    <div style={{ color: '#4b5563', fontSize: 11 }}>DK {odds}</div>
+                  </div>
+                  {picked && <span style={{ background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.25)', borderRadius: 4, padding: '2px 7px', color: '#00e87a', fontSize: 10, fontWeight: 700 }}>PICKED</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      {/* Section C — TourneyRun Season Long */}
+      <Section style={{ background: '#0a1a0f' }} className="py-16 sm:py-24 px-4 border-b border-gray-800">
+        <div className="max-w-5xl mx-auto">
+          <div className="grid sm:grid-cols-2 gap-10 sm:gap-16 items-center">
+            <div>
+              <div style={{ display: 'inline-block', background: 'rgba(0,232,122,0.08)', border: '1px solid rgba(0,232,122,0.2)', borderRadius: 999, padding: '4px 14px', marginBottom: 16 }}>
+                <span style={{ color: '#00e87a', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>🏌️ Season Long</span>
+              </div>
+              <h2 style={{ color: '#fff', fontSize: 'clamp(28px,4vw,42px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 16, letterSpacing: '-0.02em' }}>
+                Season-long fantasy golf.<br />
+                <span style={{ color: '#00e87a' }}>Draft once. Win all year.</span>
+              </h2>
+              <p style={{ color: '#9ca3af', fontSize: 16, lineHeight: 1.7, marginBottom: 24 }}>
+                The most strategic fantasy golf format available. One auction draft before the season. 13 events. Bragging rights until The Open.
+              </p>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {[
+                  'Auction draft with salary cap — strategy matters',
+                  'Set weekly lineups (4 core + 4 flex players)',
+                  'FAAB waiver wire to add players between events',
+                  'Majors count 1.5× — Augusta decides everything',
+                  'Season-long leaderboard with automatic scoring',
+                ].map(item => (
+                  <li key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, color: '#d1d5db', fontSize: 14, lineHeight: 1.5 }}>
+                    <span style={{ color: '#00e87a', flexShrink: 0, marginTop: 1 }}>✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/golf/create"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#00e87a', color: '#001a0d', fontWeight: 800, fontSize: 15, padding: '14px 28px', borderRadius: 999, textDecoration: 'none' }}
+              >
+                Create a League <ArrowRight size={16} />
+              </Link>
+            </div>
+            <div style={{ background: '#060d07', border: '1px solid #0f1a10', borderRadius: 20, padding: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
+              <div style={{ color: '#4b5563', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>Season Standings · 8 events in</div>
+              {[
+                { name: 'ScottieOrBust',  pts: 312.5, change: '▲1', rank: 1 },
+                { name: 'AuctionKing',    pts: 298.0, change: '—',  rank: 2 },
+                { name: 'WaiverWizard',   pts: 281.5, change: '▲3', rank: 3 },
+                { name: 'MajorMoney',     pts: 267.0, change: '▼1', rank: 4 },
+              ].map(({ name, pts, change, rank }) => (
+                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: rank === 1 ? 'rgba(0,232,122,0.06)' : 'rgba(255,255,255,0.02)', border: `1px solid ${rank === 1 ? 'rgba(0,232,122,0.18)' : 'rgba(255,255,255,0.05)'}`, borderRadius: 10, marginBottom: 6 }}>
+                  <span style={{ color: rank === 1 ? '#00e87a' : '#4b5563', fontWeight: 800, fontSize: 13, width: 20 }}>{rank}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: rank === 1 ? '#fff' : '#d1d5db', fontWeight: 700, fontSize: 13 }}>{name}</div>
+                  </div>
+                  <span style={{ color: change.includes('▲') ? '#4ade80' : change === '—' ? '#4b5563' : '#f87171', fontSize: 11, marginRight: 8 }}>{change}</span>
+                  <span style={{ color: '#00e87a', fontWeight: 800, fontSize: 14 }}>{pts}</span>
+                </div>
+              ))}
+              <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: '#f59e0b', fontSize: 13 }}>★</span>
+                <span style={{ color: '#f59e0b', fontSize: 12, fontWeight: 600 }}>Masters next — all points ×1.5</span>
+              </div>
+            </div>
           </div>
         </div>
       </Section>
@@ -826,7 +1022,7 @@ export default function GolfLanding() {
             Built for commissioners
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-white mb-3">
-            Built for commissioners. Finally.
+            Built for commissioners. Priced for everyone.
           </h2>
           <p className="text-gray-400 text-base max-w-lg mx-auto">
             Stop managing your golf pool in a spreadsheet.
@@ -848,6 +1044,24 @@ export default function GolfLanding() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Pricing callout */}
+        <div style={{ maxWidth: 480, margin: '0 auto 32px', background: 'rgba(0,232,122,0.04)', border: '1.5px solid rgba(0,232,122,0.2)', borderRadius: 16, padding: '20px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontSize: 20 }}>💰</span>
+            <span style={{ color: '#00e87a', fontWeight: 800, fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em' }}>TourneyRun Commissioner Fee</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+            <span style={{ color: '#fff', fontWeight: 900, fontSize: 32, lineHeight: 1 }}>$9.99</span>
+            <span style={{ color: '#9ca3af', fontSize: 14 }}>per tournament</span>
+          </div>
+          <div style={{ color: '#6b7280', fontSize: 13, marginBottom: 12 }}>
+            Competitors charge <span style={{ color: '#f87171', textDecoration: 'line-through' }}>$30–$110</span> for the same thing.
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#4ade80', fontSize: 12, fontWeight: 600 }}>
+            <span>✓</span> Free to browse — no credit card required
+          </div>
         </div>
 
         <div className="text-center">
