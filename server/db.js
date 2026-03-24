@@ -216,9 +216,12 @@ try { db.exec("ALTER TABLE player_stats ADD COLUMN played_at DATETIME"); } catch
 // or pullSchedule before the parseRoundName fix.  Uses known 2026 tournament dates.
 try {
   db.prepare("UPDATE games SET round_name='First Four'   WHERE game_date BETWEEN '2026-03-18' AND '2026-03-19' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
+  db.prepare("UPDATE games SET round_name='Second Round' WHERE game_date BETWEEN '2026-03-22' AND '2026-03-25' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
   db.prepare("UPDATE games SET round_name='Second Round' WHERE game_date BETWEEN '2026-03-26' AND '2026-03-29' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
   db.prepare("UPDATE games SET round_name='Sweet 16'     WHERE game_date BETWEEN '2026-04-03' AND '2026-04-04' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
   db.prepare("UPDATE games SET round_name='Elite 8'      WHERE game_date BETWEEN '2026-04-05' AND '2026-04-06' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
+  // Fix games wrongly tagged Sweet 16 on R64 dates (2026-03-20)
+  db.prepare("UPDATE games SET round_name='First Round' WHERE game_date='2026-03-20' AND round_name='Sweet 16'").run();
   // Diagnostic: show round_name distribution after fix
   const roundDist = db.prepare("SELECT round_name, COUNT(*) as cnt FROM games GROUP BY round_name ORDER BY cnt DESC").all();
   console.log('[db] game round_name date-fix applied. Distribution:', JSON.stringify(roundDist));
