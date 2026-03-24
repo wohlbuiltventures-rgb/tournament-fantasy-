@@ -621,7 +621,7 @@ function TieredPickSheet({ leagueId, league }) {
                           {player.player_name}
                         </div>
                         <div style={{ color: '#4b5563', fontSize: 11, marginTop: 1 }}>
-                          #{player.world_ranking}{player.country ? ` · ${player.country}` : ''}
+                          #{player.world_ranking}{player.country ? ` · ${toFlag(player.country)}` : ''}
                         </div>
                       </div>
                     </button>

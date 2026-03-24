@@ -1254,4 +1254,22 @@ try {
   console.log(`[golf-db] Country propagated — ptp: ${r1.changes}, picks: ${r2.changes}`);
 } catch (e) { console.log('[golf-db] country propagation skipped:', e.message); }
 
+// ── Direct country fallback for players that don't match via golf_players.name ──
+// Runs every boot; safe no-op for players already populated.
+try {
+  const _HOU_LEAGUE = 'ff568722-fbe9-4695-86a8-a31287c22841';
+  const COUNTRY_FIXUPS = [
+    // Players confirmed US whose country isn't propagating via golf_players join
+    { name: 'Brooks Koepka', country: 'US' },
+  ];
+  const _fixCtryTP = db.prepare('UPDATE pool_tier_players SET country = ? WHERE player_name = ? AND league_id = ? AND country IS NULL');
+  const _fixCtryPP = db.prepare('UPDATE pool_picks SET country = ? WHERE player_name = ? AND league_id = ? AND country IS NULL');
+  db.transaction(() => {
+    for (const f of COUNTRY_FIXUPS) {
+      _fixCtryTP.run(f.country, f.name, _HOU_LEAGUE);
+      _fixCtryPP.run(f.country, f.name, _HOU_LEAGUE);
+    }
+  })();
+} catch (e) { console.log('[golf-db] country fallback fixups skipped:', e.message); }
+
 module.exports = db;
