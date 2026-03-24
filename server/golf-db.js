@@ -1227,22 +1227,31 @@ try {
 } catch (e) { console.log('[golf-db] odds fixups skipped:', e.message); }
 
 // Always propagate country from golf_players → pool tables on every boot
-// Runs last so it catches any rows rebuilt by earlier migrations this boot
+// Joins on player_name (not id) since pool tables store names, not golf_players.id refs
 try { db.exec('ALTER TABLE pool_tier_players ADD COLUMN country TEXT'); } catch (e) {}
 try { db.exec('ALTER TABLE pool_picks ADD COLUMN country TEXT'); } catch (e) {}
 try {
   const _HOU_LEAGUE = 'ff568722-fbe9-4695-86a8-a31287c22841';
-  db.prepare(`
+
+  // Diagnostic: verify the join works before propagation
+  const _ptpSample = db.prepare('SELECT player_id, player_name FROM pool_tier_players WHERE league_id = ? LIMIT 3').all(_HOU_LEAGUE);
+  console.log('[golf-db] ptp sample:', JSON.stringify(_ptpSample));
+  const _gpScheff = db.prepare("SELECT id, name FROM golf_players WHERE name = 'Scottie Scheffler'").get();
+  console.log('[golf-db] golf_players Scheffler:', JSON.stringify(_gpScheff));
+
+  const r1 = db.prepare(`
     UPDATE pool_tier_players SET country = (
-      SELECT country FROM golf_players WHERE golf_players.id = pool_tier_players.player_id
+      SELECT country FROM golf_players WHERE golf_players.name = pool_tier_players.player_name
+        AND golf_players.country IS NOT NULL
     ) WHERE country IS NULL AND league_id = ?
   `).run(_HOU_LEAGUE);
-  db.prepare(`
+  const r2 = db.prepare(`
     UPDATE pool_picks SET country = (
-      SELECT country FROM golf_players WHERE golf_players.id = pool_picks.player_id
+      SELECT country FROM golf_players WHERE golf_players.name = pool_picks.player_name
+        AND golf_players.country IS NOT NULL
     ) WHERE country IS NULL AND league_id = ?
   `).run(_HOU_LEAGUE);
-  console.log('[golf-db] Country propagated to pool tables');
+  console.log(`[golf-db] Country propagated — ptp: ${r1.changes}, picks: ${r2.changes}`);
 } catch (e) { console.log('[golf-db] country propagation skipped:', e.message); }
 
 module.exports = db;
