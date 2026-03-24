@@ -746,12 +746,22 @@ function InitialsAvatar({ name, tier, size = 44 }) {
   );
 }
 
+const GOLF_COUNTRY_MAP = {
+  USA:'us', ENG:'gb', SCO:'gb', WAL:'gb', NIR:'gb', IRL:'ie',
+  AUS:'au', NZL:'nz', RSA:'za', ZIM:'zw', IND:'in', JPN:'jp',
+  KOR:'kr', CHN:'cn', TPE:'tw', THA:'th', MAS:'my', SIN:'sg',
+  PHI:'ph', FIJ:'fj', PNG:'pg', GER:'de', AUT:'at', SWE:'se',
+  NOR:'no', DEN:'dk', FIN:'fi', BEL:'be', NED:'nl', FRA:'fr',
+  ESP:'es', ITA:'it', POR:'pt', CHI:'cl', ARG:'ar', COL:'co',
+  MEX:'mx', CAN:'ca', VEN:'ve', PAR:'py', URU:'uy', BRA:'br',
+};
+
 function CountryFlag({ cc }) {
   if (!cc) return null;
-  const code = cc.toLowerCase();
+  const iso2 = GOLF_COUNTRY_MAP[cc.toUpperCase()] || cc.toLowerCase();
   return (
     <img
-      src={`https://flagcdn.com/24x18/${code}.png`}
+      src={`https://flagcdn.com/24x18/${iso2}.png`}
       alt={cc}
       style={{ width: 18, height: 13, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }}
       onError={e => { e.target.style.display = 'none'; }}
@@ -975,7 +985,10 @@ function TierPickerModal({ tierNum, tierConfig, players, currentSel, onPick, onC
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                   <InitialsAvatar name={p.player_name} tier={tierNum} size={36} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.player_name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {p.country && <CountryFlag cc={p.country} />}
+                      <span style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.player_name}</span>
+                    </div>
                     {p.world_ranking && <div style={{ color: '#4b5563', fontSize: 11, marginTop: 1 }}>WR #{p.world_ranking}</div>}
                   </div>
                 </div>
@@ -1124,7 +1137,7 @@ function PoolRosterTab({ leagueId, league }) {
             <div style={{ background: 'rgba(0,232,122,0.05)', border: '1px solid rgba(0,232,122,0.15)', borderRadius: 12, padding: '12px 16px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div>
                 <div style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{tourn.name}</div>
-                <div style={{ color: '#4b5563', fontSize: 12, marginTop: 2 }}>Lock picks before Thursday tee time</div>
+                <div style={{ color: '#4b5563', fontSize: 12, marginTop: 2 }}>Picks lock 1 hour before first tee time Thursday</div>
               </div>
               {lockTime && <PicksCountdown lockTime={lockTime} />}
             </div>
@@ -1339,8 +1352,8 @@ function PoolRosterTab({ leagueId, league }) {
       {showConfirm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300, padding: '0 16px 16px' }}>
           <div style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: 24, width: '100%', maxWidth: 420 }}>
-            <h3 style={{ color: '#fff', fontWeight: 800, fontSize: 18, margin: '0 0 4px' }}>Lock in your picks?</h3>
-            <p style={{ color: '#6b7280', fontSize: 13, margin: '0 0 18px' }}>You won't be able to change them after submitting.</p>
+            <h3 style={{ color: '#fff', fontWeight: 800, fontSize: 18, margin: '0 0 4px' }}>Submit your picks?</h3>
+            <p style={{ color: '#6b7280', fontSize: 13, margin: '0 0 18px' }}>You can still change your picks up until 1 hour before Thursday's first tee time. After that, picks are locked for good.</p>
             <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: '12px 16px', marginBottom: 18 }}>
               {tiers.map(t => {
                 const tc = ROSTER_TIER_COLORS[t.tier] || ROSTER_TIER_COLORS[4];
@@ -1361,9 +1374,9 @@ function PoolRosterTab({ leagueId, league }) {
             </div>
             {submitError && <p style={{ color: '#f87171', fontSize: 12, marginBottom: 12 }}>{submitError}</p>}
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setShowConfirm(false)} disabled={submitting} style={{ flex: 1, background: '#1f2937', border: 'none', color: '#9ca3af', padding: '12px 0', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => setShowConfirm(false)} disabled={submitting} style={{ flex: 1, background: '#1f2937', border: 'none', color: '#9ca3af', padding: '12px 0', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Go Back</button>
               <button onClick={handleConfirmSubmit} disabled={submitting} style={{ flex: 1, background: '#00e87a', border: 'none', color: '#001a0d', padding: '12px 0', borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: submitting ? 'not-allowed' : 'pointer' }}>
-                {submitting ? 'Submitting…' : 'Yes, lock them in →'}
+                {submitting ? 'Submitting…' : 'Submit Picks'}
               </button>
             </div>
           </div>

@@ -302,12 +302,7 @@ router.post('/leagues/:id/tier-players/:playerId/move', authMiddleware, (req, re
 // ── Lock-time helper (Thursday 12:00 UTC of tournament week) ─────────────────
 
 function computeLockTime(startDate) {
-  const d = new Date(startDate);
-  const dow = d.getDay();
-  const daysBack = (dow + 3) % 7;
-  d.setDate(d.getDate() - daysBack);
-  d.setUTCHours(12, 0, 0, 0);
-  return d.toISOString();
+  return new Date(startDate + 'T12:00:00.000Z').toISOString();
 }
 
 // ── GET /leagues/:id/picks/my ─────────────────────────────────────────────────
@@ -500,9 +495,13 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
     let tiersConfig = [];
     try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
 
-    const tierPlayers = db.prepare(
-      'SELECT * FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? ORDER BY tier_number ASC, world_ranking ASC'
-    ).all(league.id, tid);
+    const tierPlayers = db.prepare(`
+      SELECT ptp.*, gp.country
+      FROM pool_tier_players ptp
+      LEFT JOIN golf_players gp ON gp.id = ptp.player_id
+      WHERE ptp.league_id = ? AND ptp.tournament_id = ?
+      ORDER BY ptp.tier_number ASC, ptp.world_ranking ASC
+    `).all(league.id, tid);
 
     const tiers = tiersConfig.map(t => ({
       tier:     t.tier,
