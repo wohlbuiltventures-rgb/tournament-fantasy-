@@ -235,8 +235,12 @@ function nameInitials(name) {
   return name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 }
 
-const ROUND_ORDER = ['First Four', 'R64', 'R32', 'S16', 'E8', 'F4', 'NCG'];
-const ROUND_SHORT = { 'First Four': 'FF', R64: 'R64', R32: 'R32', S16: 'S16', E8: 'E8', F4: 'F4', NCG: 'NCG' };
+const ROUND_ORDER = ['FF', 'R64', 'R32', 'S16', 'E8', 'F4', 'NCG'];
+const ROUND_SHORT = { FF: 'FF', R64: 'R64', R32: 'R32', S16: 'S16', E8: 'E8', F4: 'F4', NCG: 'NCG' };
+function normalizeRoundCode(code) {
+  const c = code || '';
+  return c === 'First Four' || c === 'First four' ? 'FF' : c;
+}
 
 function fmtGameDate(dateStr) {
   if (!dateStr) return '';
@@ -716,9 +720,9 @@ export default function Leaderboard() {
                             const expandKey = `${team.user_id}-${player.player_id}`;
                             const isPlayerExpanded = expandedPlayerId === expandKey;
                             const gameLog = player.game_log || [];
-                            const playedRoundSet = new Set(gameLog.map(g => g.round_code));
-                            const lastPlayedRound = gameLog.length > 0 ? gameLog[gameLog.length - 1].round_code : null;
-                            const hasFirstFour = playedRoundSet.has('First Four');
+                            const playedRoundSet = new Set(gameLog.map(g => normalizeRoundCode(g.round_code || g.round)));
+                            const lastPlayedRound = gameLog.length > 0 ? normalizeRoundCode(gameLog[gameLog.length - 1].round_code || gameLog[gameLog.length - 1].round) : null;
+                            const hasFirstFour = playedRoundSet.has('FF');
                             const shownRounds = hasFirstFour ? ROUND_ORDER : ROUND_ORDER.slice(1);
                             const getPillColors = (r) => {
                               if (!playedRoundSet.has(r)) return { bg: 'transparent', color: '#4b5563', border: '#374151' };
@@ -813,7 +817,7 @@ export default function Leaderboard() {
                                                 style={isElimGame
                                                   ? { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
                                                   : { background: 'rgba(55,138,221,0.12)', color: '#60a5fa', border: '1px solid rgba(55,138,221,0.25)' }}>
-                                                {game.round_code || '—'}
+                                                {normalizeRoundCode(game.round_code || game.round) || '—'}
                                               </span>
                                               <span className="text-gray-400 text-xs flex-1 truncate">vs {game.opponent || '—'}</span>
                                               <span className="text-xs font-semibold shrink-0"
