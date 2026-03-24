@@ -476,6 +476,7 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
         pp.id, pp.tier_number, pp.player_id, pp.player_name, pp.salary_used,
         ptp.odds_display, ptp.world_ranking,
         COALESCE(pp.country, gp.country) AS country,
+        COALESCE(pp.is_withdrawn, ptp.is_withdrawn, 0) AS is_withdrawn,
         gs.round1, gs.round2, gs.round3, gs.round4,
         gs.made_cut, gs.finish_position, gs.fantasy_points
       FROM pool_picks pp
@@ -501,7 +502,8 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
       SELECT ptp.id, ptp.league_id, ptp.tournament_id, ptp.player_id, ptp.player_name,
         ptp.tier_number, ptp.odds_display, ptp.odds_decimal, ptp.world_ranking,
         ptp.salary, ptp.manually_overridden, ptp.created_at,
-        COALESCE(ptp.country, gp.country) AS country
+        COALESCE(ptp.country, gp.country) AS country,
+        COALESCE(ptp.is_withdrawn, 0) AS is_withdrawn
       FROM pool_tier_players ptp
       LEFT JOIN golf_players gp ON gp.id = ptp.player_id
       WHERE ptp.league_id = ? AND ptp.tournament_id = ?

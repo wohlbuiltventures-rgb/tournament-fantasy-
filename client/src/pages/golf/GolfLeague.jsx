@@ -758,16 +758,17 @@ function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagu
   const todayRaw = getTodayScore(pick);
   const totalPar = pick.player_total ?? rounds.reduce((s, r) => s + (r || 0), 0);
   const pts = pick.fantasy_points;
-  const isWD  = pick.made_cut === 0 && pick.finish_position == null;
+  const isPreTournWD = !!pick.is_withdrawn;  // flagged WD before tournament starts
+  const isWD  = !isPreTournWD && pick.made_cut === 0 && pick.finish_position == null;
   const isCUT = (pick.made_cut === 0 && pick.finish_position != null) || espnCut;
   const hasScores = rounds.length > 0;
   const isLive = tournStatus === 'active';
   const isComplete = tournStatus === 'completed';
-  const showTeeTime = !hasScores && !isCUT && !isWD && !isPending && teeTimeRaw;
+  const showTeeTime = !hasScores && !isCUT && !isWD && !isPreTournWD && !isPending && teeTimeRaw;
   const teeTxt = showTeeTime ? fmtTeeTimeShort(teeTimeRaw) : null;
 
   // Drop-scoring display
-  const isDropStyle = isDropped || isCUT || isWD;
+  const isDropStyle = isDropped || isCUT || isWD || isPreTournWD;
   const countingBorder = !isDropStyle && hasScores ? '#00e87a' : tc.border;
 
   return (
@@ -820,6 +821,9 @@ function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagu
         ) : hasScores && !isCUT && !isWD ? (
           <span style={{ fontSize: 9, fontWeight: 700, color: '#00e87a', background: 'rgba(0,232,122,0.1)', border: '1px solid rgba(0,232,122,0.25)', padding: '1px 6px', borderRadius: 4, letterSpacing: '0.05em' }}>COUNTING</span>
         ) : null}
+        {isPreTournWD && (
+          <div style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 700, color: '#f87171', letterSpacing: '0.05em' }}>WD</div>
+        )}
         {(isWD || isCUT) && (
           <div style={{
             background: isWD ? 'rgba(239,68,68,0.15)' : 'rgba(107,114,128,0.15)',
@@ -844,10 +848,10 @@ function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagu
           </>
         ) : teeTxt ? (
           <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, textAlign: 'right' }}>{teeTxt}</span>
-        ) : (!isCUT && !isWD && !isPending && onRemove) ? (
+        ) : ((!isCUT && !isWD && !isPending && onRemove) || (isPreTournWD && onRemove && !picksLocked)) ? (
           <button
             onClick={e => { e.stopPropagation(); onRemove(); }}
-            style={{ width: 44, height: 44, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '50%', cursor: 'pointer', color: '#9ca3af', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: -6 }}
+            style={{ width: 44, height: 44, background: isPreTournWD ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.06)', border: `1px solid ${isPreTournWD ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)'}`, borderRadius: '50%', cursor: 'pointer', color: isPreTournWD ? '#f87171' : '#9ca3af', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: -6 }}
           >×</button>
         ) : !isCUT && !isWD && !isPending ? (
           <span style={{ fontSize: 12, color: '#4b5563' }}>—</span>
@@ -1006,31 +1010,36 @@ function TierPickerModal({ tierNum, tierConfig, players, currentSel, onPick, onC
           )}
           {filtered.map(p => {
             const isSel = currentSel.includes(p.player_id);
+            const isWDPlayer = !!p.is_withdrawn;
             const isFull = currentSel.length >= limit && !isSel;
+            const isDisabled = isFull || isWDPlayer;
             return (
               <button
                 key={p.player_id}
-                onClick={() => !isFull && onPick(p.player_id, p.player_name)}
+                onClick={() => !isDisabled && onPick(p.player_id, p.player_name)}
                 style={{
                   width: '100%', textAlign: 'left',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '11px 14px', marginBottom: 6,
-                  background: isSel ? `rgba(${rgb},0.13)` : 'rgba(255,255,255,0.03)',
-                  border: `1.5px solid ${isSel ? tc.accent : 'rgba(255,255,255,0.07)'}`,
-                  borderRadius: 12, cursor: isFull ? 'not-allowed' : 'pointer',
-                  opacity: isFull ? 0.3 : 1, transition: 'background 0.1s, border-color 0.1s',
+                  background: isSel ? `rgba(${rgb},0.13)` : isWDPlayer ? 'rgba(239,68,68,0.04)' : 'rgba(255,255,255,0.03)',
+                  border: `1.5px solid ${isSel ? tc.accent : isWDPlayer ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.07)'}`,
+                  borderRadius: 12, cursor: isDisabled ? 'not-allowed' : 'pointer',
+                  opacity: isFull ? 0.3 : isWDPlayer ? 0.5 : 1, transition: 'background 0.1s, border-color 0.1s',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <span style={{ fontSize: 24, lineHeight: 1, flexShrink: 0 }}>{toFlag(p.country)}</span>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.player_name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: isWDPlayer ? '#6b7280' : '#f1f5f9', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isWDPlayer ? 'line-through' : 'none' }}>{p.player_name}</span>
+                      {isWDPlayer && <span style={{ fontSize: 9, fontWeight: 700, color: '#f87171', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>WD</span>}
+                    </div>
                     {p.world_ranking && <div style={{ color: '#4b5563', fontSize: 11, marginTop: 1 }}>WR #{p.world_ranking}</div>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 8 }}>
-                  {p.odds_display && <span style={{ color: tc.label, fontSize: 13, fontWeight: 600 }}>{fmtOdds(p.odds_display)}</span>}
-                  {isSel && (
+                  {p.odds_display && <span style={{ color: isWDPlayer ? '#4b5563' : tc.label, fontSize: 13, fontWeight: 600 }}>{fmtOdds(p.odds_display)}</span>}
+                  {isSel && !isWDPlayer && (
                     <div style={{ width: 22, height: 22, borderRadius: '50%', background: tc.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Check style={{ width: 13, height: 13, color: '#fff' }} />
                     </div>

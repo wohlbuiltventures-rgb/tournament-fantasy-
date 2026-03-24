@@ -569,6 +569,100 @@ async function runAutoSync() {
   }
 }
 
+// ── Field sync (WD detection) ─────────────────────────────────────────────────
+// Fetches ESPN scoreboard for upcoming tournaments and marks withdrawn players.
+async function syncTournamentField(tournamentId) {
+  const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tournamentId);
+  if (!tourn) return;
+
+  const leagues = db.prepare(
+    "SELECT id FROM golf_leagues WHERE pool_tournament_id = ? AND format_type = 'pool' AND status != 'archived'"
+  ).all(tournamentId);
+  if (!leagues.length) return;
+
+  // Fetch ESPN scoreboard to get actual field
+  let espnData;
+  try {
+    const url = tourn.espn_event_id
+      ? `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=${tourn.espn_event_id}`
+      : `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard`;
+    espnData = await fetchJson(url);
+  } catch (e) {
+    console.warn(`[field-sync] ESPN fetch failed for ${tourn.name}:`, e.message);
+    return;
+  }
+
+  const events = espnData?.events || [];
+  const event = tourn.espn_event_id
+    ? events.find(ev => String(ev.id) === String(tourn.espn_event_id)) || events[0]
+    : events[0];
+  if (!event) { console.log('[field-sync] No ESPN event found'); return; }
+
+  const espnCompetitors = event.competitions?.[0]?.competitors || [];
+  const espnNames = new Set(espnCompetitors.map(c => norm(c.athlete?.displayName || '')));
+
+  console.log(`[field-sync] ${tourn.name}: ${espnNames.size} players in ESPN field`);
+
+  for (const league of leagues) {
+    const tierPlayers = db.prepare(
+      'SELECT * FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND is_withdrawn = 0'
+    ).all(league.id, tournamentId);
+
+    const markWD = db.prepare(
+      'UPDATE pool_tier_players SET is_withdrawn = 1 WHERE id = ?'
+    );
+    const markPickWD = db.prepare(
+      'UPDATE pool_picks SET is_withdrawn = 1 WHERE league_id = ? AND tournament_id = ? AND player_name = ?'
+    );
+
+    let wdCount = 0;
+    db.transaction(() => {
+      for (const p of tierPlayers) {
+        const n = norm(p.player_name);
+        // Check direct match or last+first-initial match
+        const inField = espnNames.has(n) || [...espnNames].some(en => {
+          const parts = en.split(' ');
+          const np = n.split(' ');
+          return parts[parts.length - 1] === np[np.length - 1] && parts[0]?.[0] === np[0]?.[0];
+        });
+        if (!inField) {
+          markWD.run(p.id);
+          markPickWD.run(league.id, tournamentId, p.player_name);
+          console.log(`[field-sync] WD detected: ${p.player_name} (league ${league.id})`);
+          wdCount++;
+        }
+      }
+    })();
+    if (wdCount > 0) {
+      console.log(`[field-sync] ${tourn.name}: ${wdCount} player(s) marked WD in league ${league.id}`);
+    } else {
+      console.log(`[field-sync] ${tourn.name}: no WDs detected`);
+    }
+  }
+}
+
+let _fieldSyncInterval = null;
+
+async function runFieldSync() {
+  // Find pool leagues with tournaments starting within 7 days
+  const upcoming = db.prepare(`
+    SELECT DISTINCT gt.id, gt.name FROM golf_tournaments gt
+    JOIN golf_leagues gl ON gl.pool_tournament_id = gt.id AND gl.format_type = 'pool' AND gl.status != 'archived'
+    WHERE gt.status IN ('scheduled','active')
+      AND date(gt.start_date) <= date('now', '+7 days')
+      AND date(gt.start_date) >= date('now', '-1 days')
+    ORDER BY gt.start_date ASC
+  `).all();
+
+  for (const t of upcoming) {
+    try {
+      await syncTournamentField(t.id);
+    } catch (e) {
+      console.error(`[field-sync] Error for ${t.name}:`, e.message);
+    }
+  }
+}
+
 function scheduleAutoSync() {
   if (_syncInterval) clearInterval(_syncInterval);
   _syncInterval = setInterval(runAutoSync, 10 * 60 * 1000);
@@ -581,6 +675,15 @@ function scheduleAutoSync() {
   _oddsInterval = setInterval(syncPoolOdds, 6 * 60 * 60 * 1000);
   setTimeout(syncPoolOdds, 45000);
   console.log('[golf-sync] Odds sync scheduled — 6h intervals when ODDS_API_KEY set');
+
+  // Field sync (WD detection): run daily at 8am UTC, also once on startup after 60s
+  if (_fieldSyncInterval) clearInterval(_fieldSyncInterval);
+  _fieldSyncInterval = setInterval(() => {
+    const now = new Date();
+    if (now.getUTCHours() === 8 && now.getUTCMinutes() < 10) runFieldSync();
+  }, 10 * 60 * 1000); // check every 10 min, fire when hour = 8 UTC
+  setTimeout(runFieldSync, 60000);
+  console.log('[golf-sync] Field sync scheduled — daily 8am UTC');
 }
 
 function getSyncStatus() {
@@ -619,4 +722,4 @@ async function backfillCompleted() {
   }
 }
 
-module.exports = { syncTournamentScores, scheduleAutoSync, getSyncStatus, backfillCompleted, setIo, syncPoolOdds };
+module.exports = { syncTournamentScores, scheduleAutoSync, getSyncStatus, backfillCompleted, setIo, syncPoolOdds, syncTournamentField };

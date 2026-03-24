@@ -1226,6 +1226,51 @@ try {
   console.log('[golf-db] Houston Open odds fixups applied for', oddsFixups.length, 'players');
 } catch (e) { console.log('[golf-db] odds fixups skipped:', e.message); }
 
+// ── is_withdrawn column (WD support) ─────────────────────────────────────────
+try { db.exec('ALTER TABLE pool_tier_players ADD COLUMN is_withdrawn INTEGER DEFAULT 0'); } catch (e) {}
+try { db.exec('ALTER TABLE pool_picks ADD COLUMN is_withdrawn INTEGER DEFAULT 0'); } catch (e) {}
+
+// ── Houston Open WD field update (Scheffler, Cauley → Power, Kuchar) ──────────
+try {
+  const _HOU = 'ff568722-fbe9-4695-86a8-a31287c22841';
+  const _WDTID = db.prepare("SELECT pool_tournament_id FROM golf_leagues WHERE id = ?").get(_HOU)?.pool_tournament_id;
+
+  // Flag withdrawn players in pool_tier_players and pool_picks
+  if (_WDTID) {
+    db.prepare("UPDATE pool_tier_players SET is_withdrawn=1 WHERE player_name IN ('Scottie Scheffler','Bud Cauley') AND league_id=? AND tournament_id=?").run(_HOU, _WDTID);
+    db.prepare("UPDATE pool_picks SET is_withdrawn=1 WHERE player_name IN ('Scottie Scheffler','Bud Cauley') AND league_id=? AND tournament_id=?").run(_HOU, _WDTID);
+
+    // Add replacement players to golf_players if not present
+    const _gpInsert = db.prepare('INSERT OR IGNORE INTO golf_players (id, name, country, world_ranking) VALUES (?, ?, ?, ?)');
+    _gpInsert.run(uuidv4(), 'Seamus Power', 'IE', 120);
+    _gpInsert.run(uuidv4(), 'Matt Kuchar',  'US', 200);
+
+    // Add to pool_tier_players
+    const _ptpInsert = db.prepare(
+      'INSERT OR IGNORE INTO pool_tier_players (id, league_id, tournament_id, player_id, player_name, tier_number, odds_display, odds_decimal, country, is_withdrawn) ' +
+      "SELECT ?, ?, ?, gp.id, gp.name, 4, '500:1', 501, gp.country, 0 FROM golf_players gp WHERE gp.name = ?"
+    );
+    _ptpInsert.run(uuidv4(), _HOU, _WDTID, uuidv4(), 'Seamus Power');
+    _ptpInsert.run(uuidv4(), _HOU, _WDTID, uuidv4(), 'Matt Kuchar');
+
+    // Verify duplicates don't exist (use player_name as uniqueness check)
+    const _dupeCheck = db.prepare(
+      "SELECT COUNT(*) as n FROM pool_tier_players WHERE league_id=? AND tournament_id=? AND player_name=? AND is_withdrawn=0"
+    );
+    ['Seamus Power','Matt Kuchar'].forEach(name => {
+      const cnt = _dupeCheck.get(_HOU, _WDTID, name)?.n || 0;
+      if (cnt > 1) {
+        // Keep only the most recently inserted one
+        db.prepare(
+          "DELETE FROM pool_tier_players WHERE league_id=? AND tournament_id=? AND player_name=? AND id NOT IN (SELECT id FROM pool_tier_players WHERE league_id=? AND tournament_id=? AND player_name=? ORDER BY created_at DESC LIMIT 1)"
+        ).run(_HOU, _WDTID, name, _HOU, _WDTID, name);
+      }
+    });
+
+    console.log('[golf-db] HOU WD update: Scheffler/Cauley flagged WD, Power/Kuchar added T4');
+  }
+} catch (e) { console.log('[golf-db] HOU WD update skipped:', e.message); }
+
 // Always propagate country from golf_players → pool tables on every boot
 // Joins on player_name (not id) since pool tables store names, not golf_players.id refs
 try { db.exec('ALTER TABLE pool_tier_players ADD COLUMN country TEXT'); } catch (e) {}
@@ -1283,6 +1328,8 @@ try {
     { name: 'Wyndham Clark',    country: 'US' },
     { name: 'Sahith Theegala',  country: 'US' },
     { name: 'Mackenzie Hughes', country: 'CA' },
+    { name: 'Seamus Power',     country: 'IE' },
+    { name: 'Matt Kuchar',      country: 'US' },
   ];
   const _fixCtryTP = db.prepare('UPDATE pool_tier_players SET country = ? WHERE player_name = ? AND league_id = ? AND country IS NULL');
   const _fixCtryPP = db.prepare('UPDATE pool_picks SET country = ? WHERE player_name = ? AND league_id = ? AND country IS NULL');
