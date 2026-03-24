@@ -748,7 +748,7 @@ function InitialsAvatar({ name, tier, size = 44 }) {
 
 // Flag emoji from 2-letter ISO country code ('US' → 🇺🇸)
 const toFlag = code => {
-  if (!code) return '🏌️';
+  if (!code || code.length !== 2) return '🏌️';
   return code.toUpperCase().replace(/./g, c => String.fromCodePoint(c.charCodeAt(0) + 127397));
 };
 
