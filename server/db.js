@@ -212,8 +212,18 @@ try { db.exec("ALTER TABLE player_stats ADD COLUMN round TEXT DEFAULT ''"); } ca
 try { db.exec("ALTER TABLE player_stats ADD COLUMN opponent TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE player_stats ADD COLUMN played_at DATETIME"); } catch (e) {}
 
-// Backfill player_stats.round for any rows inserted before the column existed
-// (admin score entry didn't populate it; also handles rows from espnPoller before the fix)
+// Fix games.round_name for games created via generate-bracket (hardcoded 'First Round')
+// or pullSchedule before the parseRoundName fix.  Uses known 2026 tournament dates.
+try {
+  db.prepare("UPDATE games SET round_name='First Four'   WHERE game_date BETWEEN '2026-03-18' AND '2026-03-19' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
+  db.prepare("UPDATE games SET round_name='Second Round' WHERE game_date BETWEEN '2026-03-26' AND '2026-03-29' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
+  db.prepare("UPDATE games SET round_name='Sweet 16'     WHERE game_date BETWEEN '2026-04-03' AND '2026-04-04' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
+  db.prepare("UPDATE games SET round_name='Elite 8'      WHERE game_date BETWEEN '2026-04-05' AND '2026-04-06' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
+  console.log('[db] game round_name date-fix applied');
+} catch (e) { console.log('[db] game round_name fix skipped:', e.message); }
+
+// Backfill (and correct) player_stats.round for ALL rows using now-fixed games.round_name.
+// This overwrites wrong 'R64' values on R32/S16 games too (not just empty rows).
 try {
   db.exec(`
     UPDATE player_stats SET round = (
@@ -230,8 +240,8 @@ try {
     )
     FROM games g
     WHERE player_stats.game_id = g.id
-      AND (player_stats.round IS NULL OR player_stats.round = '')
   `);
+  console.log('[db] player_stats.round backfill complete');
 } catch (e) { console.log('[db] round backfill skipped:', e.message); }
 
 // ── Injury designations (2026 tournament) ────────────────────────────────────

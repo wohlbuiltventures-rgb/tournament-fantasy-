@@ -426,14 +426,14 @@ function pushStandingsToLeagues(io) {
 // including scheduled (future) games. Safe to run repeatedly — idempotent.
 function parseRoundName(headline) {
   const h = (headline || '').toLowerCase();
-  if (h.includes('first four'))            return 'First Four';
-  if (h.includes('first round'))           return 'First Round';
-  if (h.includes('second round'))          return 'Second Round';
-  if (h.includes('sweet 16') || h.includes('sweet sixteen')) return 'Sweet 16';
-  if (h.includes('elite 8') || h.includes('elite eight'))    return 'Elite 8';
-  if (h.includes('final four'))            return 'Final Four';
-  if (h.includes('national championship') || h.includes('championship game')) return 'Championship';
-  return 'First Round';
+  if (h.includes('first four'))                               return 'First Four';
+  if (h.includes('first round')  || h.includes('round of 64')) return 'First Round';
+  if (h.includes('second round') || h.includes('round of 32')) return 'Second Round';
+  if (h.includes('sweet 16') || h.includes('sweet sixteen') || h.includes('round of 16')) return 'Sweet 16';
+  if (h.includes('elite 8')  || h.includes('elite eight')   || h.includes('round of 8'))  return 'Elite 8';
+  if (h.includes('final four') || h.includes('round of 4'))  return 'Final Four';
+  if (h.includes('national championship') || h.includes('championship game') || h.includes('round of 2')) return 'Championship';
+  return '';  // empty = unknown; don't overwrite an existing value with a wrong guess
 }
 
 function parseRegion(headline) {
@@ -495,17 +495,19 @@ async function pullSchedule(io) {
       // Try to find an existing game by espn_event_id first, then by name matching
       const byId = db.prepare('SELECT * FROM games WHERE espn_event_id = ?').get(espnEventId);
       if (byId) {
-        // Update metadata only — don't clobber scores already set by the poller
+        // Update metadata only — don't clobber scores already set by the poller.
+        // round_name: use ESPN value when it's non-empty AND more specific than 'First Round'
+        // (generate-bracket hardcodes 'First Round' for all games; ESPN is authoritative here).
         db.prepare(`
           UPDATE games SET
             game_date    = COALESCE(NULLIF(game_date,  ''), ?),
-            round_name   = COALESCE(NULLIF(round_name, ''), ?),
+            round_name   = CASE WHEN ? <> '' AND ? <> 'First Round' THEN ? ELSE COALESCE(NULLIF(round_name, ''), ?) END,
             tip_off_time = COALESCE(NULLIF(tip_off_time, ''), ?),
             tv_network   = COALESCE(NULLIF(tv_network,  ''), ?),
             location     = COALESCE(NULLIF(location,    ''), ?),
             region       = COALESCE(NULLIF(region,      ''), ?)
           WHERE espn_event_id = ?
-        `).run(gameDate, roundName, tipOffTime, tvNetwork, location, region, espnEventId);
+        `).run(gameDate, roundName, roundName, roundName, roundName, tipOffTime, tvNetwork, location, region, espnEventId);
         updated++;
         continue;
       }
@@ -517,13 +519,13 @@ async function pullSchedule(io) {
           UPDATE games SET
             espn_event_id = COALESCE(NULLIF(espn_event_id, ''), ?),
             game_date     = COALESCE(NULLIF(game_date,  ''), ?),
-            round_name    = COALESCE(NULLIF(round_name, ''), ?),
+            round_name    = CASE WHEN ? <> '' AND ? <> 'First Round' THEN ? ELSE COALESCE(NULLIF(round_name, ''), ?) END,
             tip_off_time  = COALESCE(NULLIF(tip_off_time, ''), ?),
             tv_network    = COALESCE(NULLIF(tv_network,  ''), ?),
             location      = COALESCE(NULLIF(location,    ''), ?),
             region        = COALESCE(NULLIF(region,      ''), ?)
           WHERE id = ?
-        `).run(espnEventId, gameDate, roundName, tipOffTime, tvNetwork, location, region, nameMatch.game.id);
+        `).run(espnEventId, gameDate, roundName, roundName, roundName, roundName, tipOffTime, tvNetwork, location, region, nameMatch.game.id);
         updated++;
         continue;
       }
