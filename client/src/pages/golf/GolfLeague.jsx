@@ -920,13 +920,25 @@ function TierPickerModal({ tierNum, tierConfig, players, currentSel, onPick, onC
   const rgbMap = { '#f59e0b': '245,158,11', '#8b5cf6': '139,92,246', '#3b82f6': '59,130,246', '#10b981': '16,185,129' };
   const rgb = rgbMap[tc.accent] || '16,185,129';
 
+  const [query, setQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchRef = useRef(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => searchRef.current?.focus(), 120);
+    return () => clearTimeout(t);
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q ? sorted.filter(p => p.player_name.toLowerCase().includes(q)) : sorted;
+
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
       onClick={onClose}
     >
       <div
-        style={{ width: '100%', maxWidth: 560, background: '#111827', borderRadius: '20px 20px 0 0', maxHeight: '82vh', display: 'flex', flexDirection: 'column' }}
+        style={{ width: '100%', maxWidth: 560, background: '#111827', borderRadius: '20px 20px 0 0', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Drag handle */}
@@ -947,12 +959,52 @@ function TierPickerModal({ tierNum, tierConfig, players, currentSel, onPick, onC
           </div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.07)', border: 'none', color: '#9ca3af', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
         </div>
+
+        {/* Search bar */}
+        <div style={{ padding: '10px 14px 2px' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: 'rgba(255,255,255,0.05)',
+            border: `1.5px solid ${searchFocused ? '#00e87a' : 'rgba(255,255,255,0.1)'}`,
+            borderRadius: 12, padding: '0 14px', height: 44,
+            transition: 'border-color 0.15s',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={searchFocused ? '#00e87a' : '#6b7280'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transition: 'stroke 0.15s' }}>
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              ref={searchRef}
+              type="search"
+              inputMode="search"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder="Search players..."
+              style={{
+                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                color: '#f1f5f9', fontSize: 14, fontWeight: 500,
+                caretColor: '#00e87a',
+              }}
+            />
+            {query && (
+              <button
+                onClick={() => { setQuery(''); searchRef.current?.focus(); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 18, padding: '0 2px', lineHeight: 1, flexShrink: 0 }}
+              >×</button>
+            )}
+          </div>
+        </div>
+
         {/* Player list */}
-        <div style={{ overflowY: 'auto', flex: 1, padding: '10px 14px 8px' }}>
+        <div style={{ overflowY: 'auto', flex: 1, padding: '8px 14px 8px' }}>
           {sorted.length === 0 && (
             <p style={{ color: '#4b5563', textAlign: 'center', padding: 32, fontSize: 13 }}>No players in this tier yet</p>
           )}
-          {sorted.map(p => {
+          {filtered.length === 0 && sorted.length > 0 && (
+            <p style={{ color: '#4b5563', textAlign: 'center', padding: 32, fontSize: 13 }}>No players found for "{query}"</p>
+          )}
+          {filtered.map(p => {
             const isSel = currentSel.includes(p.player_id);
             const isFull = currentSel.length >= limit && !isSel;
             return (
