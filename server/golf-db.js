@@ -1108,7 +1108,25 @@ try {
     }
   })();
   console.log('[golf-db] Country codes set on golf_players');
+
+  // Diagnostic: verify the UPDATE actually matched rows
+  const _chkScheff = db.prepare("SELECT name, country FROM golf_players WHERE name = 'Scottie Scheffler'").get();
+  console.log('[golf-db] Scheffler country check:', _chkScheff);
+  const _chkGotterup = db.prepare("SELECT name, country FROM golf_players WHERE name = 'Chris Gotterup'").get();
+  console.log('[golf-db] Gotterup country check:', _chkGotterup);
+  const _cntUs = db.prepare("SELECT COUNT(*) as n FROM golf_players WHERE country = 'US'").get();
+  console.log('[golf-db] US players in golf_players:', _cntUs.n);
+  const _anyGp = db.prepare("SELECT name, country FROM golf_players ORDER BY rowid DESC LIMIT 3").all();
+  console.log('[golf-db] Last 3 golf_players rows:', JSON.stringify(_anyGp));
 } catch (e) { console.log('[golf-db] country migration skipped:', e.message); }
+
+try {
+  const _HOU_LEAGUE = 'ff568722-fbe9-4695-86a8-a31287c22841';
+  const _cntPtp = db.prepare("SELECT COUNT(*) as n FROM pool_tier_players WHERE country IS NOT NULL AND league_id = ?").get(_HOU_LEAGUE);
+  console.log('[golf-db] ptp with country set:', _cntPtp.n);
+  const _sampPtp = db.prepare("SELECT player_name, country FROM pool_tier_players WHERE league_id = ? LIMIT 3").all(_HOU_LEAGUE);
+  console.log('[golf-db] ptp sample:', JSON.stringify(_sampPtp));
+} catch (e) { console.log('[golf-db] country diagnostic skipped:', e.message); }
 
 // ── Manual odds / tier corrections (Houston Open) ─────────────────────────────
 // ESPN odds weren't available at sync time — apply known betting lines manually.
