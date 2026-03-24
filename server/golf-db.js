@@ -1259,8 +1259,14 @@ try {
 try {
   const _HOU_LEAGUE = 'ff568722-fbe9-4695-86a8-a31287c22841';
   const COUNTRY_FIXUPS = [
-    // Players confirmed US whose country isn't propagating via golf_players join
-    { name: 'Brooks Koepka', country: 'US' },
+    // Players whose country isn't propagating via golf_players name join
+    { name: 'Brooks Koepka',    country: 'US' },
+    { name: 'Chris Gotterup',   country: 'US' },
+    { name: 'Jake Knapp',       country: 'US' },
+    { name: 'Rickie Fowler',    country: 'US' },
+    { name: 'Wyndham Clark',    country: 'US' },
+    { name: 'Sahith Theegala',  country: 'US' },
+    { name: 'Mackenzie Hughes', country: 'CA' },
   ];
   const _fixCtryTP = db.prepare('UPDATE pool_tier_players SET country = ? WHERE player_name = ? AND league_id = ? AND country IS NULL');
   const _fixCtryPP = db.prepare('UPDATE pool_picks SET country = ? WHERE player_name = ? AND league_id = ? AND country IS NULL');
