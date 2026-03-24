@@ -219,15 +219,18 @@ try {
   db.prepare("UPDATE games SET round_name='Second Round' WHERE game_date BETWEEN '2026-03-26' AND '2026-03-29' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
   db.prepare("UPDATE games SET round_name='Sweet 16'     WHERE game_date BETWEEN '2026-04-03' AND '2026-04-04' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
   db.prepare("UPDATE games SET round_name='Elite 8'      WHERE game_date BETWEEN '2026-04-05' AND '2026-04-06' AND (round_name='' OR round_name IS NULL OR round_name='First Round')").run();
-  console.log('[db] game round_name date-fix applied');
+  // Diagnostic: show round_name distribution after fix
+  const roundDist = db.prepare("SELECT round_name, COUNT(*) as cnt FROM games GROUP BY round_name ORDER BY cnt DESC").all();
+  console.log('[db] game round_name date-fix applied. Distribution:', JSON.stringify(roundDist));
 } catch (e) { console.log('[db] game round_name fix skipped:', e.message); }
 
 // Backfill (and correct) player_stats.round for ALL rows using now-fixed games.round_name.
-// This overwrites wrong 'R64' values on R32/S16 games too (not just empty rows).
+// Uses a correlated subquery (universally supported in all SQLite versions).
+// Overwrites wrong 'R64' values on R32/S16 games — not just empty rows.
 try {
   db.exec(`
     UPDATE player_stats SET round = (
-      CASE lower(g.round_name)
+      SELECT CASE lower(g.round_name)
         WHEN 'first four'   THEN 'First Four'
         WHEN 'first round'  THEN 'R64'
         WHEN 'second round' THEN 'R32'
@@ -237,11 +240,14 @@ try {
         WHEN 'championship' THEN 'NCG'
         ELSE g.round_name
       END
+      FROM games g
+      WHERE g.id = player_stats.game_id
     )
-    FROM games g
-    WHERE player_stats.game_id = g.id
+    WHERE game_id IN (SELECT id FROM games)
   `);
-  console.log('[db] player_stats.round backfill complete');
+  // Diagnostic: show what round values exist after backfill
+  const roundCounts = db.prepare("SELECT round, COUNT(*) as cnt FROM player_stats GROUP BY round ORDER BY cnt DESC").all();
+  console.log('[db] player_stats.round backfill complete. Round distribution:', JSON.stringify(roundCounts));
 } catch (e) { console.log('[db] round backfill skipped:', e.message); }
 
 // ── Injury designations (2026 tournament) ────────────────────────────────────

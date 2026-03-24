@@ -23,6 +23,14 @@ function buildStandings(leagueId) {
   ).get(leagueId);
   console.log(`[standings] league=${leagueId} raw picks=${rawCount.cnt} members=${members.length}`);
 
+  // ── Round diagnostics — log once per call so we can verify DB state ──────────
+  const _gRounds = db.prepare("SELECT round_name, COUNT(*) as n FROM games GROUP BY round_name ORDER BY n DESC").all();
+  console.log('[standings] games.round_name dist:', JSON.stringify(_gRounds));
+  const _psRounds = db.prepare("SELECT round, COUNT(*) as n FROM player_stats GROUP BY round ORDER BY n DESC").all();
+  console.log('[standings] player_stats.round dist:', JSON.stringify(_psRounds));
+  const _samplePS = db.prepare("SELECT ps.round, ps.points, g.round_name, g.game_date FROM player_stats ps JOIN games g ON g.id = ps.game_id ORDER BY g.game_date DESC LIMIT 6").all();
+  console.log('[standings] recent player_stats rows:', JSON.stringify(_samplePS));
+
   // ── Fetch ALL picks + player info for this league in one batch query ────────
   // Using LEFT JOIN so picks with orphaned player_id still surface (shows up as
   // null player fields rather than silently disappearing from the results).
@@ -140,9 +148,6 @@ function buildStandings(leagueId) {
         ORDER BY g.game_date ASC
       `).all(player.player_id);
 
-      if (gameLog.length > 0 && player.player_id === allPicks[0]?.player_id) {
-        console.log(`[standings] round debug player=${player.name} game_log=`, JSON.stringify(gameLog.map(g => ({ round: g.round_code, pts: g.points }))));
-      }
 
       // Projected ETP = current_pts + (alive_players × tourney_ppg × games_remaining)
       // games_remaining: First Four teams can play up to 7 games total;
