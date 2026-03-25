@@ -16,6 +16,35 @@ const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
+// ── Migration log ─────────────────────────────────────────────────────────────
+// Tracks which one-time migrations have already run so they never fire twice.
+// Use runOnce('migration_name', () => { /* destructive work */ }) for any
+// startup migration that runs DELETE, DROP, or other irreversible operations.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS migration_log (
+    name       TEXT PRIMARY KEY,
+    ran_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+/**
+ * Run a migration exactly once, ever.
+ * If 'name' already exists in migration_log, the fn is skipped silently.
+ * If it throws, the error is logged but NOT recorded — it will retry next boot.
+ */
+function runOnce(name, fn) {
+  if (db.prepare('SELECT 1 FROM migration_log WHERE name = ?').get(name)) return;
+  try {
+    db.transaction(() => {
+      fn();
+      db.prepare('INSERT INTO migration_log (name) VALUES (?)').run(name);
+    })();
+    console.log(`[migration] ${name} ✓`);
+  } catch (err) {
+    console.error(`[migration] ${name} FAILED:`, err.message);
+  }
+}
+
 // Create tables
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -460,3 +489,4 @@ try {
 } catch (e) { console.error('[db] draft_status migration error:', e.message); }
 
 module.exports = db;
+module.exports.runOnce = runOnce;
