@@ -1023,6 +1023,7 @@ export default function GolfLanding() {
                 { feature: 'Live scoring',                      us: '✅ Included free',      them: '❌ Paid upgrade only',   highlight: true  },
                 { feature: 'Auto standings email after every round', us: '✅ Automatic',     them: '❌ Manual',              highlight: false },
                 { feature: 'Commissioner price',                us: '✅ $12.99/tournament',   them: '❌ $30–$110 per league', highlight: true  },
+                { feature: '300-player pool cost',              us: '✅ $49.99 flat',          them: '❌ ~$290 (Splash Sports)', highlight: false },
                 { feature: 'Mobile-first design',               us: '✅ Modern & fast',       them: '❌ Desktop only, dated', highlight: false },
                 { feature: 'ESPN auto-sync',                    us: '✅ Built in',            them: '⚠️ Varies',             highlight: true  },
                 { feature: 'FAAB waiver wire',                  us: '✅ Full support',        them: '⚠️ Some do',            highlight: false },
@@ -1033,7 +1034,7 @@ export default function GolfLanding() {
                   key={feature}
                   style={{
                     background: highlight ? '#0a1a0f' : '#080f09',
-                    borderBottom: i < 7 ? '1px solid #111827' : 'none',
+                    borderBottom: i < 8 ? '1px solid #111827' : 'none',
                   }}
                 >
                   <td style={{ padding: '13px 20px', color: '#d1d5db', fontSize: 13, fontWeight: 500 }}>{feature}</td>
@@ -1045,7 +1046,10 @@ export default function GolfLanding() {
           </table>
         </div>
 
-        <p style={{ textAlign: 'center', color: '#374151', fontSize: 12, marginTop: 14, fontStyle: 'italic' }}>
+        <p style={{ textAlign: 'center', color: '#4ade80', fontSize: 13, fontWeight: 600, marginTop: 14 }}>
+          A 300-person pool costs ~$290 on Splash Sports. Here it's $49.99. Flat.
+        </p>
+        <p style={{ textAlign: 'center', color: '#374151', fontSize: 12, marginTop: 8, fontStyle: 'italic' }}>
           We won't name names. You know who they are.
         </p>
       </Section>
