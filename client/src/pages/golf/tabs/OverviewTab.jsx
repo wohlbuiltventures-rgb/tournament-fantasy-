@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Users, Zap, Flag, Check, Copy, MessageSquare } from 'lucide-react';
 import { Button, Badge } from '../../../components/ui';
-import api from '../../../api';
 
 const FORMAT_META = {
   pool:        { label: 'Pool',          color: 'blue'  },
@@ -9,19 +8,10 @@ const FORMAT_META = {
   tourneyrun:  { label: 'TourneyRun',    color: 'green' },
 };
 
-export default function OverviewTab({ league, members, user, isComm, navigate }) {
+export default function OverviewTab({ league, members, user, isComm, navigate, picksStatus }) {
   const inviteUrl = `${window.location.origin}/golf/join?code=${league.invite_code}`;
   const [copied, setCopied] = useState(false);
-  const [picksStatus, setPicksStatus] = useState(null);
   const fmt = FORMAT_META[league.format_type] || FORMAT_META.tourneyrun;
-
-  useEffect(() => {
-    if (league.format_type === 'pool' && league.pool_tournament_id) {
-      api.get(`/golf/leagues/${league.id}/my-roster`)
-        .then(r => setPicksStatus({ submitted: r.data.submitted, picks_locked: r.data.picks_locked }))
-        .catch(() => {});
-    }
-  }, [league.id, league.format_type, league.pool_tournament_id]); // eslint-disable-line
 
   function copyInvite() {
     navigator.clipboard.writeText(inviteUrl).then(() => {

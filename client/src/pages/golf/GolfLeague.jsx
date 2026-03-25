@@ -52,6 +52,7 @@ export default function GolfLeague() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [picksStatus, setPicksStatus] = useState(null);
 
   useDocTitle(
     league ? `${league.name} | Golf` : 'Golf League | TourneyRun',
@@ -79,6 +80,13 @@ export default function GolfLeague() {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!league || league.format_type !== 'pool' || !league.pool_tournament_id) return;
+    api.get(`/golf/leagues/${id}/my-roster`)
+      .then(r => setPicksStatus({ submitted: r.data.submitted, picks_locked: r.data.picks_locked }))
+      .catch(() => {});
+  }, [id, league?.format_type, league?.pool_tournament_id]); // eslint-disable-line
 
   // Live standings push for pool leagues
   useEffect(() => {
@@ -227,7 +235,7 @@ export default function GolfLeague() {
 
       {/* ── Tab content ── */}
       {tab === 'overview' && (
-        <OverviewTab league={league} members={members} user={user} isComm={isComm} navigate={navigate} />
+        <OverviewTab league={league} members={members} user={user} isComm={isComm} navigate={navigate} picksStatus={picksStatus} />
       )}
       {tab === 'schedule' && (
         <ScheduleTab leagueId={id} isComm={isComm} />
