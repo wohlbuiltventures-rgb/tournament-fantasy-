@@ -155,7 +155,11 @@ async function syncTournament(tournamentId) {
           if (key.split(' ').pop() === lastName) { playerId = id; break; }
         }
       }
-      if (!playerId) { unmatched++; continue; }
+      if (!playerId) {
+        console.warn(`[golf-sync] UNMATCHED player "${displayName}" in "${tourn.name}" — not found in golf_players table. Skipping.`);
+        unmatched++;
+        continue;
+      }
 
       // Parse linescores (per-round scores)
       const linescores = comp.linescores || comp.rounds || [];

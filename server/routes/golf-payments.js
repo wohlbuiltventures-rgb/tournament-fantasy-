@@ -94,9 +94,10 @@ async function createPaymentLink({ name, amount, metadata, redirectUrl, buyerEma
 
 // ── Referral code helpers ─────────────────────────────────────────────────────
 function genReferralCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 chars; 256 % 32 === 0, no modulo bias
+  const bytes = crypto.randomBytes(8);
   let code = '';
-  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 8; i++) code += chars[bytes[i] % chars.length];
   return code;
 }
 

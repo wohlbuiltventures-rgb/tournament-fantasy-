@@ -41,11 +41,13 @@ function buildStandings(leagueId) {
     ORDER BY dp.pick_number
   `).all(leagueId);
 
-  // Group picks by user_id for O(1) lookup per member
-  const picksByUser = {};
+  // Group picks by user_id for O(1) lookup per member.
+  // Map avoids prototype pollution — plain objects inherit keys like 'toString'
+  // which would pass `if (!obj[key])` and corrupt grouping for those user IDs.
+  const picksByUser = new Map();
   for (const pick of allPicks) {
-    if (!picksByUser[pick.user_id]) picksByUser[pick.user_id] = [];
-    picksByUser[pick.user_id].push(pick);
+    if (!picksByUser.has(pick.user_id)) picksByUser.set(pick.user_id, []);
+    picksByUser.get(pick.user_id).push(pick);
   }
 
   // Batch-fetch next scheduled (unplayed, not live) game per team for "Next game" display
@@ -73,7 +75,7 @@ function buildStandings(leagueId) {
   }
 
   const standings = members.map(member => {
-    const draftedPlayers = picksByUser[member.user_id] || [];
+    const draftedPlayers = picksByUser.get(member.user_id) || [];
 
     let totalPoints = 0;
     const playerStats = draftedPlayers.map(player => {
