@@ -1005,4 +1005,33 @@ router.get('/admin/sync/status', authMiddleware, (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// PATCH /api/golf/leagues/:id/settings — commissioner edits buy-in + payouts
+// ---------------------------------------------------------------------------
+router.patch('/leagues/:id/settings', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Not commissioner' });
+
+    const { buy_in_amount, payout_1st, payout_2nd, payout_3rd } = req.body;
+    const p1 = Math.round((parseFloat(payout_1st) || 0) * 100) / 100;
+    const p2 = Math.round((parseFloat(payout_2nd) || 0) * 100) / 100;
+    const p3 = Math.round((parseFloat(payout_3rd) || 0) * 100) / 100;
+
+    if (Math.abs(p1 + p2 + p3 - 100) > 0.5) {
+      return res.status(400).json({ error: 'Payouts must sum to 100%' });
+    }
+
+    db.prepare(
+      'UPDATE golf_leagues SET buy_in_amount = ?, payout_first = ?, payout_second = ?, payout_third = ? WHERE id = ?'
+    ).run(parseFloat(buy_in_amount) || 0, p1, p2, p3, req.params.id);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[golf] settings patch error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

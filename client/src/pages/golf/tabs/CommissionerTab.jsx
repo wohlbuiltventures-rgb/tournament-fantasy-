@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '../../../components/ui';
 import api from '../../../api';
 import GolfPaymentModal from '../../../components/golf/GolfPaymentModal';
+import { POOL_TIERS } from '../../../utils/poolPricing';
 
 function MassBlast({ leagueId }) {
   const [msg, setMsg] = useState('');
@@ -86,6 +87,20 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   const [balancing, setBalancing]   = useState(false);
   const [balanceDone, setBalanceDone] = useState(false);
 
+  // Feature 1: capacity upsell
+  const [capacityDismissed, setCapacityDismissed] = useState(false);
+  const [upgrading, setUpgrading]   = useState(false);
+  const [upgradeError, setUpgradeError] = useState('');
+
+  // Feature 2: pool settings
+  const [buyIn,   setBuyIn]   = useState(String(league?.buy_in_amount  ?? 0));
+  const [payout1, setPayout1] = useState(String(league?.payout_first   ?? 70));
+  const [payout2, setPayout2] = useState(String(league?.payout_second  ?? 20));
+  const [payout3, setPayout3] = useState(String(league?.payout_third   ?? 10));
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsSaved,  setSettingsSaved]  = useState(false);
+  const [settingsError,  setSettingsError]  = useState('');
+
   useEffect(() => {
     Promise.all([
       api.get('/golf/payments/status'),
@@ -105,6 +120,55 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
       }
     }).catch(() => setGateChecked(true));
   }, [leagueId]);
+
+  // Feature 1: capacity upsell derived values
+  const currentMax      = league?.max_teams || 20;
+  const currentTierIdx  = POOL_TIERS.findIndex(t => t.maxTeams === currentMax);
+  const currentTierData = currentTierIdx >= 0 ? POOL_TIERS[currentTierIdx] : null;
+  const nextTierData    = currentTierIdx >= 0 && currentTierIdx < POOL_TIERS.length - 1
+    ? POOL_TIERS[currentTierIdx + 1] : null;
+  const capacityFill    = currentMax > 0 ? members.length / currentMax : 0;
+  const showCapacityBanner = league?.format_type === 'pool' && capacityFill >= 0.80 && !capacityDismissed;
+  const priceDiff       = nextTierData && currentTierData
+    ? (nextTierData.price - currentTierData.price).toFixed(2) : null;
+
+  async function handleUpgrade() {
+    setUpgrading(true);
+    setUpgradeError('');
+    try {
+      const r = await api.post(`/golf/leagues/${leagueId}/upgrade-tier`);
+      window.location.href = r.data.url;
+    } catch {
+      setUpgradeError('Something went wrong. Please try again.');
+      setUpgrading(false);
+    }
+  }
+
+  // Feature 2: settings derived values
+  const thursdayStart  = league?.pool_tournament_start
+    ? new Date(league.pool_tournament_start + 'T12:00:00.000Z') : null;
+  const settingsLocked = !!thursdayStart && new Date() >= thursdayStart;
+  const payoutsSum     = (parseFloat(payout1) || 0) + (parseFloat(payout2) || 0) + (parseFloat(payout3) || 0);
+  const payoutsValid   = Math.abs(payoutsSum - 100) < 0.5;
+
+  async function saveSettings() {
+    if (!payoutsValid) { setSettingsError('Payouts must sum to exactly 100%'); return; }
+    setSettingsSaving(true);
+    setSettingsError('');
+    try {
+      await api.patch(`/golf/leagues/${leagueId}/settings`, {
+        buy_in_amount: parseFloat(buyIn) || 0,
+        payout_1st: parseFloat(payout1) || 0,
+        payout_2nd: parseFloat(payout2) || 0,
+        payout_3rd: parseFloat(payout3) || 0,
+      });
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 3000);
+    } catch {
+      setSettingsError('Failed to save. Try again.');
+    }
+    setSettingsSaving(false);
+  }
 
   if (!gateChecked) {
     return <div style={{ color: '#4b5563', padding: 32, textAlign: 'center', fontSize: 14 }}>Loading…</div>;
@@ -163,6 +227,54 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
         </div>
       ) : (
         <div className="space-y-4">
+          {/* ── Capacity upsell banner ── */}
+          {showCapacityBanner && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(251,146,60,0.1), rgba(245,158,11,0.07))',
+              border: '1.5px solid rgba(251,146,60,0.4)',
+              borderRadius: 14,
+              padding: '14px 16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                <div>
+                  <div style={{ color: '#fb923c', fontWeight: 800, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                    🔥 You&apos;re popular!
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 1.5 }}>
+                    <strong style={{ color: '#fff' }}>{members.length} of {currentMax}</strong> spots filled.
+                    {nextTierData
+                      ? ` Upgrade to ${nextTierData.label} for just $${priceDiff} more.`
+                      : ' Contact us to expand further.'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setCapacityDismissed(true)}
+                  style={{ color: 'rgba(255,255,255,0.3)', fontSize: 18, lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0, padding: '0 2px' }}
+                  aria-label="Dismiss"
+                >×</button>
+              </div>
+              {upgradeError && <p style={{ color: '#f87171', fontSize: 12, marginBottom: 6 }}>{upgradeError}</p>}
+              {nextTierData ? (
+                <button
+                  disabled={upgrading}
+                  onClick={handleUpgrade}
+                  style={{
+                    background: 'rgba(251,146,60,0.2)', border: '1px solid rgba(251,146,60,0.5)',
+                    borderRadius: 8, padding: '6px 14px',
+                    color: '#fb923c', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                    opacity: upgrading ? 0.6 : 1,
+                  }}
+                >
+                  {upgrading ? 'Redirecting…' : `Upgrade for $${priceDiff}`}
+                </button>
+              ) : (
+                <a href="mailto:support@tourneyrun.app" style={{ color: '#fb923c', fontSize: 13, fontWeight: 600 }}>
+                  Contact us →
+                </a>
+              )}
+            </div>
+          )}
+
           {/* Commissioner Pro header */}
           <div className="flex items-center justify-between">
             <h3 className="text-white font-bold">Commissioner Hub</h3>
@@ -189,6 +301,93 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
               ))}
             </div>
           </div>
+
+          {/* ── Edit Pool Settings ── */}
+          {league?.format_type === 'pool' && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+              <h4 className="text-white text-sm font-bold mb-1">⚙️ Edit Pool Settings</h4>
+              {settingsLocked ? (
+                <p style={{ color: '#eab308', fontSize: 12, marginBottom: 12 }}>
+                  🔒 Settings locked — tournament starts Thursday
+                </p>
+              ) : (
+                <p className="text-gray-500 text-xs mb-3">Editable until Thursday 8am ET</p>
+              )}
+
+              <div className="space-y-3">
+                {/* Buy-in */}
+                <div>
+                  <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">
+                    Buy-in per player ($)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={buyIn}
+                    disabled={settingsLocked}
+                    onChange={e => setBuyIn(e.target.value)}
+                    className="input w-32 text-sm"
+                    style={settingsLocked ? { opacity: 0.5 } : {}}
+                  />
+                </div>
+
+                {/* Payout splits */}
+                <div>
+                  <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">
+                    Payout splits
+                  </label>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {[
+                      { label: '1st %', val: payout1, set: setPayout1 },
+                      { label: '2nd %', val: payout2, set: setPayout2 },
+                      { label: '3rd %', val: payout3, set: setPayout3 },
+                    ].map(({ label, val, set }) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <span className="text-gray-500 text-xs w-9">{label}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={val}
+                          disabled={settingsLocked}
+                          onChange={e => set(e.target.value)}
+                          className="input w-16 text-sm text-center"
+                          style={settingsLocked ? { opacity: 0.5 } : {}}
+                        />
+                      </div>
+                    ))}
+                    <span style={{
+                      fontSize: 12, fontWeight: 600,
+                      color: payoutsValid ? '#4ade80' : '#f87171',
+                    }}>
+                      {payoutsSum.toFixed(0)}%
+                    </span>
+                  </div>
+                  {!payoutsValid && (
+                    <p style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>
+                      Must sum to 100% (currently {payoutsSum.toFixed(0)}%)
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {!settingsLocked && (
+                <div className="flex items-center gap-3 mt-4">
+                  <button
+                    disabled={settingsSaving || !payoutsValid}
+                    onClick={saveSettings}
+                    className="text-sm bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                  >
+                    {settingsSaving ? 'Saving…' : 'Save settings'}
+                  </button>
+                  {settingsSaved && <span style={{ color: '#4ade80', fontSize: 13 }}>✓ Saved</span>}
+                  {settingsError && <span style={{ color: '#f87171', fontSize: 13 }}>{settingsError}</span>}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Mass blast */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">

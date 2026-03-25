@@ -557,6 +557,11 @@ async function handleGolfWebhook({ order_id, metadata }) {
           db.prepare(`UPDATE golf_leagues SET status = 'lobby' WHERE id = ? AND status = 'pending_payment'`)
             .run(metadata.league_id);
         }
+      } else if (type === 'golf_tier_upgrade') {
+        if (metadata.league_id && metadata.new_max_teams && metadata.new_tier_key) {
+          db.prepare('UPDATE golf_leagues SET max_teams = ?, pool_tier = ? WHERE id = ?')
+            .run(parseInt(metadata.new_max_teams), metadata.new_tier_key, metadata.league_id);
+        }
       }
 
       // Deduct referral credit — runs exactly once per order
@@ -748,6 +753,66 @@ router.post('/webhooks/stripe', async (req, res) => {
   }
 
   res.json({ received: true });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/golf/leagues/:id/upgrade-tier — charge the price diff, bump capacity
+// ---------------------------------------------------------------------------
+const TIER_PRICING = [
+  { maxTeams: 20,  tierKey: 'standard',   price: 12.99 },
+  { maxTeams: 40,  tierKey: 'standard',   price: 19.99 },
+  { maxTeams: 60,  tierKey: 'standard',   price: 24.99 },
+  { maxTeams: 100, tierKey: 'large_100',  price: 34.99 },
+  { maxTeams: 300, tierKey: 'large_300',  price: 49.99 },
+  { maxTeams: 999, tierKey: 'enterprise', price: 69.99 },
+];
+
+router.post('/leagues/:id/upgrade-tier', authMiddleware, async (req, res) => {
+  try {
+    const leagueId = req.params.id;
+    const userId   = req.user.id;
+
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(leagueId);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== userId) return res.status(403).json({ error: 'Not commissioner' });
+
+    const currentIdx = TIER_PRICING.findIndex(t => t.maxTeams === (league.max_teams || 20));
+    if (currentIdx < 0 || currentIdx >= TIER_PRICING.length - 1) {
+      return res.status(400).json({ error: 'Already at highest tier or tier not found' });
+    }
+
+    const current  = TIER_PRICING[currentIdx];
+    const next     = TIER_PRICING[currentIdx + 1];
+    let   diff     = Math.round((next.price - current.price) * 100) / 100;
+    let   itemName = `Pool Capacity Upgrade — up to ${next.maxTeams === 999 ? '300+' : next.maxTeams} teams`;
+
+    if (new Date() < MASTERS_PROMO_END) {
+      diff     = Math.round(diff * 0.75 * 100) / 100;
+      itemName += ' (Masters Launch Price)';
+    }
+
+    const base = process.env.CLIENT_URL?.replace(/\/$/, '') || 'https://www.tourneyrun.app';
+    const user = db.prepare('SELECT email FROM users WHERE id = ?').get(userId);
+
+    const { url } = await createPaymentLink({
+      name:        itemName,
+      amount:      diff,
+      metadata: {
+        type:          'golf_tier_upgrade',
+        user_id:       userId,
+        league_id:     leagueId,
+        new_max_teams: String(next.maxTeams),
+        new_tier_key:  next.tierKey,
+      },
+      redirectUrl: `${base}/golf/league/${leagueId}?tab=commissioner&upgraded=true`,
+      buyerEmail:  user?.email,
+    });
+
+    res.json({ url });
+  } catch (err) {
+    console.error('[golf-payments] upgrade-tier error:', err.message);
+    res.status(500).json({ error: 'Failed to create checkout.' });
+  }
 });
 
 // ── Waitlist ───────────────────────────────────────────────────────────────────
