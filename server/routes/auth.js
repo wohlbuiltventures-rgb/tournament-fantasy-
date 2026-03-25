@@ -17,10 +17,31 @@ function signToken(user) {
   );
 }
 
+// ── Referral code helpers ────────────────────────────────────────────────────
+const REF_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 chars; 256 % 32 === 0
+function genReferralCode() {
+  const bytes = crypto.randomBytes(8);
+  let code = '';
+  for (let i = 0; i < 8; i++) code += REF_CHARS[bytes[i] % REF_CHARS.length];
+  return code;
+}
+
+function ensureUserReferralCode(userId) {
+  const row = db.prepare('SELECT referral_code FROM users WHERE id = ?').get(userId);
+  if (row?.referral_code) return row.referral_code;
+  let code, attempts = 0;
+  do {
+    code = genReferralCode();
+    attempts++;
+  } while (db.prepare('SELECT 1 FROM users WHERE referral_code = ?').get(code) && attempts < 20);
+  db.prepare('UPDATE users SET referral_code = ? WHERE id = ?').run(code, userId);
+  return code;
+}
+
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { email, username, password, agreement_accepted, age_confirmed, state_eligible } = req.body;
+    const { email, username, password, agreement_accepted, age_confirmed, state_eligible, ref_code } = req.body;
     if (!email || !username || !password) {
       return res.status(400).json({ error: 'Email, username, and password are required' });
     }
@@ -46,6 +67,19 @@ router.post('/register', async (req, res) => {
     const user = { id, email, username };
     const token = signToken(user);
     res.status(201).json({ token, user });
+
+    // Referral tracking — fire and forget, never blocks registration
+    if (ref_code) {
+      try {
+        const referrer = db.prepare('SELECT id FROM users WHERE referral_code = ?').get(ref_code.trim().toUpperCase());
+        if (referrer && referrer.id !== id) {
+          db.prepare('UPDATE users SET referred_by = ? WHERE id = ?').run(referrer.id, id);
+          db.prepare('INSERT OR IGNORE INTO referrals (id, referrer_id, referred_id) VALUES (?, ?, ?)').run(uuidv4(), referrer.id, id);
+        }
+      } catch (refErr) {
+        console.error('[auth] referral tracking error:', refErr.message);
+      }
+    }
 
     // Send welcome email — fire and forget, don't block registration
     sendWelcome(email, username).catch(err => console.error('Welcome email failed:', err));
@@ -139,6 +173,18 @@ router.post('/reset-password', async (req, res) => {
     res.json({ message: 'Password updated successfully' });
   } catch (err) {
     console.error('reset-password error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/auth/referral/my-code
+router.get('/referral/my-code', authMiddleware, (req, res) => {
+  try {
+    const code = ensureUserReferralCode(req.user.id);
+    const base = (process.env.CLIENT_URL || 'https://www.tourneyrun.app').replace(/\/$/, '');
+    res.json({ code, link: `${base}/ref/${code}` });
+  } catch (err) {
+    console.error('[auth] referral/my-code error:', err.message);
     res.status(500).json({ error: 'Server error' });
   }
 });

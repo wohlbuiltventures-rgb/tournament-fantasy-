@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import api from '../api';
 
 // ── CSS Animations ────────────────────────────────────────────────────────────
 
@@ -208,6 +209,158 @@ function Ticker() {
         {content}&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;{content}
       </span>
     </div>
+  );
+}
+
+// ── Referral Section ──────────────────────────────────────────────────────────
+
+const REFERRAL_STEPS = [
+  { n: '1', title: 'Share your link',    desc: 'Text it to whoever runs your pool' },
+  { n: '2', title: 'They set up a pool', desc: 'No spreadsheets. No group chat chaos.' },
+  { n: '3', title: 'You both save 50%',  desc: 'Half off your next tournament. No strings.' },
+];
+
+function ReferralSection() {
+  const { user, token } = useAuth();
+  const [refLink, setRefLink] = useState('');
+  const [copied, setCopied]   = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    api.get('/auth/referral/my-code')
+      .then(r => setRefLink(r.data.link || ''))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(refLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const smsBody = encodeURIComponent(
+    `Hey — we should run our pool on TourneyRun instead of the spreadsheet. ` +
+    `Auto scoring, live standings, starting at $9.99/tournament. ` +
+    `Use my link and we both get 50% off: ${refLink || 'tourneyrun.app/ref/...'}`
+  );
+
+  const displayLink = refLink.replace(/^https?:\/\//, '');
+
+  return (
+    <section style={{ padding: 'clamp(64px,10vw,96px) 24px', borderTop: '0.5px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+        {/* Eyebrow + headline */}
+        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#f59e0b', marginBottom: 14 }}>
+            Refer a Commissioner
+          </div>
+          <h2 style={{ margin: '0 0 16px', fontSize: 'clamp(1.9rem,4.5vw,3rem)', fontWeight: 900, letterSpacing: '-0.03em', color: '#fff' }}>
+            Still running your pool in a group chat?
+          </h2>
+          <p style={{ margin: '0 auto', fontSize: 16, color: 'rgba(255,255,255,0.5)', maxWidth: 580, lineHeight: 1.7 }}>
+            Send your commissioner the link. If they set up a pool on TourneyRun, you both get{' '}
+            <span style={{ color: '#22c55e', fontWeight: 700 }}>50% off</span>{' '}
+            your next tournament — starting at $9.99/tournament.
+          </p>
+        </div>
+
+        {/* Three steps */}
+        <div className="hub-steps-grid" style={{ display: 'grid', gap: 16, marginBottom: 48 }}>
+          {REFERRAL_STEPS.map(({ n, title, desc }) => (
+            <div key={n} className="hub-step-card" style={{
+              background: 'rgba(255,255,255,0.025)',
+              border: '0.5px solid rgba(255,255,255,0.07)',
+              borderRadius: 16, padding: '28px 24px', textAlign: 'center',
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: '50%',
+                background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)',
+                color: '#f59e0b', fontWeight: 900, fontSize: 16,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 16px',
+              }}>
+                {n}
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: '#fff', marginBottom: 6 }}>{title}</div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>{desc}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Referral input or CTA */}
+        <div style={{ maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
+          {user ? (
+            loading ? (
+              <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>Loading your link…</div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                  <input
+                    readOnly
+                    value={displayLink}
+                    onClick={e => e.target.select()}
+                    style={{
+                      flex: 1, background: 'rgba(255,255,255,0.05)',
+                      border: '0.5px solid rgba(255,255,255,0.12)',
+                      borderRadius: 10, padding: '12px 16px',
+                      color: 'rgba(255,255,255,0.8)', fontSize: 14,
+                      outline: 'none', cursor: 'text', fontFamily: 'monospace',
+                    }}
+                  />
+                  <button
+                    onClick={handleCopy}
+                    style={{
+                      background: copied ? '#16a34a' : '#22c55e',
+                      color: '#fff', fontWeight: 700, fontSize: 14,
+                      padding: '12px 20px', borderRadius: 10, border: 'none',
+                      cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 104,
+                      transition: 'background 0.15s',
+                    }}
+                  >
+                    {copied ? 'Copied!' : 'Copy link'}
+                  </button>
+                </div>
+                <a
+                  href={`sms:?&body=${smsBody}`}
+                  style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', textDecoration: 'none', transition: 'color 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.35)'}
+                >
+                  Or text your commissioner directly →
+                </a>
+              </>
+            )
+          ) : (
+            <Link
+              to="/register"
+              style={{
+                display: 'inline-block',
+                background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                color: '#fff', fontWeight: 800, fontSize: 15,
+                padding: '14px 32px', borderRadius: 12,
+                textDecoration: 'none', letterSpacing: '0.01em',
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              Sign up to get your referral link →
+            </Link>
+          )}
+
+          {/* Pricing footnote */}
+          <p style={{ margin: '20px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.2)', lineHeight: 1.6 }}>
+            From $9.99/tournament · up to 20 players · $14.99 up to 60 · $24.99 up to 100 · Enterprise $34.99
+          </p>
+        </div>
+
+      </div>
+    </section>
   );
 }
 
@@ -824,6 +977,9 @@ export default function HubLanding() {
           </div>
         </div>
       </section>
+
+      {/* ──────────────────── REFERRAL ─────────────────────────────────────── */}
+      <ReferralSection />
 
       {/* ──────────────────── TICKER ───────────────────────────────────────── */}
       <Ticker />

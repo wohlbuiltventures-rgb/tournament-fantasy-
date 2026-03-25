@@ -12,6 +12,7 @@ export default function Register() {
   const [searchParams] = useSearchParams();
   const sdSession = searchParams.get('smartdraft_session');
   const thenUrl   = searchParams.get('then');
+  const refCode   = searchParams.get('ref') || localStorage.getItem('ref_code') || '';
 
   const [form, setForm]     = useState({ email: '', username: '', password: '', confirmPassword: '' });
   const [checks, setChecks] = useState({ terms: false, age: false, state: false });
@@ -35,7 +36,9 @@ export default function Register() {
         agreement_accepted: checks.terms,
         age_confirmed: checks.age,
         state_eligible: checks.state,
+        ...(refCode && { ref_code: refCode }),
       });
+      if (refCode) localStorage.removeItem('ref_code');
       // Claim the standalone Smart Draft credit if we came from Stripe checkout
       if (sdSession) {
         try { await api.post('/payments/claim-credit', { session_id: sdSession }); } catch {}

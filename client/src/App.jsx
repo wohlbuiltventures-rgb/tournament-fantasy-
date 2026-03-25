@@ -54,6 +54,7 @@ import PaymentSuccess from './pages/PaymentSuccess';
 import EntryPaymentSuccess from './pages/EntryPaymentSuccess';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import RefRedirect from './pages/RefRedirect';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Profile from './pages/Profile';
@@ -116,6 +117,7 @@ export default function App() {
             {/* ── Auth (shared between products) ── */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/ref/:code" element={<RefRedirect />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 
