@@ -286,13 +286,18 @@ try {
     db.prepare(`
       INSERT INTO golf_tournaments (id, name, course, start_date, end_date, season_year, is_major, status, espn_event_id)
       VALUES (?, 'Texas Children''s Houston Open', 'Memorial Park Golf Course, Houston, TX',
-              '2026-03-27', '2026-03-30', 2026, 0, 'scheduled', '401811939')
+              '2026-03-26', '2026-03-30', 2026, 0, 'scheduled', '401811939')
     `).run(uuidv4());
   } else {
     // Ensure espn_event_id is set even if row already existed
     db.prepare("UPDATE golf_tournaments SET espn_event_id = '401811939' WHERE name LIKE '%Houston Open%' AND (espn_event_id IS NULL OR espn_event_id = '')").run();
   }
 } catch (e) { console.error('[golf-db] Houston Open seed error:', e.message); }
+
+// ── Houston Open 2026 — correct start_date to Thursday 3/26 ──────────────────
+runOnce('fix-houston-open-start-date-2026-03-26', () => {
+  db.prepare("UPDATE golf_tournaments SET start_date = '2026-03-26' WHERE name LIKE '%Houston Open%' AND season_year = 2026").run();
+});
 
 // ── COLLIN promo code — owner free code for personal use / testing ─────────────
 try {
