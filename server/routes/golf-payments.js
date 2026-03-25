@@ -22,7 +22,6 @@ const AMOUNTS = {
 // Pool creation pricing by max-teams tier
 function getPriceForMaxTeams(maxTeams) {
   if (maxTeams <= 20)  return { amount: 9.99,  label: 'Up to 20 teams' };
-  if (maxTeams <= 40)  return { amount: 14.99, label: 'Up to 40 teams' };
   if (maxTeams <= 60)  return { amount: 14.99, label: 'Up to 60 teams' };
   if (maxTeams <= 100) return { amount: 24.99, label: 'Up to 100 teams' };
   return                      { amount: 34.99, label: 'Enterprise 100+' };
@@ -282,7 +281,13 @@ router.post('/payments/create-checkout-session', authMiddleware, async (req, res
       ...(tournamentId  && { tournament_id:  tournamentId  }),
       ...(refCode       && { ref_code:        refCode       }),
       ...(creditToApply > 0 && { credit_applied: String(creditToApply) }),
-      ...(promoRecord   && { promo_code_id:   promoRecord.id }),
+      ...(promoRecord   && {
+        promo_code_id:   promoRecord.id,
+        // Carry actual pricing so the webhook handler can write a correct audit record
+        original_price:  String(baseAmount),
+        discount_amount: String(promoDiscount),
+        final_price:     String(finalAmount),
+      }),
     };
 
     // Record promo use and fulfill directly if fully discounted
@@ -423,43 +428,182 @@ router.post('/checkout/season-pass', authMiddleware, async (req, res) => {
 // Accepts: { order_id, metadata } — metadata already parsed from Square order.
 // ---------------------------------------------------------------------------
 async function fulfillGolfPayment(metadata) {
-  const type     = metadata.type;
-  const orderId  = metadata._order_id || 'credit_applied';
+  const type    = metadata.type;
+  const orderId = metadata._order_id || 'credit_applied';
 
-  if (type === 'golf_season_pass') {
-    db.prepare(`
-      INSERT INTO golf_season_passes (id, user_id, season, paid_at, stripe_session_id)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
-      ON CONFLICT(user_id, season) DO UPDATE SET
-        paid_at = CURRENT_TIMESTAMP,
-        stripe_session_id = excluded.stripe_session_id
-    `).run(uuidv4(), metadata.user_id, metadata.season || SEASON, orderId);
-    console.log(`[golf] season_pass fulfilled user=${metadata.user_id}`);
+  // All DB writes run in a single transaction so a partial failure
+  // (e.g. league activation succeeds but season_pass insert fails)
+  // cannot leave data in an inconsistent state.
+  db.transaction(() => {
+    if (type === 'golf_season_pass') {
+      db.prepare(`
+        INSERT INTO golf_season_passes (id, user_id, season, paid_at, stripe_session_id)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+        ON CONFLICT(user_id, season) DO UPDATE SET
+          paid_at = CURRENT_TIMESTAMP,
+          stripe_session_id = excluded.stripe_session_id
+      `).run(uuidv4(), metadata.user_id, metadata.season || SEASON, orderId);
 
-  } else if (type === 'golf_pool_entry' || type === 'golf_office_pool') {
-    db.prepare(`
-      INSERT INTO golf_pool_entries (id, user_id, tournament_id, paid_at, stripe_session_id)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
-      ON CONFLICT(user_id, tournament_id) DO UPDATE SET
-        paid_at = CURRENT_TIMESTAMP,
-        stripe_session_id = excluded.stripe_session_id
-    `).run(uuidv4(), metadata.user_id, metadata.tournament_id, orderId);
-    console.log(`[golf] pool_entry fulfilled user=${metadata.user_id} tourn=${metadata.tournament_id}`);
+    } else if (type === 'golf_pool_entry' || type === 'golf_office_pool') {
+      db.prepare(`
+        INSERT INTO golf_pool_entries (id, user_id, tournament_id, paid_at, stripe_session_id)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+        ON CONFLICT(user_id, tournament_id) DO UPDATE SET
+          paid_at = CURRENT_TIMESTAMP,
+          stripe_session_id = excluded.stripe_session_id
+      `).run(uuidv4(), metadata.user_id, metadata.tournament_id, orderId);
 
-  } else if (type === 'golf_comm_pro') {
-    db.prepare(`
-      INSERT INTO golf_comm_pro (id, league_id, commissioner_id, season, paid_at, promo_applied, stripe_session_id)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0, ?)
-      ON CONFLICT(league_id, season) DO UPDATE SET
-        paid_at = CURRENT_TIMESTAMP,
-        stripe_session_id = excluded.stripe_session_id
-    `).run(uuidv4(), metadata.league_id, metadata.user_id, metadata.season || SEASON, orderId);
-    // Activate the league (was created with pending_payment status)
-    if (metadata.league_id) {
-      db.prepare(`UPDATE golf_leagues SET status = 'lobby' WHERE id = ? AND status = 'pending_payment'`)
-        .run(metadata.league_id);
+    } else if (type === 'golf_comm_pro') {
+      db.prepare(`
+        INSERT INTO golf_comm_pro (id, league_id, commissioner_id, season, paid_at, promo_applied, stripe_session_id)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0, ?)
+        ON CONFLICT(league_id, season) DO UPDATE SET
+          paid_at = CURRENT_TIMESTAMP,
+          stripe_session_id = excluded.stripe_session_id
+      `).run(uuidv4(), metadata.league_id, metadata.user_id, metadata.season || SEASON, orderId);
 
-      // Send "pool is live" confirmation email to the commissioner
+      if (metadata.league_id) {
+        db.prepare(`UPDATE golf_leagues SET status = 'lobby' WHERE id = ? AND status = 'pending_payment'`)
+          .run(metadata.league_id);
+      }
+    }
+  })();
+
+  console.log(`[golf] fulfillGolfPayment type=${type} user=${metadata.user_id}`);
+
+  // Email fires after the transaction commits — a failed email never rolls back fulfillment
+  if (type === 'golf_comm_pro' && metadata.league_id) {
+    try {
+      const league = db.prepare(
+        'SELECT name, max_teams, pool_tournament_id FROM golf_leagues WHERE id = ?'
+      ).get(metadata.league_id);
+      const user = db.prepare('SELECT email, username FROM users WHERE id = ?').get(metadata.user_id);
+      if (league && user) {
+        const memberCount = db.prepare(
+          'SELECT COUNT(*) as n FROM golf_league_members WHERE golf_league_id = ?'
+        ).get(metadata.league_id).n;
+        const spotsOpen = Math.max(0, (league.max_teams || 20) - memberCount);
+        const tourn = league.pool_tournament_id
+          ? db.prepare('SELECT name FROM golf_tournaments WHERE id = ?').get(league.pool_tournament_id)
+          : null;
+        await require('../mailer').sendGolfPoolLive(user.email, {
+          username:       user.username,
+          leagueName:     league.name,
+          leagueId:       metadata.league_id,
+          spotsOpen,
+          tournamentName: tourn?.name || null,
+        });
+      }
+    } catch (emailErr) {
+      console.warn('[golf] pool-live email failed:', emailErr.message);
+    }
+  }
+}
+
+async function handleGolfWebhook({ order_id, metadata }) {
+  // ── Idempotency guard ─────────────────────────────────────────────────────
+  // Square retries webhooks. Check whether we've already fully processed this
+  // order before doing anything. The processed_webhook_orders row is written
+  // inside the same DB transaction as the credit deduction, so it is impossible
+  // for the guard to pass while the side-effects are missing (or vice versa).
+  const alreadyProcessed = db.prepare(
+    'SELECT 1 FROM processed_webhook_orders WHERE order_id = ?'
+  ).get(order_id);
+  if (alreadyProcessed) {
+    console.log(`[golf-webhook] duplicate delivery for order ${order_id} — skipped`);
+    return;
+  }
+
+  try {
+    // Fulfill + deduct credits + mark processed — all in one atomic transaction
+    db.transaction(() => {
+      const type    = metadata.type;
+      const orderId = order_id;
+
+      if (type === 'golf_season_pass') {
+        db.prepare(`
+          INSERT INTO golf_season_passes (id, user_id, season, paid_at, stripe_session_id)
+          VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+          ON CONFLICT(user_id, season) DO UPDATE SET
+            paid_at = CURRENT_TIMESTAMP, stripe_session_id = excluded.stripe_session_id
+        `).run(uuidv4(), metadata.user_id, metadata.season || SEASON, orderId);
+
+      } else if (type === 'golf_pool_entry' || type === 'golf_office_pool') {
+        db.prepare(`
+          INSERT INTO golf_pool_entries (id, user_id, tournament_id, paid_at, stripe_session_id)
+          VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+          ON CONFLICT(user_id, tournament_id) DO UPDATE SET
+            paid_at = CURRENT_TIMESTAMP, stripe_session_id = excluded.stripe_session_id
+        `).run(uuidv4(), metadata.user_id, metadata.tournament_id, orderId);
+
+      } else if (type === 'golf_comm_pro') {
+        db.prepare(`
+          INSERT INTO golf_comm_pro (id, league_id, commissioner_id, season, paid_at, promo_applied, stripe_session_id)
+          VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 0, ?)
+          ON CONFLICT(league_id, season) DO UPDATE SET
+            paid_at = CURRENT_TIMESTAMP, stripe_session_id = excluded.stripe_session_id
+        `).run(uuidv4(), metadata.league_id, metadata.user_id, metadata.season || SEASON, orderId);
+
+        if (metadata.league_id) {
+          db.prepare(`UPDATE golf_leagues SET status = 'lobby' WHERE id = ? AND status = 'pending_payment'`)
+            .run(metadata.league_id);
+        }
+      }
+
+      // Deduct referral credit — runs exactly once per order
+      if (metadata.credit_applied && metadata.user_id) {
+        const creditApplied = parseFloat(metadata.credit_applied);
+        if (creditApplied > 0) {
+          db.prepare(`
+            UPDATE golf_referral_credits
+            SET balance = MAX(0, balance - ?)
+            WHERE user_id = ? AND season = ?
+          `).run(creditApplied, metadata.user_id, metadata.season || SEASON);
+        }
+      }
+
+      // Mark this order as fully processed — prevents any future duplicate
+      db.prepare('INSERT INTO processed_webhook_orders (order_id) VALUES (?)').run(order_id);
+    })();
+
+    console.log(`[golf-webhook] fulfilled order=${order_id} type=${metadata.type}`);
+
+    // ── Post-commit async work (emails, referral credits) ─────────────────
+    // These run outside the transaction. If they fail, the fulfillment is
+    // already committed and the order marked processed — no double-charge risk.
+
+    // Record promo code use (P0-3 fix: use actual prices, not 0/0/0)
+    if (metadata.promo_code_id && metadata.user_id) {
+      try {
+        const promo = db.prepare('SELECT * FROM promo_codes WHERE id = ?').get(metadata.promo_code_id);
+        if (promo) {
+          const alreadyRecorded = db.prepare(
+            'SELECT id FROM promo_code_uses WHERE promo_code_id = ? AND league_id = ?'
+          ).get(metadata.promo_code_id, metadata.league_id || null);
+          if (!alreadyRecorded) {
+            // Reconstruct actual pricing from metadata (set at checkout time)
+            const originalPrice  = parseFloat(metadata.original_price  || 0);
+            const discountAmount = parseFloat(metadata.discount_amount  || 0);
+            const finalPrice     = parseFloat(metadata.final_price      || 0);
+            db.prepare(`
+              INSERT INTO promo_code_uses (id, promo_code_id, league_id, user_id, original_price, discount_amount, final_price)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(uuidv4(), promo.id, metadata.league_id || null, metadata.user_id,
+                   originalPrice, discountAmount, finalPrice);
+            db.prepare('UPDATE promo_codes SET uses_count = uses_count + 1 WHERE id = ?').run(promo.id);
+          }
+        }
+      } catch (e) {
+        console.warn('[golf-payments] promo use record error:', e.message);
+      }
+    }
+
+    if (metadata.ref_code && metadata.user_id) {
+      await applyReferralCredits(metadata.user_id, metadata.ref_code);
+    }
+
+    // Send "pool is live" email for comm_pro (was previously inside fulfillGolfPayment)
+    if (metadata.type === 'golf_comm_pro' && metadata.league_id) {
       try {
         const league = db.prepare(
           'SELECT name, max_teams, pool_tournament_id FROM golf_leagues WHERE id = ?'
@@ -485,53 +629,8 @@ async function fulfillGolfPayment(metadata) {
         console.warn('[golf] pool-live email failed:', emailErr.message);
       }
     }
-    console.log(`[golf] comm_pro fulfilled league=${metadata.league_id}`);
-  }
-}
 
-async function handleGolfWebhook({ order_id, metadata }) {
-  try {
-    await fulfillGolfPayment({ ...metadata, _order_id: order_id });
-
-    // Deduct referral credit that was applied at checkout
-    if (metadata.credit_applied && metadata.user_id) {
-      const creditApplied = parseFloat(metadata.credit_applied);
-      if (creditApplied > 0) {
-        db.prepare(`
-          UPDATE golf_referral_credits
-          SET balance = MAX(0, balance - ?)
-          WHERE user_id = ? AND season = ?
-        `).run(creditApplied, metadata.user_id, metadata.season || SEASON);
-      }
-    }
-
-    // Record promo code use (paid path — discount was partial, so Square was charged)
-    if (metadata.promo_code_id && metadata.user_id) {
-      try {
-        const promo = db.prepare('SELECT * FROM promo_codes WHERE id = ?').get(metadata.promo_code_id);
-        if (promo) {
-          const alreadyRecorded = db.prepare(
-            'SELECT id FROM promo_code_uses WHERE promo_code_id = ? AND league_id = ?'
-          ).get(metadata.promo_code_id, metadata.league_id || null);
-          if (!alreadyRecorded) {
-            db.prepare(`
-              INSERT INTO promo_code_uses (id, promo_code_id, league_id, user_id, original_price, discount_amount, final_price)
-              VALUES (?, ?, ?, ?, ?, ?, ?)
-            `).run(uuidv4(), promo.id, metadata.league_id || null, metadata.user_id, 0, 0, 0);
-            db.prepare('UPDATE promo_codes SET uses_count = uses_count + 1 WHERE id = ?').run(promo.id);
-          }
-        }
-      } catch (e) {
-        console.warn('[golf-payments] promo use record error:', e.message);
-      }
-    }
-
-    // Award referral credits if a ref_code was used (first payment by this user)
-    if (metadata.ref_code && metadata.user_id) {
-      await applyReferralCredits(metadata.user_id, metadata.ref_code);
-    }
-
-    // Send confirmation email
+    // Send payment confirmation email
     try {
       const user = db.prepare('SELECT email, username FROM users WHERE id = ?').get(metadata.user_id);
       if (user) {
@@ -547,6 +646,7 @@ async function handleGolfWebhook({ order_id, metadata }) {
     } catch (e) {
       console.warn('[golf-webhook] email failed:', e.message);
     }
+
   } catch (err) {
     console.error('[golf-webhook] handleGolfWebhook error:', err.message);
     throw err;

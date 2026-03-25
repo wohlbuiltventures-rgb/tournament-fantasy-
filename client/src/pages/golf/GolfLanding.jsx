@@ -252,16 +252,16 @@ export default function GolfLanding() {
             <span style={{ color: '#00e87a' }}>DONE RIGHT.</span>
           </h1>
           <p className="text-gray-400 text-lg sm:text-xl max-w-xl mx-auto mb-12 leading-relaxed">
-            Your golf pool shouldn't live in a spreadsheet. Auto-scoring, live standings, and picks in one place — from $9.99/tournament.
+            Stop texting scores. Stop updating spreadsheets. Run your pool in one place — from $9.99/tournament.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             {user ? (
               <>
                 <Link
-                  to="/golf/dashboard"
+                  to="/golf/create?format=pool"
                   className="inline-flex items-center justify-center gap-2 bg-green-500 hover:bg-green-400 text-white font-black px-10 py-4 rounded-full transition-all shadow-lg shadow-green-500/30 text-base"
                 >
-                  My Golf Leagues <ArrowRight className="w-5 h-5" />
+                  <Trophy size={15} strokeWidth={1.75} /> Run an Office Pool →
                 </Link>
                 <Link
                   to="/golf/create"
@@ -286,14 +286,6 @@ export default function GolfLanding() {
                 </Link>
               </>
             )}
-          </div>
-          <div className="mt-3 flex justify-center">
-            <Link
-              to="/golf/create?format=pool"
-              className="inline-flex items-center justify-center gap-2 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white font-semibold px-7 py-3.5 rounded-full transition-all bg-transparent hover:bg-gray-800/50"
-            >
-              <Trophy size={15} strokeWidth={1.75} /> Run an Office Pool →
-            </Link>
           </div>
           <button
             onClick={() => howItWorksRef.current?.scrollIntoView({ behavior: 'smooth' })}
@@ -542,7 +534,7 @@ export default function GolfLanding() {
             </div>
 
             {/* Card 2: Golf Pool */}
-            <div className="relative bg-gray-900 border border-yellow-500/25 rounded-2xl p-5 sm:p-6 ring-1 ring-yellow-500/10">
+            <div className="relative bg-gray-900 border border-green-500/40 rounded-2xl p-5 sm:p-6 ring-1 ring-yellow-500/10">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap">
                 <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full"
                   style={{ background: '#f59e0b', color: '#451a03' }}>
@@ -551,6 +543,7 @@ export default function GolfLanding() {
               </div>
               <div className="mt-3">
                 <div className="text-2xl mb-2">📋</div>
+                <span className="bg-green-500/20 text-green-400 text-xs font-semibold px-2 py-0.5 rounded-full inline-block mb-2">Most Popular</span>
                 <h3 className="text-white font-black text-base">Golf Pool</h3>
                 <p className="text-yellow-400/80 text-xs mt-0.5 mb-4">Best for office pools & casual groups</p>
                 <ul className="space-y-2 text-sm text-gray-400">
@@ -750,7 +743,7 @@ export default function GolfLanding() {
                 <span style={{ color: '#00e87a' }}>Draft once. Win all year.</span>
               </h2>
               <p style={{ color: '#9ca3af', fontSize: 16, lineHeight: 1.7, marginBottom: 24 }}>
-                The most strategic fantasy golf format available. One auction draft before the season. 13 events. Bragging rights until The Open.
+                One draft. Trash talk from January through Augusta. 13 events, one champion.
               </p>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {[

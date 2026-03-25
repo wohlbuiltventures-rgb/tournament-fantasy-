@@ -10,6 +10,9 @@
     "install:all": "npm install && cd server && npm install && cd ../client && npm install"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@playwright/test": "^1.58.2",
+    "concurrently": "^8.2.2",
+    "dotenv": "^17.3.1",
+    "playwright": "^1.58.2"
   }
 }

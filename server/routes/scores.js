@@ -1,6 +1,6 @@
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
-const { buildStandings } = require('../standingsBuilder');
+const { buildStandings, syncTotalPoints } = require('../standingsBuilder');
 const db = require('../db');
 
 const router = express.Router();
@@ -11,6 +11,7 @@ router.get('/league/:leagueId/standings', authMiddleware, (req, res) => {
     const { leagueId } = req.params;
     const result = buildStandings(leagueId);
     if (!result) return res.status(404).json({ error: 'League not found' });
+    syncTotalPoints(leagueId, result.standings);
 
     // Include the settings from the result
     res.json({

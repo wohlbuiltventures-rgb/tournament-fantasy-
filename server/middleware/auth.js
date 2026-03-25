@@ -12,6 +12,9 @@ function authMiddleware(req, res, next) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     // Always pull fresh role from DB so superadmin grant takes effect without re-login
     const row = db.prepare('SELECT role FROM users WHERE id = ?').get(decoded.id);
+    if (row?.role === 'banned') {
+      return res.status(403).json({ error: 'Account suspended' });
+    }
     req.user = { id: decoded.id, email: decoded.email, username: decoded.username, role: row?.role || 'user' };
     next();
   } catch (err) {

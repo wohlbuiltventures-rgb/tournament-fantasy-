@@ -63,8 +63,12 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Accept email or username in the email field
-    const user = db.prepare('SELECT * FROM users WHERE email = ? OR username = ?').get(email, email);
+    // Accept email or username in the email field.
+    // Select only the fields needed for auth — never pull password_hash into
+    // a variable that could accidentally be serialised into a response.
+    const user = db.prepare(
+      'SELECT id, email, username, role, password_hash FROM users WHERE email = ? OR username = ?'
+    ).get(email, email);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }

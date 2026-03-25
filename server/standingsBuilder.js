@@ -17,13 +17,6 @@ function buildStandings(leagueId) {
     WHERE lm.league_id = ?
   `).all(leagueId);
 
-  // ── Diagnostic: raw pick count before any JOIN ─────────────────────────────
-  const rawCount = db.prepare(
-    'SELECT COUNT(*) as cnt FROM draft_picks WHERE league_id = ?'
-  ).get(leagueId);
-  console.log(`[standings] league=${leagueId} raw picks=${rawCount.cnt} members=${members.length}`);
-
-
   // ── Fetch ALL picks + player info for this league in one batch query ────────
   // Using LEFT JOIN so picks with orphaned player_id still surface (shows up as
   // null player fields rather than silently disappearing from the results).
@@ -47,11 +40,6 @@ function buildStandings(leagueId) {
     WHERE dp.league_id = ?
     ORDER BY dp.pick_number
   `).all(leagueId);
-
-  console.log(`[standings] batch picks returned=${allPicks.length}`);
-  if (allPicks.length > 0) {
-    console.log('[standings] sample pick:', JSON.stringify(allPicks[0]));
-  }
 
   // Group picks by user_id for O(1) lookup per member
   const picksByUser = {};
@@ -89,6 +77,16 @@ function buildStandings(leagueId) {
 
     let totalPoints = 0;
     const playerStats = draftedPlayers.map(player => {
+      // Detect orphaned draft_picks: the LEFT JOIN returns '[unknown]' for player
+      // name when the player_id no longer exists in the players table. Silently
+      // counting 0 points for these picks would produce wrong standings.
+      if (player.name === '[unknown]') {
+        console.warn(
+          `[standings] ORPHANED player_id=${player.player_id} in league=${leagueId}` +
+          ` for user=${member.user_id} — contributing 0 pts (investigate draft_picks row)`
+        );
+      }
+
       const stats = db.prepare(`
         SELECT COALESCE(SUM(ps.points), 0) as total_points
         FROM player_stats ps
@@ -198,9 +196,6 @@ function buildStandings(leagueId) {
       };
     });
 
-    db.prepare('UPDATE league_members SET total_points = ? WHERE league_id = ? AND user_id = ?')
-      .run(Math.round(totalPoints * 10) / 10, leagueId, member.user_id);
-
     const totalPlayers = draftedPlayers.length;
     const aliveCount   = draftedPlayers.filter(p => !p.is_eliminated).length;
 
@@ -251,4 +246,21 @@ function buildStandings(leagueId) {
   return { standings, settings, sgLeader, sgBoard, isLive, livePlayerIds: [...livePlayerIds] };
 }
 
-module.exports = { buildStandings };
+/**
+ * Persist computed total_points back to league_members.
+ * Callers that need the DB to reflect current standings (pollers, score endpoints)
+ * call this after buildStandings(). Read-only callers (AI context, previews) skip it.
+ */
+function syncTotalPoints(leagueId, standings) {
+  const stmt = db.prepare(
+    'UPDATE league_members SET total_points = ? WHERE league_id = ? AND user_id = ?'
+  );
+  const run = db.transaction(() => {
+    for (const s of standings) {
+      stmt.run(Math.round(s.total_points * 10) / 10, leagueId, s.user_id);
+    }
+  });
+  run();
+}
+
+module.exports = { buildStandings, syncTotalPoints };

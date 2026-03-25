@@ -223,8 +223,8 @@ export default function Navbar() {
             </>
           ) : (
             <div className="flex items-center" style={{ gap: 10 }}>
-              <Link to="/login" className="text-gray-300 hover:text-white font-medium transition-colors" style={{ fontSize: 14 }}>
-                Login
+              <Link to="/login" className="border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 px-4 py-1.5 rounded-full text-sm transition-all" style={{ textDecoration: 'none' }}>
+                Sign In
               </Link>
               <Link to="/register" className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg font-medium transition-colors" style={{ fontSize: 14 }}>
                 Register

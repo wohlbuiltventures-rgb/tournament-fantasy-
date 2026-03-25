@@ -1,7 +1,7 @@
 const https = require('https');
 const { v4: uuidv4 } = require('uuid');
 const db = require('./db');
-const { buildStandings } = require('./standingsBuilder');
+const { buildStandings, syncTotalPoints } = require('./standingsBuilder');
 const { postEliminations, checkAndPostRankChanges } = require('./wallUtils');
 const { sendLeagueStandingsEmail } = require('./mailer');
 
@@ -441,6 +441,7 @@ async function maybeEmailRoundStandings() {
         try {
           const payload = buildStandings(league.id);
           if (!payload?.standings?.length) continue;
+          syncTotalPoints(league.id, payload.standings);
 
           const members = db.prepare(`
             SELECT lm.user_id, u.email, u.username
@@ -485,6 +486,7 @@ function pushStandingsToLeagues(io) {
     try {
       const payload = buildStandings(id);
       if (payload) {
+        syncTotalPoints(id, payload.standings);
         checkAndPostRankChanges(id, payload.standings, io);
         io.to(`leaderboard_${id}`).emit('standings_update', {
           ...payload,

@@ -25,15 +25,16 @@ function norm(name) {
     .trim();
 }
 
-// Fantasy points — par 72 baseline, commissioner formula
-// Each round: (raw_score - 72) * -1.5
+// Fantasy points — configurable par baseline, commissioner formula
+// Each round: (raw_score - par) * -1.5
 // Finish bonuses: 1st +30, top5 +12, top10 +8, top25 +3
 // Cut bonus +2; missed cut -5; major x1.5
-const PAR = 72;
-function calcPts(r1, r2, r3, r4, madeCut, finishPos, isMajor) {
+// par defaults to 72 but can be overridden per tournament (e.g. Riviera = 71)
+const DEFAULT_PAR = 72;
+function calcPts(r1, r2, r3, r4, madeCut, finishPos, isMajor, par = DEFAULT_PAR) {
   let pts = 0;
   [r1, r2, r3, r4].forEach(r => {
-    if (r !== null && r !== undefined) pts += (r - PAR) * -1.5;
+    if (r !== null && r !== undefined) pts += (r - par) * -1.5;
   });
   if (finishPos !== null && finishPos !== undefined) {
     if      (finishPos === 1)   pts += 30;
@@ -56,11 +57,22 @@ function parseRound(entry) {
   if (v === null || v === undefined || v === '' || v === '--') return null;
   const n = Number(v);
   if (isNaN(n)) return null;
-  // If value looks like a to-par number (-5 to +5) convert to raw.
-  // If it looks like a raw score (65-80) keep as-is.
-  // Heuristic: if |n| <= 15 it's probably to-par; if >= 60 it's raw.
-  if (Math.abs(n) <= 20) return PAR + n;  // to-par → raw
-  return n;                                // already raw
+
+  // Heuristic: ESPN linescores.value ≤ ±20 is treated as to-par; ≥ 60 as raw strokes.
+  // The gap between 21 and 59 is physically impossible in PGA play (lowest raw ever ~58,
+  // highest to-par ever ~+20), so values landing there are ambiguous — log a warning
+  // so misclassification is visible rather than silently producing wrong fantasy points.
+  if (Math.abs(n) > 20 && n < 60) {
+    console.warn(
+      `[golf-score-sync] AMBIGUOUS round value=${n} (player/tourn unknown) — ` +
+      `treating as raw strokes. Expected to-par ≤ ±20 or raw ≥ 60. ` +
+      `Verify ESPN linescore format if fantasy points look wrong.`
+    );
+    return n; // treat as raw strokes
+  }
+
+  if (Math.abs(n) <= 20) return DEFAULT_PAR + n;  // to-par → raw
+  return n;                                        // already raw
 }
 
 const upsertScore = db.prepare(`
@@ -122,7 +134,8 @@ async function syncTournament(tournamentId) {
   const allPlayers = db.prepare('SELECT id, name FROM golf_players').all();
   const nameMap = new Map(allPlayers.map(p => [norm(p.name), p.id]));
 
-  const isMajor = !!tourn.is_major;
+  const isMajor  = !!tourn.is_major;
+  const coursePar = tourn.par || DEFAULT_PAR;
   let synced = 0;
   let unmatched = 0;
 
@@ -169,7 +182,7 @@ async function syncTournament(tournamentId) {
         ? parseInt(String(posRaw).replace(/^T/, ''))
         : null;
 
-      const pts = calcPts(r1, r2, r3, r4, madeCut, finishPos, isMajor);
+      const pts = calcPts(r1, r2, r3, r4, madeCut, finishPos, isMajor, coursePar);
       upsertScore.run(tourn.id, playerId, r1, r2, r3, r4, madeCut ? 1 : 0, finishPos, pts);
       synced++;
     }

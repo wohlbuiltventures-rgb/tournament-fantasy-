@@ -277,12 +277,10 @@ export default function HubLanding() {
             ) : (
               <>
                 <Link to="/login"
-                  className="hidden md:block"
-                  style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.45)'}
+                  className="hidden md:inline-flex items-center border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 px-4 py-1.5 rounded-full text-sm transition-all"
+                  style={{ textDecoration: 'none' }}
                 >
-                  Sign in
+                  Sign In
                 </Link>
                 <Link to="/register"
                   style={{
