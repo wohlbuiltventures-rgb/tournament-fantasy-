@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useDocTitle } from '../../hooks/useDocTitle';
 import { useState, useEffect, useRef } from 'react';
 import api from '../../api';
+import MastersPromoBanner from '../../components/golf/MastersPromoBanner';
 import { ArrowRight, Plus, MessageCircle, CheckCircle, XCircle, Trophy, Calendar, DollarSign, Star, Flag, BarChart2, Clipboard, Mail, FileText } from 'lucide-react';
 
 // ── Keyframes ─────────────────────────────────────────────────────────────────
@@ -255,7 +256,7 @@ export default function GolfLanding() {
             <span style={{ color: '#22c55e' }}>DONE RIGHT.</span>
           </h1>
           <p className="text-gray-400 text-lg sm:text-xl max-w-xl mx-auto mb-12 leading-relaxed">
-            Stop texting scores. Stop updating spreadsheets. Run your pool in one place — from $9.99/tournament.
+            Stop texting scores. Stop updating spreadsheets. Run your pool in one place — from $12.99/tournament.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             {user ? (
@@ -961,6 +962,9 @@ export default function GolfLanding() {
           ))}
         </div>
 
+        {/* Masters promo banner */}
+        <MastersPromoBanner />
+
         {/* Pricing callout */}
         <div style={{ maxWidth: 480, margin: '0 auto 32px', background: 'rgba(0,232,122,0.04)', border: '1.5px solid rgba(0,232,122,0.2)', borderRadius: 16, padding: '20px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -968,7 +972,7 @@ export default function GolfLanding() {
             <span style={{ color: '#22c55e', fontWeight: 800, fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.06em' }}>TourneyRun Commissioner Fee</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-            <span style={{ color: '#fff', fontWeight: 900, fontSize: 32, lineHeight: 1 }}>$9.99</span>
+            <span style={{ color: '#fff', fontWeight: 900, fontSize: 32, lineHeight: 1 }}>$12.99</span>
             <span style={{ color: '#9ca3af', fontSize: 14 }}>per tournament</span>
           </div>
           <div style={{ color: '#6b7280', fontSize: 13, marginBottom: 12 }}>
@@ -1018,7 +1022,7 @@ export default function GolfLanding() {
               {[
                 { feature: 'Live scoring',                      us: '✅ Included free',      them: '❌ Paid upgrade only',   highlight: true  },
                 { feature: 'Auto standings email after every round', us: '✅ Automatic',     them: '❌ Manual',              highlight: false },
-                { feature: 'Commissioner price',                us: '✅ $9.99/tournament',    them: '❌ $30–$110 per league', highlight: true  },
+                { feature: 'Commissioner price',                us: '✅ $12.99/tournament',   them: '❌ $30–$110 per league', highlight: true  },
                 { feature: 'Mobile-first design',               us: '✅ Modern & fast',       them: '❌ Desktop only, dated', highlight: false },
                 { feature: 'ESPN auto-sync',                    us: '✅ Built in',            them: '⚠️ Varies',             highlight: true  },
                 { feature: 'FAAB waiver wire',                  us: '✅ Full support',        them: '⚠️ Some do',            highlight: false },
@@ -1223,7 +1227,7 @@ export default function GolfLanding() {
             Create Your Masters Pool →
           </Link>
           <div style={{ marginTop: 16, color: '#374151', fontSize: 12 }}>
-            Free to create · From $9.99/tournament for pools
+            Free to create · From $12.99/tournament for pools
           </div>
         </div>
       </div>

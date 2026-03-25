@@ -121,11 +121,11 @@ function CardHeader({ icon: Icon, title }) {
 // ── Pool tier selector ────────────────────────────────────────────────────────
 
 const POOL_TIERS = [
-  { tier: 'standard',   maxTeams: 20,  label: '20 teams',      price: 9.99,  priceLabel: '$9.99/tournament'  },
-  { tier: 'standard',   maxTeams: 40,  label: '40 teams',      price: 14.99, priceLabel: '$14.99/tournament' },
-  { tier: 'standard',   maxTeams: 60,  label: '60 teams',      price: 14.99, priceLabel: '$14.99/tournament' },
-  { tier: 'large_100',  maxTeams: 100, label: '100 teams',     price: 24.99, priceLabel: '$24.99/tournament' },
-  { tier: 'enterprise', maxTeams: 999, label: 'Enterprise 100+', price: 34.99, priceLabel: '$34.99/tournament' },
+  { tier: 'standard',   maxTeams: 20,  label: '20 teams',        price: 12.99, priceLabel: '$12.99/tournament' },
+  { tier: 'standard',   maxTeams: 40,  label: '40 teams',        price: 19.99, priceLabel: '$19.99/tournament' },
+  { tier: 'standard',   maxTeams: 60,  label: '60 teams',        price: 24.99, priceLabel: '$24.99/tournament' },
+  { tier: 'large_100',  maxTeams: 100, label: '100 teams',       price: 34.99, priceLabel: '$34.99/tournament' },
+  { tier: 'enterprise', maxTeams: 999, label: 'Enterprise 100+', price: 49.99, priceLabel: '$49.99/tournament' },
 ];
 
 function PoolTierSelector({ maxTeams, poolTier, onChange }) {
@@ -451,7 +451,7 @@ const DEFAULT_FORM = {
   picks_per_team: 7,
   scoring_style: 'stroke_play',
   pool_tier: 'standard',
-  comm_pro_price: 19.99,
+  comm_pro_price: 12.99,
   pick_sheet_format: 'tiered',
   pool_tiers: [
     { tier: 1, odds_min: '8:1',   odds_max: '75:1',  picks: 1, approxPlayers: 8  },
@@ -490,7 +490,7 @@ export default function CreateGolfLeague() {
   const [format, setFormat] = useState(initialFormat);
   const [form, setForm] = useState(() => ({
     ...DEFAULT_FORM,
-    ...(initialFormat === 'pool' ? { max_teams: 20, pool_tier: 'standard', comm_pro_price: 19.99 } : {}),
+    ...(initialFormat === 'pool' ? { max_teams: 20, pool_tier: 'standard', comm_pro_price: 12.99 } : {}),
   }));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -555,7 +555,7 @@ export default function CreateGolfLeague() {
     setForm(prev => ({
       ...prev,
       max_teams: f === 'pool' ? 20 : 8,
-      ...(f === 'pool' ? { pool_tier: 'standard', comm_pro_price: 19.99 } : {}),
+      ...(f === 'pool' ? { pool_tier: 'standard', comm_pro_price: 12.99 } : {}),
     }));
   }
 

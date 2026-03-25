@@ -13,6 +13,7 @@ const SEASON                 = '2026';
 const REFERRAL_CREDIT_AMOUNT = 1.00;
 const REFERRAL_MAX_SEASONAL  = 10.00;
 const PROMO_MEMBER_THRESHOLD = 6;
+const MASTERS_PROMO_END      = new Date('2026-04-10');
 
 const AMOUNTS = {
   office_pool: 0.99,
@@ -21,10 +22,11 @@ const AMOUNTS = {
 
 // Pool creation pricing by max-teams tier
 function getPriceForMaxTeams(maxTeams) {
-  if (maxTeams <= 20)  return { amount: 9.99,  label: 'Up to 20 teams' };
-  if (maxTeams <= 60)  return { amount: 14.99, label: 'Up to 60 teams' };
-  if (maxTeams <= 100) return { amount: 24.99, label: 'Up to 100 teams' };
-  return                      { amount: 34.99, label: 'Enterprise 100+' };
+  if (maxTeams <= 20)  return { amount: 12.99, label: 'Up to 20 teams'  };
+  if (maxTeams <= 40)  return { amount: 19.99, label: 'Up to 40 teams'  };
+  if (maxTeams <= 60)  return { amount: 24.99, label: 'Up to 60 teams'  };
+  if (maxTeams <= 100) return { amount: 34.99, label: 'Up to 100 teams' };
+  return                      { amount: 49.99, label: 'Enterprise 100+' };
 }
 
 // ── Square client factory ─────────────────────────────────────────────────────
@@ -240,6 +242,11 @@ router.post('/payments/create-checkout-session', authMiddleware, async (req, res
       const { amount, label } = getPriceForMaxTeams(league.max_teams || 20);
       baseAmount   = amount;
       lineItemName = `TourneyRun Pool · ${label} — ${league.name}`;
+      // Masters launch promo: 25% off pools created before April 10 2026
+      if (new Date() < MASTERS_PROMO_END) {
+        baseAmount   = Math.round(baseAmount * 0.75 * 100) / 100;
+        lineItemName += ' (Masters Launch Price)';
+      }
     } else {
       baseAmount   = AMOUNTS[type];
       lineItemName = type === 'season_pass'

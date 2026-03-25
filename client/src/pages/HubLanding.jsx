@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useDocTitle } from '../hooks/useDocTitle';
 import api from '../api';
+import MastersPromoBanner from '../components/golf/MastersPromoBanner';
 
 // ── CSS Animations ────────────────────────────────────────────────────────────
 
@@ -246,7 +247,7 @@ function ReferralSection() {
 
   const smsBody = encodeURIComponent(
     `Hey — we should run our pool on TourneyRun instead of the spreadsheet. ` +
-    `Auto scoring, live standings, starting at $9.99/tournament. ` +
+    `Auto scoring, live standings, starting at $12.99/tournament. ` +
     `Use my link and we both get 50% off: ${refLink || 'tourneyrun.app/ref/...'}`
   );
 
@@ -267,7 +268,7 @@ function ReferralSection() {
           <p style={{ margin: '0 auto', fontSize: 16, color: 'rgba(255,255,255,0.5)', maxWidth: 580, lineHeight: 1.7 }}>
             Send your commissioner the link. If they set up a pool on TourneyRun, you both get{' '}
             <span style={{ color: '#22c55e', fontWeight: 700 }}>50% off</span>{' '}
-            your next tournament — starting at $9.99/tournament.
+            your next tournament — starting at $12.99/tournament.
           </p>
         </div>
 
@@ -359,7 +360,7 @@ function ReferralSection() {
 
           {/* Pricing footnote */}
           <p style={{ margin: '20px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.2)', lineHeight: 1.6 }}>
-            From $9.99/tournament · up to 20 players · $14.99 up to 60 · $24.99 up to 100 · Enterprise $34.99
+            From $12.99/tournament · up to 20 players · $19.99 up to 40 · $24.99 up to 60 · $34.99 up to 100 · Enterprise $49.99
           </p>
         </div>
 
@@ -804,7 +805,7 @@ export default function HubLanding() {
                   <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                 </svg>
               ),
-              title: 'From $9.99/tournament',
+              title: 'From $12.99/tournament',
               desc: 'No prize pool fees. Your group keeps every dollar.',
             },
           ].map(({ icon, title, desc }) => (
@@ -921,6 +922,7 @@ export default function HubLanding() {
       {/* ──────────────────── PRICING ─────────────────────────────────────── */}
       <section style={{ padding: 'clamp(64px,10vw,96px) 24px', borderTop: '0.5px solid rgba(255,255,255,0.06)' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <MastersPromoBanner />
           <div style={{ textAlign: 'center', marginBottom: 56 }}>
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#f59e0b', marginBottom: 14 }}>Pricing</div>
             <h2 style={{ margin: '0 0 12px', fontSize: 'clamp(1.9rem, 4.5vw, 3rem)', fontWeight: 900, letterSpacing: '-0.03em', color: '#fff' }}>
@@ -933,7 +935,7 @@ export default function HubLanding() {
             {/* Left — statement */}
             <div>
               <p style={{ margin: '0 0 16px', fontSize: 'clamp(1.5rem,3vw,2.2rem)', fontWeight: 900, color: '#fff', lineHeight: 1.2, letterSpacing: '-0.02em' }}>
-                From <span style={{ color: '#22c55e' }}>$9.99</span> per tournament.
+                From <span style={{ color: '#22c55e' }}>$12.99</span> per tournament.
               </p>
               <p style={{ margin: '0 0 12px', fontSize: 15, color: 'rgba(255,255,255,0.5)', lineHeight: 1.75 }}>
                 Zero prize pool fees. Zero subscriptions.
@@ -968,7 +970,7 @@ export default function HubLanding() {
                 </div>
               </div>
               {[
-                { label: 'Platform fee',   ours: 'From $9.99/tournament', theirs: '10–25% + sub' },
+                { label: 'Platform fee',   ours: 'From $12.99/tournament', theirs: '10–25% + sub' },
                 { label: 'Prize pool cut', ours: 'Zero',                  theirs: 'Up to 12.5%'  },
                 { label: 'Subscriptions',  ours: 'None',                  theirs: '$5–20/month'  },
                 { label: 'Setup fees',     ours: 'None',                  theirs: 'Often yes'    },
