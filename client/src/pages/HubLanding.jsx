@@ -360,7 +360,7 @@ function ReferralSection() {
 
           {/* Pricing footnote */}
           <p style={{ margin: '20px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.2)', lineHeight: 1.6 }}>
-            From $12.99/tournament · up to 20 players · $19.99 up to 40 · $24.99 up to 60 · $34.99 up to 100 · Enterprise $49.99
+            From $12.99/tournament · up to 20 players · $19.99 up to 40 · $24.99 up to 60 · $34.99 up to 100 · $49.99 up to 300 · Enterprise $69.99
           </p>
         </div>
 

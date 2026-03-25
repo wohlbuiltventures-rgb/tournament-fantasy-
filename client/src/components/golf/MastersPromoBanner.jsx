@@ -1,13 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MASTERS_PROMO_END } from '../../utils/mastersPromo';
-
-const TIERS = [
-  { orig: '$12.99', promo: '$9.99'  },
-  { orig: '$19.99', promo: '$14.99' },
-  { orig: '$24.99', promo: '$18.99' },
-  { orig: '$34.99', promo: '$26.99' },
-  { orig: '$49.99', promo: '$37.99' },
-];
+import { MASTERS_PROMO_END, POOL_TIERS } from '../../utils/poolPricing';
 
 function getCountdown() {
   const diff = MASTERS_PROMO_END - new Date();
@@ -64,16 +56,16 @@ export default function MastersPromoBanner() {
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-        {TIERS.map(({ orig, promo }) => (
-          <div key={orig} style={{
+        {POOL_TIERS.map(({ price, promoPrice }) => (
+          <div key={price} style={{
             display: 'flex', alignItems: 'center', gap: 5,
             background: 'rgba(0,0,0,0.25)',
             border: '1px solid rgba(251,146,60,0.2)',
             borderRadius: 8,
             padding: '5px 11px',
           }}>
-            <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: 13, textDecoration: 'line-through' }}>{orig}</span>
-            <span style={{ color: '#fb923c', fontSize: 14, fontWeight: 800 }}>{promo}</span>
+            <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: 13, textDecoration: 'line-through' }}>${price.toFixed(2)}</span>
+            <span style={{ color: '#fb923c', fontSize: 14, fontWeight: 800 }}>${promoPrice.toFixed(2)}</span>
           </div>
         ))}
       </div>

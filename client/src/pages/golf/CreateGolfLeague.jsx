@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Flag, DollarSign, Trophy, Settings, Check, Zap } from 'lucide-react';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
-import { isMastersPromoActive, getPromoPrice } from '../../utils/mastersPromo';
+import { isMastersPromoActive, POOL_TIERS } from '../../utils/poolPricing';
 
 // ── Format definitions ────────────────────────────────────────────────────────
 
@@ -121,13 +121,6 @@ function CardHeader({ icon: Icon, title }) {
 
 // ── Pool tier selector ────────────────────────────────────────────────────────
 
-const POOL_TIERS = [
-  { tier: 'standard',   maxTeams: 20,  label: '20 teams',        price: 12.99, priceLabel: '$12.99/tournament' },
-  { tier: 'standard',   maxTeams: 40,  label: '40 teams',        price: 19.99, priceLabel: '$19.99/tournament' },
-  { tier: 'standard',   maxTeams: 60,  label: '60 teams',        price: 24.99, priceLabel: '$24.99/tournament' },
-  { tier: 'large_100',  maxTeams: 100, label: '100 teams',       price: 34.99, priceLabel: '$34.99/tournament' },
-  { tier: 'enterprise', maxTeams: 999, label: 'Enterprise 100+', price: 49.99, priceLabel: '$49.99/tournament' },
-];
 
 function PoolTierSelector({ maxTeams, poolTier, onChange }) {
   const sel = POOL_TIERS.find(t => t.maxTeams === maxTeams && t.tier === poolTier) || POOL_TIERS[0];
@@ -1268,7 +1261,7 @@ export default function CreateGolfLeague() {
                   {isMastersPromoActive() ? (
                     <>
                       <span style={{ textDecoration: 'line-through', color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>${tier.price.toFixed(2)}</span>
-                      {' '}${getPromoPrice(tier.price).toFixed(2)}/tournament
+                      {' '}${tier.promoPrice.toFixed(2)}/tournament
                       <span style={{ color: '#fb923c', fontWeight: 600, fontSize: 12, marginLeft: 6 }}>Masters Launch Pricing · ends April 10</span>
                     </>
                   ) : tier.priceLabel}

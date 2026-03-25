@@ -1,3 +1,2 @@
-export const MASTERS_PROMO_END = new Date('2026-04-10');
-export const isMastersPromoActive = () => new Date() < MASTERS_PROMO_END;
-export const getPromoPrice = (price) => Math.round(price * 0.75 * 100) / 100;
+// Canonical pricing lives in poolPricing.js — import from there.
+export { MASTERS_PROMO_END, isMastersPromoActive, POOL_TIERS } from './poolPricing';

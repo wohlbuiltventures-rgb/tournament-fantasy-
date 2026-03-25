@@ -26,7 +26,8 @@ function getPriceForMaxTeams(maxTeams) {
   if (maxTeams <= 40)  return { amount: 19.99, label: 'Up to 40 teams'  };
   if (maxTeams <= 60)  return { amount: 24.99, label: 'Up to 60 teams'  };
   if (maxTeams <= 100) return { amount: 34.99, label: 'Up to 100 teams' };
-  return                      { amount: 49.99, label: 'Enterprise 100+' };
+  if (maxTeams <= 300) return { amount: 49.99, label: 'Up to 300 teams' };
+  return                      { amount: 69.99, label: 'Enterprise 300+' };
 }
 
 // ── Square client factory ─────────────────────────────────────────────────────
