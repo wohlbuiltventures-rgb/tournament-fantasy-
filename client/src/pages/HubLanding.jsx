@@ -768,7 +768,7 @@ export default function HubLanding() {
             <h2 style={{ margin: '0 0 12px', fontSize: 'clamp(1.9rem, 4.5vw, 3rem)', fontWeight: 900, letterSpacing: '-0.03em', color: '#fff' }}>
               We charge a flat fee per tournament. That's it.
             </h2>
-            <p style={{ margin: 0, fontSize: 16, color: 'rgba(255,255,255,0.4)' }}>Tired of the fantasy sports monopoly?</p>
+            <p style={{ margin: 0, fontSize: 16, color: 'rgba(255,255,255,0.4)' }}>The bigger your pool, the worse the deal gets on other platforms. With us, you pay once — whether it's 8 players or 80.</p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 40, alignItems: 'center' }}>
