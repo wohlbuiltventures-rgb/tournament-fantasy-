@@ -229,6 +229,9 @@ const _golfColMigrations = [
   `ALTER TABLE golf_tournaments ADD COLUMN par INTEGER DEFAULT 72`,
   `ALTER TABLE golf_leagues ADD COLUMN payout_pool_override REAL`,
   `ALTER TABLE golf_leagues ADD COLUMN pool_drop_count INTEGER DEFAULT 2`,
+  `ALTER TABLE golf_leagues ADD COLUMN venmo TEXT`,
+  `ALTER TABLE golf_leagues ADD COLUMN zelle TEXT`,
+  `ALTER TABLE golf_leagues ADD COLUMN paypal TEXT`,
 ];
 for (const sql of _golfColMigrations) { try { db.exec(sql); } catch (_) {} }
 

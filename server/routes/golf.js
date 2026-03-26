@@ -1081,18 +1081,31 @@ router.patch('/leagues/:id/settings', authMiddleware, (req, res) => {
     if (!league) return res.status(404).json({ error: 'League not found' });
     if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Not commissioner' });
 
-    const { buy_in_amount, payout_1st, payout_2nd, payout_3rd } = req.body;
-    const p1 = Math.round((parseFloat(payout_1st) || 0) * 100) / 100;
-    const p2 = Math.round((parseFloat(payout_2nd) || 0) * 100) / 100;
-    const p3 = Math.round((parseFloat(payout_3rd) || 0) * 100) / 100;
+    const { buy_in_amount, payout_1st, payout_2nd, payout_3rd, venmo, zelle, paypal } = req.body;
 
-    if (Math.abs(p1 + p2 + p3 - 100) > 0.5) {
-      return res.status(400).json({ error: 'Payouts must sum to 100%' });
+    // Payout settings — only if provided
+    if (payout_1st !== undefined) {
+      const p1 = Math.round((parseFloat(payout_1st) || 0) * 100) / 100;
+      const p2 = Math.round((parseFloat(payout_2nd) || 0) * 100) / 100;
+      const p3 = Math.round((parseFloat(payout_3rd) || 0) * 100) / 100;
+      if (Math.abs(p1 + p2 + p3 - 100) > 0.5) {
+        return res.status(400).json({ error: 'Payouts must sum to 100%' });
+      }
+      db.prepare(
+        'UPDATE golf_leagues SET buy_in_amount = ?, payout_first = ?, payout_second = ?, payout_third = ? WHERE id = ?'
+      ).run(parseFloat(buy_in_amount) || 0, p1, p2, p3, req.params.id);
     }
 
-    db.prepare(
-      'UPDATE golf_leagues SET buy_in_amount = ?, payout_first = ?, payout_second = ?, payout_third = ? WHERE id = ?'
-    ).run(parseFloat(buy_in_amount) || 0, p1, p2, p3, req.params.id);
+    // Payment methods — saved independently, no payout validation needed
+    if (venmo !== undefined || zelle !== undefined || paypal !== undefined) {
+      const fields = [];
+      const vals = [];
+      if (venmo  !== undefined) { fields.push('venmo = ?');  vals.push(venmo  || null); }
+      if (zelle  !== undefined) { fields.push('zelle = ?');  vals.push(zelle  || null); }
+      if (paypal !== undefined) { fields.push('paypal = ?'); vals.push(paypal || null); }
+      vals.push(req.params.id);
+      db.prepare(`UPDATE golf_leagues SET ${fields.join(', ')} WHERE id = ?`).run(...vals);
+    }
 
     res.json({ ok: true });
   } catch (err) {

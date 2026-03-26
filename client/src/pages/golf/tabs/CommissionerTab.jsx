@@ -4,9 +4,92 @@ import api from '../../../api';
 import GolfPaymentModal from '../../../components/golf/GolfPaymentModal';
 import { POOL_TIERS } from '../../../utils/poolPricing';
 
+// ── Blast confirmation modal ──────────────────────────────────────────────────
+function BlastModal({ leagueId, initialMsg, onClose }) {
+  const [msg, setMsg]       = useState(initialMsg);
+  const [sending, setSending] = useState(false);
+  const [sentCount, setSentCount] = useState(null);
+
+  async function send() {
+    if (!msg.trim()) return;
+    setSending(true);
+    try {
+      const r = await api.post(`/golf/leagues/${leagueId}/blast`, { message: msg });
+      setSentCount(r.data.sent ?? 0);
+      setTimeout(() => onClose(), 3000);
+    } catch { /* silent */ }
+    setSending(false);
+  }
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.78)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+      onClick={() => { if (!sending) onClose(); }}
+    >
+      <div
+        style={{ background: '#0d1117', border: '1px solid #1f2937', borderRadius: 20,
+          padding: 24, maxWidth: 480, width: '100%' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 style={{ color: '#fff', fontWeight: 800, fontSize: 15, margin: '0 0 4px' }}>
+          Send to all members
+        </h3>
+        <p style={{ color: '#4b5563', fontSize: 12, margin: '0 0 14px' }}>
+          Edit the message below before sending.
+        </p>
+        <textarea
+          value={msg}
+          onChange={e => setMsg(e.target.value)}
+          rows={9}
+          disabled={sentCount !== null}
+          style={{
+            width: '100%', background: '#111827', border: '1px solid #1f2937',
+            borderRadius: 10, padding: '10px 12px', color: '#e5e7eb', fontSize: 13,
+            resize: 'vertical', lineHeight: 1.65, fontFamily: 'inherit',
+            boxSizing: 'border-box', opacity: sentCount !== null ? 0.5 : 1,
+          }}
+        />
+        {sentCount !== null ? (
+          <p style={{ color: '#4ade80', fontSize: 14, fontWeight: 700,
+            textAlign: 'center', margin: '14px 0 0' }}>
+            ✓ Sent to {sentCount} members
+          </p>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button
+              disabled={sending || !msg.trim()}
+              onClick={send}
+              style={{
+                flex: 1, background: '#16a34a', border: 'none', borderRadius: 10,
+                padding: '11px 0', color: '#fff', fontWeight: 700, fontSize: 13,
+                cursor: sending || !msg.trim() ? 'not-allowed' : 'pointer',
+                opacity: sending || !msg.trim() ? 0.5 : 1,
+              }}
+            >
+              {sending ? 'Sending…' : 'Send to all members'}
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                background: '#1f2937', border: 'none', borderRadius: 10,
+                padding: '11px 18px', color: '#9ca3af', fontWeight: 600,
+                fontSize: 13, cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Custom blast textarea ─────────────────────────────────────────────────────
 function MassBlast({ leagueId }) {
-  const [msg, setMsg] = useState('');
-  const [sent, setSent] = useState(false);
+  const [msg, setMsg]     = useState('');
+  const [sent, setSent]   = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function send() {
@@ -17,9 +100,7 @@ function MassBlast({ leagueId }) {
       setSent(true);
       setMsg('');
       setTimeout(() => setSent(false), 4000);
-    } catch {
-      // silently fail
-    }
+    } catch { /* silent */ }
     setLoading(false);
   }
 
@@ -28,7 +109,7 @@ function MassBlast({ leagueId }) {
       <textarea
         value={msg}
         onChange={e => setMsg(e.target.value)}
-        placeholder="Send a message to all league members…"
+        placeholder="Or write a custom message to all league members…"
         rows={3}
         className="input w-full resize-none text-sm"
       />
@@ -44,8 +125,9 @@ function MassBlast({ leagueId }) {
   );
 }
 
+// ── Referral section ──────────────────────────────────────────────────────────
 function ReferralSection() {
-  const [data, setData] = useState(null);
+  const [data, setData]   = useState(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -78,6 +160,7 @@ function ReferralSection() {
   );
 }
 
+// ── Main component ────────────────────────────────────────────────────────────
 export default function CommissionerTab({ leagueId, leagueName, members, league }) {
   const [promoData, setPromoData]   = useState(null);
   const [isPaid, setIsPaid]         = useState(false);
@@ -87,12 +170,12 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   const [balancing, setBalancing]   = useState(false);
   const [balanceDone, setBalanceDone] = useState(false);
 
-  // Feature 1: capacity upsell
+  // Capacity upsell
   const [capacityDismissed, setCapacityDismissed] = useState(false);
   const [upgrading, setUpgrading]   = useState(false);
   const [upgradeError, setUpgradeError] = useState('');
 
-  // Feature 2: pool settings
+  // Pool settings
   const [buyIn,   setBuyIn]   = useState(String(league?.buy_in_amount  ?? 0));
   const [payout1, setPayout1] = useState(String(league?.payout_first   ?? 70));
   const [payout2, setPayout2] = useState(String(league?.payout_second  ?? 20));
@@ -100,6 +183,16 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSaved,  setSettingsSaved]  = useState(false);
   const [settingsError,  setSettingsError]  = useState('');
+
+  // Payment methods
+  const [venmo,  setVenmo]  = useState(league?.venmo  || '');
+  const [zelle,  setZelle]  = useState(league?.zelle  || '');
+  const [paypal, setPaypal] = useState(league?.paypal || '');
+  const [pmSaving, setPmSaving] = useState(false);
+  const [pmSaved,  setPmSaved]  = useState(false);
+
+  // Blast modal
+  const [blastModal, setBlastModal] = useState(null); // string (pre-filled message) or null
 
   useEffect(() => {
     Promise.all([
@@ -121,7 +214,7 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
     }).catch(() => setGateChecked(true));
   }, [leagueId]);
 
-  // Feature 1: capacity upsell derived values
+  // ── Derived values ──────────────────────────────────────────────────────────
   const currentMax      = league?.max_teams || 20;
   const currentTierIdx  = POOL_TIERS.findIndex(t => t.maxTeams === currentMax);
   const currentTierData = currentTierIdx >= 0 ? POOL_TIERS[currentTierIdx] : null;
@@ -132,6 +225,55 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   const priceDiff       = nextTierData && currentTierData
     ? (nextTierData.price - currentTierData.price).toFixed(2) : null;
 
+  const thursdayStart   = league?.pool_tournament_start
+    ? new Date(league.pool_tournament_start + 'T12:00:00.000Z') : null;
+  const settingsLocked  = !!thursdayStart && new Date() >= thursdayStart;
+  const payoutsSum      = (parseFloat(payout1) || 0) + (parseFloat(payout2) || 0) + (parseFloat(payout3) || 0);
+  const payoutsValid    = Math.abs(payoutsSum - 100) < 0.5;
+
+  // Total picks per player (from pool_tiers JSON)
+  const totalPicks = (() => {
+    try {
+      const tiers = JSON.parse(league?.pool_tiers || '[]');
+      const sum = tiers.reduce((a, t) => a + (parseInt(t.picks) || 0), 0);
+      return sum > 0 ? sum : null;
+    } catch { return null; }
+  })();
+
+  // Prize pool
+  const prizePool = members.length * (parseFloat(buyIn) || league?.buy_in_amount || 0);
+  const p1pct = parseFloat(payout1) || league?.payout_first  || 70;
+  const p2pct = parseFloat(payout2) || league?.payout_second || 20;
+  const p3pct = parseFloat(payout3) || league?.payout_third  || 10;
+
+  // Scoring label
+  const scoringLabel = league?.scoring_style === 'fantasy_points'
+    ? 'Most fantasy points wins'
+    : 'Lowest combined score wins (Stroke Play)';
+
+  // ── Template generators ─────────────────────────────────────────────────────
+  function picksReminderMsg() {
+    return `⛳ Reminder — picks for ${leagueName} are due before Thursday 8am ET. Head to TourneyRun to lock in your ${totalPicks ?? 7} golfers before the deadline. Don't get locked out!`;
+  }
+
+  function welcomeMsg() {
+    const picks = totalPicks ?? 'X';
+    const pool  = prizePool > 0 ? `$${prizePool.toFixed(0)}` : '[Prize Pool]';
+    return `Welcome to ${leagueName}! Here's how it works:\n- Pick ${picks} golfers before Thursday 8am ET\n- Players are grouped into tiers by betting odds\n- ${scoringLabel}\n- Prize pool: ${pool} — ${p1pct}% to 1st, ${p2pct}% to 2nd, ${p3pct}% to 3rd\n- Standings update automatically from ESPN\n\nGood luck and may the best golfer win! 🏆`;
+  }
+
+  function payReminderMsg() {
+    const amount = league?.buy_in_amount > 0 ? `$${league.buy_in_amount}` : '[buy-in amount]';
+    const methods = [
+      venmo  ? `Venmo: ${venmo}`   : '',
+      zelle  ? `Zelle: ${zelle}`   : '',
+      paypal ? `PayPal: ${paypal}` : '',
+    ].filter(Boolean).join('\n');
+    const methodsLine = methods || '[Add your payment methods in the Commissioner Hub]';
+    return `Hey! Just a reminder to pay your ${amount} buy-in for ${leagueName}.\n\n${methodsLine}\n\nPlease pay as soon as possible so the prize pool is accurate. Thanks!`;
+  }
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
   async function handleUpgrade() {
     setUpgrading(true);
     setUpgradeError('');
@@ -143,13 +285,6 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
       setUpgrading(false);
     }
   }
-
-  // Feature 2: settings derived values
-  const thursdayStart  = league?.pool_tournament_start
-    ? new Date(league.pool_tournament_start + 'T12:00:00.000Z') : null;
-  const settingsLocked = !!thursdayStart && new Date() >= thursdayStart;
-  const payoutsSum     = (parseFloat(payout1) || 0) + (parseFloat(payout2) || 0) + (parseFloat(payout3) || 0);
-  const payoutsValid   = Math.abs(payoutsSum - 100) < 0.5;
 
   async function saveSettings() {
     if (!payoutsValid) { setSettingsError('Payouts must sum to exactly 100%'); return; }
@@ -170,6 +305,21 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
     setSettingsSaving(false);
   }
 
+  async function savePaymentMethods() {
+    setPmSaving(true);
+    try {
+      await api.patch(`/golf/leagues/${leagueId}/settings`, {
+        venmo:  venmo.trim()  || null,
+        zelle:  zelle.trim()  || null,
+        paypal: paypal.trim() || null,
+      });
+      setPmSaved(true);
+      setTimeout(() => setPmSaved(false), 3000);
+    } catch { /* silent */ }
+    setPmSaving(false);
+  }
+
+  // ── Gate check ──────────────────────────────────────────────────────────────
   if (!gateChecked) {
     return <div style={{ color: '#4b5563', padding: 32, textAlign: 'center', fontSize: 14 }}>Loading…</div>;
   }
@@ -181,8 +331,44 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   const showPromoBar = !isPaid && !alreadyUsedPromo && membersNeeded > 0;
   const pct = Math.min(100, Math.round((memberCount / 6) * 100));
 
+  // ── Quick-send button styles ─────────────────────────────────────────────────
+  const quickBtnBase = {
+    border: 'none', borderRadius: 8, padding: '7px 12px',
+    fontWeight: 700, fontSize: 12, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+  };
+  const quickBtns = [
+    {
+      label: '📣 Picks Reminder',
+      msg: picksReminderMsg,
+      style: { ...quickBtnBase, background: 'rgba(22,163,74,0.15)', color: '#4ade80',
+        border: '1px solid rgba(22,163,74,0.35)' },
+    },
+    {
+      label: '👋 Welcome & Rules',
+      msg: welcomeMsg,
+      style: { ...quickBtnBase, background: 'rgba(59,130,246,0.12)', color: '#93c5fd',
+        border: '1px solid rgba(59,130,246,0.35)' },
+    },
+    {
+      label: '💰 Pay Your Buy-In',
+      msg: payReminderMsg,
+      style: { ...quickBtnBase, background: 'rgba(245,158,11,0.12)', color: '#fbbf24',
+        border: '1px solid rgba(245,158,11,0.35)' },
+    },
+  ];
+
   return (
     <div className="space-y-4">
+      {/* Blast modal */}
+      {blastModal && (
+        <BlastModal
+          leagueId={leagueId}
+          initialMsg={blastModal}
+          onClose={() => setBlastModal(null)}
+        />
+      )}
+
       {/* Gate modal */}
       {showGate && (
         <GolfPaymentModal
@@ -213,12 +399,7 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
           <p className="text-gray-400 text-sm mb-4 max-w-sm mx-auto">
             Unlock auto-emails, payment tracking, FAAB results, CSV export, and more for $19.99/season.
           </p>
-          <Button
-            variant="primary"
-            color="purple"
-            size="lg"
-            onClick={() => setShowGate(true)}
-          >
+          <Button variant="primary" color="purple" size="lg" onClick={() => setShowGate(true)}>
             Unlock Commissioner Pro — $19.99
           </Button>
           {!alreadyUsedPromo && (
@@ -232,8 +413,7 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
             <div style={{
               background: 'linear-gradient(135deg, rgba(251,146,60,0.1), rgba(245,158,11,0.07))',
               border: '1.5px solid rgba(251,146,60,0.4)',
-              borderRadius: 14,
-              padding: '14px 16px',
+              borderRadius: 14, padding: '14px 16px',
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
                 <div>
@@ -288,7 +468,8 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
             </div>
             <div>
               {members.map((m, i) => (
-                <div key={m.user_id} style={{ borderBottom: i < members.length - 1 ? '1px solid #111827' : 'none' }}
+                <div key={m.user_id}
+                  style={{ borderBottom: i < members.length - 1 ? '1px solid #111827' : 'none' }}
                   className="flex items-center justify-between px-4 py-3">
                   <div>
                     <div className="text-white text-sm font-semibold">{m.team_name}</div>
@@ -313,26 +494,19 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
               ) : (
                 <p className="text-gray-500 text-xs mb-3">Editable until Thursday 8am ET</p>
               )}
-
               <div className="space-y-3">
-                {/* Buy-in */}
                 <div>
                   <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">
                     Buy-in per player ($)
                   </label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={buyIn}
+                    type="number" min="0" step="0.01" value={buyIn}
                     disabled={settingsLocked}
                     onChange={e => setBuyIn(e.target.value)}
                     className="input w-32 text-sm"
                     style={settingsLocked ? { opacity: 0.5 } : {}}
                   />
                 </div>
-
-                {/* Payout splits */}
                 <div>
                   <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">
                     Payout splits
@@ -346,11 +520,7 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                       <div key={label} className="flex items-center gap-1.5">
                         <span className="text-gray-500 text-xs w-9">{label}</span>
                         <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="1"
-                          value={val}
+                          type="number" min="0" max="100" step="1" value={val}
                           disabled={settingsLocked}
                           onChange={e => set(e.target.value)}
                           className="input w-16 text-sm text-center"
@@ -358,10 +528,7 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                         />
                       </div>
                     ))}
-                    <span style={{
-                      fontSize: 12, fontWeight: 600,
-                      color: payoutsValid ? '#4ade80' : '#f87171',
-                    }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: payoutsValid ? '#4ade80' : '#f87171' }}>
                       {payoutsSum.toFixed(0)}%
                     </span>
                   </div>
@@ -372,7 +539,6 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                   )}
                 </div>
               </div>
-
               {!settingsLocked && (
                 <div className="flex items-center gap-3 mt-4">
                   <button
@@ -382,16 +548,80 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                   >
                     {settingsSaving ? 'Saving…' : 'Save settings'}
                   </button>
-                  {settingsSaved && <span style={{ color: '#4ade80', fontSize: 13 }}>✓ Saved</span>}
-                  {settingsError && <span style={{ color: '#f87171', fontSize: 13 }}>{settingsError}</span>}
+                  {settingsSaved  && <span style={{ color: '#4ade80', fontSize: 13 }}>✓ Saved</span>}
+                  {settingsError  && <span style={{ color: '#f87171', fontSize: 13 }}>{settingsError}</span>}
                 </div>
               )}
             </div>
           )}
 
-          {/* Mass blast */}
+          {/* ── Mass Blast ── */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
-            <h4 className="text-white text-sm font-bold mb-3">📣 Mass Blast</h4>
+            <h4 className="text-white text-sm font-bold mb-4">📣 Mass Blast</h4>
+
+            {/* Payment methods (for pay reminder template) */}
+            <div style={{
+              background: '#080f0c', border: '1px solid #1a2e1f',
+              borderRadius: 10, padding: '12px 14px', marginBottom: 14,
+            }}>
+              <p style={{ color: '#4b5563', fontSize: 11, fontWeight: 700,
+                textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 10px' }}>
+                Payment Methods
+                <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: '#374151' }}>
+                  {' '}— shown in pay reminder emails
+                </span>
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                {[
+                  { label: 'Venmo',  val: venmo,  set: setVenmo,  ph: '@username' },
+                  { label: 'Zelle',  val: zelle,  set: setZelle,  ph: 'phone or email' },
+                  { label: 'PayPal', val: paypal, set: setPaypal, ph: 'paypal.me/username' },
+                ].map(({ label, val, set, ph }) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#4b5563', fontSize: 11, fontWeight: 700, width: 42, flexShrink: 0 }}>
+                      {label}
+                    </span>
+                    <input
+                      type="text"
+                      value={val}
+                      onChange={e => set(e.target.value)}
+                      placeholder={ph}
+                      className="input flex-1"
+                      style={{ fontSize: 12, padding: '5px 10px' }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={savePaymentMethods}
+                  disabled={pmSaving}
+                  style={{
+                    background: 'rgba(55,65,81,0.5)', border: '1px solid rgba(55,65,81,0.8)',
+                    borderRadius: 7, padding: '4px 14px',
+                    color: '#9ca3af', fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                    opacity: pmSaving ? 0.5 : 1,
+                  }}
+                >
+                  {pmSaving ? 'Saving…' : 'Save'}
+                </button>
+                {pmSaved && <span style={{ color: '#4ade80', fontSize: 12 }}>✓ Saved</span>}
+              </div>
+            </div>
+
+            {/* Quick-send template buttons */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+              {quickBtns.map(({ label, msg, style }) => (
+                <button key={label} style={style} onClick={() => setBlastModal(msg())}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px solid #111827', marginBottom: 14 }} />
+
+            {/* Custom message textarea */}
             <MassBlast leagueId={leagueId} />
           </div>
 
@@ -406,7 +636,7 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                 const blob = new Blob([csv], { type: 'text/csv' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url; a.download = `${leagueName.replace(/\s+/g,'-')}-standings.csv`;
+                a.href = url; a.download = `${leagueName.replace(/\s+/g, '-')}-standings.csv`;
                 a.click(); URL.revokeObjectURL(url);
               }}
               className="text-sm text-green-400 hover:text-green-300 underline underline-offset-2"
@@ -423,11 +653,12 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                 Divide the field into equal-sized tier groups sorted by odds. Good if T1 has 3 players and T6 has 80.
               </p>
 
-              {/* Preview modal */}
               {balancePreview && (
-                <div style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.75)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
                   onClick={() => setBalancePreview(null)}>
-                  <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: 20, padding: 24, maxWidth: 400, width: '100%' }}
+                  <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: 20,
+                    padding: 24, maxWidth: 400, width: '100%' }}
                     onClick={e => e.stopPropagation()}>
                     <h3 className="text-white font-bold text-base mb-1">Rebalance Preview</h3>
                     <p className="text-gray-500 text-xs mb-3">{balancePreview.field_size} players across {balancePreview.tiers.length} tiers</p>
