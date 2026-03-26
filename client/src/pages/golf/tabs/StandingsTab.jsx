@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { Flag, Trophy } from 'lucide-react';
 import api from '../../../api';
+import { isStrokeBased, computeRanks, scoreColor } from './golfScoringUtils';
 
 const FORMAT_META = {
   pool:        { label: 'Pool',          color: 'blue'  },
@@ -82,17 +83,6 @@ function PrizeCard({ prizeTotal, buyIn, memberCount, p1, p2, p3 }) {
   );
 }
 
-function computeRanks(standings, scoringStyle) {
-  const lowerIsBetter = scoringStyle === 'total_strokes';
-  const arr = standings.map((s, i) => ({ pts: s.season_points ?? 0, i }));
-  return arr.map(({ pts }) => {
-    const rank = lowerIsBetter
-      ? arr.filter(x => x.pts < pts).length + 1
-      : arr.filter(x => x.pts > pts).length + 1;
-    const tied = arr.filter(x => x.pts === pts).length > 1;
-    return { rank, tied };
-  });
-}
 
 const LeaderboardRow = memo(function LeaderboardRow({
   s, rankInfo, expandContent, canExpand,
@@ -103,9 +93,8 @@ const LeaderboardRow = memo(function LeaderboardRow({
   const isOpen = expanded === s.user_id;
   const pts    = s.season_points ?? 0;
   const myPrize = hasPrize ? prizeForRank(rankInfo.rank, prizeTotal, p1, p2, p3) : null;
-  const ptColor = isTotalStrokes
-    ? (pts < 0 ? '#22c55e' : pts > 0 ? '#ef4444' : '#9ca3af')
-    : (pts > 0 ? '#22c55e' : pts < 0 ? '#ef4444' : '#9ca3af');
+  // isTotalStrokes is already the full isStrokeBased() check — pass the right convention
+  const ptColor = scoreColor(pts, isTotalStrokes ? 'stroke_play' : 'tourneyrun');
   const isBot  = /^bot[\s_]?\d/i.test(s.username || '');
 
   return (
@@ -206,7 +195,9 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
   // All derived values and hooks must be declared before any early return
   const standings    = data?.standings || [];
   const scoringStyle = data?.scoring_style || 'fantasy_points';
-  const isTotalStrokes = scoringStyle === 'total_strokes';
+  // True for ALL stroke-based styles: 'stroke_play', 'total_score', 'total_strokes'
+  // This controls color direction (negative=green), sort order, and display format.
+  const isTotalStrokes = isStrokeBased(scoringStyle);
   const ranks = useMemo(
     () => computeRanks(standings, scoringStyle),
     [standings, scoringStyle],

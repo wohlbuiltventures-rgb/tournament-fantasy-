@@ -1,20 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { useState, useEffect } from 'react';
-
-// ── #6 + #3: computeRanks (duplicated here for unit testing) ──────────────────
-
-function computeRanks(standings, scoringStyle) {
-  const lowerIsBetter = scoringStyle === 'total_strokes';
-  const arr = standings.map((s) => ({ pts: s.season_points ?? 0 }));
-  return arr.map(({ pts }) => {
-    const rank = lowerIsBetter
-      ? arr.filter(x => x.pts < pts).length + 1
-      : arr.filter(x => x.pts > pts).length + 1;
-    const tied = arr.filter(x => x.pts === pts).length > 1;
-    return { rank, tied };
-  });
-}
+import { computeRanks } from '../golfScoringUtils';
 
 describe('computeRanks', () => {
   it('ranks by fantasy_points descending', () => {
