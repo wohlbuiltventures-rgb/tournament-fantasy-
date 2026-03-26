@@ -826,4 +826,71 @@ router.post('/leagues/:id/commissioner/add-picks', authMiddleware, async (req, r
   }
 });
 
+// ── POST /leagues/:id/commissioner/remove-picks ───────────────────────────────
+// Allows the commissioner to delete picks on behalf of specified users.
+// Body: { picks: [{ username, player_name }] }
+// Idempotent — silently skips if pick doesn't exist.
+// Returns { ok: true, deleted: N, results: [...] }
+
+router.post('/leagues/:id/commissioner/remove-picks', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
+    if (league.format_type !== 'pool') return res.status(400).json({ error: 'Pool leagues only' });
+
+    const tid = league.pool_tournament_id;
+    if (!tid) return res.status(400).json({ error: 'No tournament linked' });
+
+    const { picks: picksToRemove = [] } = req.body;
+    if (!Array.isArray(picksToRemove) || picksToRemove.length === 0) {
+      return res.status(400).json({ error: 'picks array required' });
+    }
+
+    const results = [];
+
+    for (const { username, player_name } of picksToRemove) {
+      if (!username || !player_name) {
+        results.push({ username, player_name, status: 'skipped', reason: 'missing username or player_name' });
+        continue;
+      }
+
+      const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) ||
+                   db.prepare('SELECT * FROM users WHERE LOWER(username) = LOWER(?)').get(username);
+      if (!user) {
+        results.push({ username, player_name, status: 'skipped', reason: 'user not found' });
+        continue;
+      }
+
+      const normN = n => (n || '').toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim();
+      const target = normN(player_name);
+
+      // Find the pick by normalized player_name match
+      const existing = db.prepare(
+        'SELECT * FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ?'
+      ).all(req.params.id, tid, user.id)
+        .find(p => normN(p.player_name) === target);
+
+      if (!existing) {
+        results.push({ username, player_name, status: 'skipped', reason: 'pick not found' });
+        continue;
+      }
+
+      db.prepare(
+        'DELETE FROM pool_picks WHERE id = ?'
+      ).run(existing.id);
+
+      results.push({ username, player_name: existing.player_name, tier: existing.tier_number, status: 'deleted' });
+    }
+
+    const deleted = results.filter(r => r.status === 'deleted').length;
+    console.log(`[golf-pool] commissioner remove-picks: ${deleted} deleted, ${results.length - deleted} skipped`);
+
+    res.json({ ok: true, deleted, results });
+  } catch (err) {
+    console.error('[golf-pool] commissioner remove-picks error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
