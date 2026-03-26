@@ -23,6 +23,24 @@ async function sendEmail({ to, subject, html, from = FROM }) {
   return data;
 }
 
+// ── Batch send (up to 100 emails per call) ────────────────────────────────────
+// emails: array of { to, subject, html, from? }
+async function sendEmailBatch(emails) {
+  if (!_resend) {
+    console.warn('[email] Skipping batch — RESEND_API_KEY not configured');
+    return;
+  }
+  const payload = emails.map(e => ({
+    from: e.from || FROM,
+    to:   e.to,
+    subject: e.subject,
+    html: e.html,
+  }));
+  const { data, error } = await _resend.emails.batch(payload);
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // ── Password reset ────────────────────────────────────────────────────────────
 async function sendPasswordReset(toEmail, resetUrl) {
   await sendEmail({
@@ -430,6 +448,7 @@ async function sendGolfPoolLive(toEmail, { username, leagueName, leagueId, spots
 
 module.exports = {
   sendEmail,
+  sendEmailBatch,
   sendPasswordReset,
   sendWelcome,
   sendLeagueStandingsEmail,

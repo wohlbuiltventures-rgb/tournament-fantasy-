@@ -1021,17 +1021,14 @@ router.post('/leagues/:id/blast', authMiddleware, async (req, res) => {
       'SELECT u.email, u.username FROM golf_league_members glm JOIN users u ON glm.user_id = u.id WHERE glm.golf_league_id = ?'
     ).all(req.params.id);
 
-    const { sendEmail } = require('../mailer');
+    console.log('[golf] Blast: fetched', members.length, 'emails for league', req.params.id);
+
+    const { sendEmailBatch } = require('../mailer');
     const baseUrl = (process.env.CLIENT_URL || 'https://tourneyrun.app').replace(/\/$/, '');
     const leagueUrl = `${baseUrl}/golf/league/${req.params.id}`;
     const safeMessage = message.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-    await Promise.all(members.map(m =>
-      sendEmail({
-        from: 'TourneyRun Golf <noreply@tourneyrun.app>',
-        to: m.email,
-        subject: `📣 Message from your ${league.name} commissioner`,
-        html: `<!DOCTYPE html>
+    const emailBody = () => `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#050f08;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
@@ -1060,10 +1057,16 @@ router.post('/leagues/:id/blast', authMiddleware, async (req, res) => {
     </td></tr>
   </table>
 </body>
-</html>`,
-      }).catch(err => console.warn(`[golf] blast email failed for ${m.email}:`, err.message))
-    ));
+</html>`;
 
+    await sendEmailBatch(members.map(m => ({
+      from: 'TourneyRun Golf <noreply@tourneyrun.app>',
+      to:   m.email,
+      subject: `📣 Message from your ${league.name} commissioner`,
+      html: emailBody(),
+    })));
+
+    console.log('[golf] Blast: sent to', members.length, 'members');
     res.json({ ok: true, sent: members.length });
   } catch (err) {
     console.error('[golf] blast error:', err);
