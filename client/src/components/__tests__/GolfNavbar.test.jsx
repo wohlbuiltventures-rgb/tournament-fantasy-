@@ -4,8 +4,22 @@ import { MemoryRouter } from 'react-router-dom';
 import GolfNavbar from '../GolfNavbar';
 import { useAuth } from '../../contexts/AuthContext';
 
-// GolfNavbar has no api import, but mock AuthContext to avoid real providers
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
+
+// GolfBellMenu uses useGolfNotifications — mock it to avoid real API calls
+vi.mock('../../hooks/useGolfNotifications', () => ({
+  useGolfNotifications: () => ({
+    notifications: [], dismissed: new Set(), dismiss: vi.fn(),
+    markAllRead: vi.fn(), unreadCount: 0, leagues: [], poolPicksMap: {}, loading: false,
+  }),
+  NOTIF_STYLE: {
+    PICKS_DUE:       { color: '#f59e0b', label: 'Picks Due'       },
+    PICKS_LOCKED:    { color: '#f59e0b', label: 'Picks Locked'    },
+    TOURNAMENT_LIVE: { color: '#22c55e', label: 'Tournament Live' },
+    ROUND_COMPLETE:  { color: '#60a5fa', label: 'Scores Updated'  },
+    WINNER:          { color: '#eab308', label: 'Results In!'     },
+  },
+}));
 
 // ── Shared auth states ──────────────────────────────────────────────────────
 

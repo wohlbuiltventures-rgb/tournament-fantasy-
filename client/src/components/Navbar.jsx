@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
+import { useGolfNotifications, NOTIF_STYLE } from '../hooks/useGolfNotifications';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,133 @@ const BBALL_NAV = [
   { to: '/basketball/strategy',  label: 'Strategy'  },
   { to: '/basketball/faq',       label: 'FAQ'       },
 ];
+
+// ── Golf notification bell ────────────────────────────────────────────────────
+
+function BellSVG() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+    </svg>
+  );
+}
+
+function NotifRow({ notif, onDismiss, onClose }) {
+  const navigate = useNavigate();
+  const s = NOTIF_STYLE[notif.type] || { color: '#6b7280', label: '' };
+
+  function handleRowClick() {
+    onDismiss(notif.id);
+    onClose();
+    if (notif.cta?.href) navigate(notif.cta.href);
+  }
+
+  return (
+    <div
+      onClick={handleRowClick}
+      style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 16px', cursor: notif.cta ? 'pointer' : 'default', borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.1s' }}
+      onMouseEnter={e => { if (notif.cta) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.color, flexShrink: 0, marginTop: 5 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: s.color, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{s.label}</div>
+        <p style={{ fontSize: 13, color: '#d1d5db', margin: 0, lineHeight: 1.4 }}>{notif.body}</p>
+        {notif.cta && (
+          <span style={{ fontSize: 11, color: '#4b5563', marginTop: 2, display: 'block' }}>{notif.cta.label} →</span>
+        )}
+      </div>
+      <button
+        onClick={e => { e.stopPropagation(); onDismiss(notif.id); }}
+        aria-label="Dismiss notification"
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#374151', fontSize: 16, lineHeight: 1, padding: '1px 3px', flexShrink: 0, marginTop: -1 }}
+      >×</button>
+    </div>
+  );
+}
+
+function GolfBellMenu({ userId }) {
+  const { notifications, dismissed, dismiss, markAllRead, unreadCount } = useGolfNotifications(userId);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const visible = notifications.filter(n => !dismissed.has(n.id));
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-label="Notifications"
+        style={{
+          position: 'relative', background: open ? 'rgba(34,197,94,0.1)' : 'none',
+          border: 'none', cursor: 'pointer', padding: '5px 6px', borderRadius: 8,
+          color: unreadCount > 0 ? '#4ade80' : '#6b7280',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'color 0.15s, background 0.15s',
+        }}
+        onMouseEnter={e => { if (!open) { e.currentTarget.style.color = '#e5e7eb'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; } }}
+        onMouseLeave={e => { if (!open) { e.currentTarget.style.color = unreadCount > 0 ? '#4ade80' : '#6b7280'; e.currentTarget.style.background = 'none'; } }}
+      >
+        <BellSVG />
+        {unreadCount > 0 && (
+          <span style={{
+            position: 'absolute', top: 2, right: 2,
+            minWidth: 15, height: 15, borderRadius: 999,
+            background: '#ef4444', color: '#fff',
+            fontSize: 9, fontWeight: 800, lineHeight: 1, padding: '0 3px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 0 1.5px #0a1a0f',
+          }}>
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+          width: 320, maxHeight: 400, overflowY: 'auto',
+          background: '#0f1923', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 12, zIndex: 200,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', position: 'sticky', top: 0, background: '#0f1923' }}>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Notifications</span>
+            {visible.length > 0 && (
+              <button
+                onClick={markAllRead}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 12, padding: 0 }}
+                onMouseEnter={e => e.currentTarget.style.color = '#d1d5db'}
+                onMouseLeave={e => e.currentTarget.style.color = '#6b7280'}
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+          {visible.length === 0 ? (
+            <div style={{ padding: '28px 16px', textAlign: 'center', color: '#4b5563', fontSize: 13 }}>
+              You're all caught up ✓
+            </div>
+          ) : (
+            visible.map(n => (
+              <NotifRow key={n.id} notif={n} onDismiss={dismiss} onClose={() => setOpen(false)} />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Golf ball SVG (shared between both variants' logo) ───────────────────────
 
@@ -220,6 +348,7 @@ export default function Navbar({ variant }) {
                   {isGolf ? 'Golf Admin' : 'Admin'}
                 </Link>
               )}
+              {isGolf && <GolfBellMenu userId={user.id} />}
               <div style={{ width: '0.5px', height: 18, background: theme.divider, flexShrink: 0 }} />
               <Link
                 to="/profile"
