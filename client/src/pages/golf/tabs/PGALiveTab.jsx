@@ -242,8 +242,8 @@ export default function PGALiveTab({ leagueId, league }) {
         )}
 
         {/* Desktop column headers */}
-        <div className="hidden sm:grid" style={{ gridTemplateColumns: isPreTournament ? '44px 1fr 1fr' : '44px 1fr 32px 32px 32px 32px 48px 44px', gap: 0, padding: '8px 14px', borderBottom: '1px solid #1f2937' }}>
-          {(isPreTournament ? ['#', 'Player', 'Tee Time'] : ['Pos', 'Player', 'R1', 'R2', 'R3', 'R4', 'Total', 'Today']).map((h, i) => (
+        <div className="hidden sm:grid" style={{ gridTemplateColumns: isPreTournament ? '44px 1fr 1fr' : '44px 1fr 36px 32px 32px 32px 32px 48px 44px', gap: 0, padding: '8px 14px', borderBottom: '1px solid #1f2937' }}>
+          {(isPreTournament ? ['#', 'Player', 'Tee Time'] : ['Pos', 'Player', 'Thru', 'R1', 'R2', 'R3', 'R4', 'Total', 'Today']).map((h, i) => (
             <div key={h} style={{ textAlign: isPreTournament ? (i === 2 ? 'right' : 'left') : (i >= 2 ? 'center' : 'left'), color: '#374151', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{h}</div>
           ))}
         </div>
@@ -271,15 +271,22 @@ export default function PGALiveTab({ leagueId, league }) {
             : null;
 
           const playerCell = (
-            <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}>
-              {c.flagHref && (
-                <img src={c.flagHref} alt={c.countryAlt} style={{ width: 16, height: 11, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }} onError={e => { e.target.style.display = 'none'; }} />
+            <div style={{ minWidth: 0, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                {c.flagHref && (
+                  <img src={c.flagHref} alt={c.countryAlt} style={{ width: 16, height: 11, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }} onError={e => { e.target.style.display = 'none'; }} />
+                )}
+                <span style={{ color: myPick ? '#22c55e' : '#fff', fontWeight: myPick ? 700 : 500, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {c.name}
+                </span>
+                {myPick && <span style={{ fontSize: 8, fontWeight: 700, color: '#22c55e', background: 'rgba(0,232,122,0.1)', border: '1px solid rgba(0,232,122,0.25)', padding: '1px 4px', borderRadius: 3, letterSpacing: '0.05em', flexShrink: 0 }}>PICK</span>}
+                {statusBadge && <span style={{ marginLeft: 2, flexShrink: 0 }}>{statusBadge}</span>}
+              </div>
+              {!isPreTournament && c.thru != null && !c.isCut && !c.isWD && (
+                <div className="block sm:hidden" style={{ color: '#4b5563', fontSize: 10, marginTop: 2, paddingLeft: 21 }}>
+                  {c.thru === 18 ? 'F' : `Thru ${c.thru}`}
+                </div>
               )}
-              <span style={{ color: myPick ? '#22c55e' : '#fff', fontWeight: myPick ? 700 : 500, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {c.name}
-              </span>
-              {myPick && <span style={{ fontSize: 8, fontWeight: 700, color: '#22c55e', background: 'rgba(0,232,122,0.1)', border: '1px solid rgba(0,232,122,0.25)', padding: '1px 4px', borderRadius: 3, letterSpacing: '0.05em', flexShrink: 0 }}>PICK</span>}
-              {statusBadge && <span style={{ marginLeft: 2, flexShrink: 0 }}>{statusBadge}</span>}
             </div>
           );
 
@@ -289,12 +296,15 @@ export default function PGALiveTab({ leagueId, league }) {
             </div>
           );
 
+          const thruCell = (
+            <div style={{ textAlign: 'center', fontSize: 11, color: '#4b5563', fontVariantNumeric: 'tabular-nums' }}>
+              {(c.isCut || c.isWD) ? '—' : c.thru === 18 ? 'F' : c.thru != null ? String(c.thru) : '—'}
+            </div>
+          );
+
           const todayCell = (
             <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: (c.isCut || c.isWD) ? '#374151' : todayFmt.color, fontVariantNumeric: 'tabular-nums' }}>
               {(c.isCut || c.isWD) ? '—' : todayFmt.text}
-              {c.thru != null && !c.isCut && !c.isWD && (
-                <div style={{ color: '#4b5563', fontSize: 9 }}>{c.thru === 18 ? 'F' : `T${c.thru}`}</div>
-              )}
             </div>
           );
 
@@ -318,7 +328,7 @@ export default function PGALiveTab({ leagueId, league }) {
               <button
                 className="hidden sm:grid"
                 onClick={isPreTournament ? undefined : toggleRow}
-                style={{ width: '100%', gridTemplateColumns: isPreTournament ? '44px 1fr 1fr' : '44px 1fr 32px 32px 32px 32px 48px 44px', gap: 0, padding: '9px 14px', alignItems: 'center', background: 'transparent', border: 'none', cursor: isPreTournament ? 'default' : 'pointer', textAlign: 'left' }}
+                style={{ width: '100%', gridTemplateColumns: isPreTournament ? '44px 1fr 1fr' : '44px 1fr 36px 32px 32px 32px 32px 48px 44px', gap: 0, padding: '9px 14px', alignItems: 'center', background: 'transparent', border: 'none', cursor: isPreTournament ? 'default' : 'pointer', textAlign: 'left' }}
                 onMouseEnter={e => { if (!isPreTournament) e.currentTarget.style.background = myPick ? 'rgba(0,232,122,0.05)' : 'rgba(255,255,255,0.02)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = myPick ? 'rgba(0,232,122,0.025)' : 'transparent'; }}
               >
@@ -329,6 +339,7 @@ export default function PGALiveTab({ leagueId, league }) {
                     {teeTxt || '—'}
                   </div>
                 ) : (<>
+                  {thruCell}
                   {rounds.map((r, ri) => {
                     const { text, color } = fmtPar(r);
                     const isCurrent = (ri + 1) === maxRound && isLive && r != null;
