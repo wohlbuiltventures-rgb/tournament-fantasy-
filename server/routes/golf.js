@@ -472,16 +472,20 @@ router.get('/leagues/:id/standings', authMiddleware, (req, res) => {
           LEFT JOIN golf_players gp ON gp.name = pp.player_name
           LEFT JOIN golf_scores gs ON gs.player_id = gp.id AND gs.tournament_id = ?
           WHERE pp.league_id = ? AND pp.tournament_id = ? AND pp.user_id = ?
+            AND (pp.is_withdrawn IS NULL OR pp.is_withdrawn = 0)
           ORDER BY pp.tier_number ASC
         `).all(tid, req.params.id, tid, m.user_id) : [];
 
-        const isTotalStrokes = league.scoring_style === 'total_strokes';
+        // 'stroke_play' and 'total_strokes' both rank by sum of round scores (lower = better).
+        // 'stroke_play' was the name used at league creation; 'total_strokes' was used in
+        // older Beta migrations. Treat them identically.
+        const isStrokeBased = ['total_strokes', 'stroke_play'].includes(league.scoring_style);
         const dropCount = league.pool_drop_count ?? 2;
 
         let total_points;
         let enrichedPicks;
 
-        if (isTotalStrokes) {
+        if (isStrokeBased) {
           const dropResult = applyDropScoring(picks, dropCount);
           total_points = dropResult.team_score;
           enrichedPicks = dropResult.picks.map(p => ({
@@ -514,8 +518,10 @@ router.get('/leagues/:id/standings', authMiddleware, (req, res) => {
         };
       });
 
-      // Total strokes: sort ascending (lower is better); fantasy points: descending
-      if (standings[0]?.scoring_style === 'total_strokes') {
+      // Stroke-based scoring (stroke_play / total_strokes): sort ascending — lowest score wins.
+      const scoringStyle = league.scoring_style || 'fantasy_points';
+      const isStrokeSort = ['total_strokes', 'stroke_play'].includes(scoringStyle);
+      if (isStrokeSort) {
         const withScores    = standings.filter(s => s.submitted);
         const withoutScores = standings.filter(s => !s.submitted);
         withScores.sort((a, b) => a.season_points - b.season_points);
@@ -525,9 +531,7 @@ router.get('/leagues/:id/standings', authMiddleware, (req, res) => {
       }
       standings.forEach((s, i) => { s.rank = i + 1; });
 
-      const scoringStyle = league.scoring_style || 'fantasy_points';
-      // has_scores: for total_strokes check if any round data exists; for fantasy_points check points
-      const hasScores = scoringStyle === 'total_strokes'
+      const hasScores = isStrokeSort
         ? standings.some(s => s.picks?.some(p => p.round1 != null || p.round2 != null || p.round3 != null || p.round4 != null))
         : standings.some(s => s.season_points !== 0);
       return res.json({
