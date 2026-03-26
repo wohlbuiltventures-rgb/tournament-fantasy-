@@ -536,6 +536,27 @@ try {
       for (const p of GOLF_PLAYERS) ins.run(uuidv4(), p.name, p.country, p.world_ranking, p.salary);
     })();
     console.log('[golf-db] Reseeded', GOLF_PLAYERS.length, 'golf players (5-tier system)');
+
+    // After a rebuild, re-anchor pool_picks player_id to new golf_players IDs by name.
+    // Without this, any existing pool_picks would have stale IDs that don't match the
+    // newly-reseeded golf_players rows, causing the standings JOIN to return null scores.
+    try {
+      const updPicks = db.prepare(`
+        UPDATE pool_picks
+        SET player_id = (SELECT id FROM golf_players WHERE name = pool_picks.player_name LIMIT 1)
+        WHERE player_name IN (SELECT name FROM golf_players)
+      `);
+      const { changes } = updPicks.run();
+      if (changes > 0) console.log(`[golf-db] Re-anchored ${changes} pool_picks to new player IDs`);
+
+      const updTierPicks = db.prepare(`
+        UPDATE pool_tier_players
+        SET player_id = (SELECT id FROM golf_players WHERE name = pool_tier_players.player_name LIMIT 1)
+        WHERE player_name IN (SELECT name FROM golf_players)
+      `);
+      const tierChanges = updTierPicks.run().changes;
+      if (tierChanges > 0) console.log(`[golf-db] Re-anchored ${tierChanges} pool_tier_players to new player IDs`);
+    } catch (e) { console.error('[golf-db] pool_picks re-anchor error:', e.message); }
   }
 } catch (e) { console.log('[golf-db] startup task skipped:', e.message); }
 

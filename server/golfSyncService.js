@@ -381,6 +381,7 @@ async function syncTournamentScores(tournamentId, { par = 72, silent = false } =
   if (!silent) console.log(`[golf-sync] → tournament status: ${newTournamentStatus || '(no change)'}, period: ${currentPeriod}`);
 
   const allPlayers = db.prepare('SELECT * FROM golf_players WHERE is_active = 1').all();
+  if (!silent) console.log(`[golf-sync] golf_players pool: ${allPlayers.length} active players`);
   const notMatched = [];
   let synced = 0;
 
@@ -392,6 +393,16 @@ async function syncTournamentScores(tournamentId, { par = 72, silent = false } =
       made_cut=excluded.made_cut, finish_position=excluded.finish_position,
       fantasy_points=excluded.fantasy_points, updated_at=CURRENT_TIMESTAMP
   `);
+
+  // Log first 3 competitors before transaction so we can diagnose parsing issues
+  if (!silent && competitors.length > 0) {
+    const sample = competitors.slice(0, 3).map(comp => {
+      const parsed = parseCompetitor(comp);
+      const matched = matchPlayer(parsed.name, allPlayers);
+      return `${parsed.name} → r1=${parsed.r1} r2=${parsed.r2} matched=${matched ? matched.name : 'NO MATCH'}`;
+    });
+    console.log('[golf-sync] Sample parse:', sample.join(' | '));
+  }
 
   db.transaction(() => {
     for (const comp of competitors) {
@@ -409,6 +420,11 @@ async function syncTournamentScores(tournamentId, { par = 72, silent = false } =
       synced++;
     }
   })();
+
+  if (!silent) {
+    const dbCount = db.prepare('SELECT COUNT(*) as c FROM golf_scores WHERE tournament_id = ?').get(tournament.id);
+    console.log(`[golf-sync] golf_scores rows after upsert: ${dbCount.c} (tournament_id=${tournament.id})`);
+  }
 
   // Recalculate member standings
   const affected = db.prepare(

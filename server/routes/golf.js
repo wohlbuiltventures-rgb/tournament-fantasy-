@@ -462,12 +462,15 @@ router.get('/leagues/:id/standings', authMiddleware, (req, res) => {
       `).all(req.params.id);
 
       const standings = members.map(m => {
+        // Join via player_name → golf_players.id → golf_scores to survive
+        // any golf_players ID rebuild that would leave stale IDs in pool_picks.
         const picks = tid ? db.prepare(`
           SELECT pp.player_id, pp.player_name, pp.tier_number, pp.country,
                  gs.fantasy_points, gs.round1, gs.round2, gs.round3, gs.round4,
                  gs.finish_position, gs.made_cut
           FROM pool_picks pp
-          LEFT JOIN golf_scores gs ON pp.player_id = gs.player_id AND gs.tournament_id = ?
+          LEFT JOIN golf_players gp ON gp.name = pp.player_name
+          LEFT JOIN golf_scores gs ON gs.player_id = gp.id AND gs.tournament_id = ?
           WHERE pp.league_id = ? AND pp.tournament_id = ? AND pp.user_id = ?
           ORDER BY pp.tier_number ASC
         `).all(tid, req.params.id, tid, m.user_id) : [];
