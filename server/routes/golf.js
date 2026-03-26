@@ -1024,8 +1024,7 @@ router.post('/leagues/:id/blast', authMiddleware, async (req, res) => {
     console.log('[golf] Blast: fetched', members.length, 'emails for league', req.params.id);
 
     const { sendEmailBatch } = require('../mailer');
-    const baseUrl = (process.env.CLIENT_URL || 'https://tourneyrun.app').replace(/\/$/, '');
-    const leagueUrl = `${baseUrl}/golf/league/${req.params.id}`;
+    const leagueUrl = `https://www.tourneyrun.app/golf/league/${req.params.id}`;
     const safeMessage = message.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     const emailBody = () => `<!DOCTYPE html>

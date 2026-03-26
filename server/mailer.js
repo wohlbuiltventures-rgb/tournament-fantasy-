@@ -73,7 +73,7 @@ async function sendWelcome(toEmail, username) {
 
   await sendEmail({
     to: toEmail,
-    subject: 'Welcome to TourneyRun 🏀',
+    subject: 'Welcome to TourneyRun ⛳',
     html: `
 <!DOCTYPE html>
 <html lang="en">
