@@ -247,10 +247,6 @@ export default function GolfLanding() {
       <div className="relative overflow-hidden px-4 pt-16 pb-20 sm:pt-20 sm:pb-24 text-center">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(34,197,94,0.08)_0%,_transparent_65%)] pointer-events-none" />
         <div className="relative max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            2026 PGA Tour Season
-          </div>
           <h1 style={{ fontSize: 'clamp(48px,10vw,80px)', fontWeight: 900, lineHeight: 1.05, color: '#fff', marginBottom: 16, letterSpacing: '-0.03em', textTransform: 'uppercase' }}>
             FANTASY GOLF.<br />
             <span style={{ color: '#22c55e' }}>DONE RIGHT.</span>
@@ -566,7 +562,7 @@ export default function GolfLanding() {
                 </ul>
                 <div className="mt-4 pt-3 border-t border-yellow-900/30">
                   <Link
-                    to="/golf/create"
+                    to="/golf/create?format=pool"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f59e0b', color: '#451a03', fontWeight: 700, fontSize: 13, padding: '9px 18px', borderRadius: 8, textDecoration: 'none' }}
                   >
                     Start a Pool <ArrowRight size={14} />
@@ -596,10 +592,10 @@ export default function GolfLanding() {
               </ul>
               <div className="mt-4 pt-3 border-t border-gray-800">
                 <Link
-                  to="/golf/create?format=pool"
+                  to="/golf/create?format=dk"
                   className="inline-flex items-center gap-1.5 text-[12px] font-bold text-green-400 hover:text-green-300 transition-colors uppercase tracking-widest"
                 >
-                  Start a Pool <ArrowRight className="w-3 h-3" />
+                  Start a DFS League <ArrowRight className="w-3 h-3" />
                 </Link>
               </div>
             </div>
@@ -706,10 +702,10 @@ export default function GolfLanding() {
                 ))}
               </ul>
               <Link
-                to="/golf/create?format=pool"
+                to="/golf/create?format=dk"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#22c55e', color: '#001a0d', fontWeight: 800, fontSize: 15, padding: '14px 28px', borderRadius: 999, textDecoration: 'none' }}
               >
-                Start a Pool <ArrowRight size={16} />
+                Start a DFS League <ArrowRight size={16} />
               </Link>
             </div>
             <div style={{ order: 1, background: '#060d07', border: '1px solid #0f1a10', borderRadius: 20, padding: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
@@ -905,25 +901,27 @@ export default function GolfLanding() {
           </div>
         </div>
 
-        {/* Feature pills */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
+        {/* Feature callouts */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginTop: 4 }}>
           {[
-            { icon: '⏱', label: 'Updated every 10 minutes' },
-            { icon: '📊', label: 'Round-by-round scoring' },
-            { icon: '🎯', label: 'Filter by your picks' },
-          ].map(({ icon, label }) => (
+            { icon: '⚡', label: 'Scores refresh every 10 min', sub: 'No manual refresh needed' },
+            { icon: '📬', label: 'Auto standings email after each round', sub: 'ESPN → DB → your inbox' },
+            { icon: '🏌️', label: 'Your picks highlighted in the field', sub: 'See exactly where you stand' },
+          ].map(({ icon, label, sub }) => (
             <div key={label} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7,
-              background: '#0a1a0f',
+              display: 'flex', alignItems: 'flex-start', gap: 10,
+              background: '#080f09',
               border: '1px solid #14532d55',
-              borderRadius: 999,
-              padding: '8px 16px',
-              color: '#9ca3af',
-              fontSize: 13,
-              fontWeight: 500,
+              borderRadius: 14,
+              padding: '12px 16px',
+              maxWidth: 220,
+              flex: '1 1 180px',
             }}>
-              <span>{icon}</span>
-              <span>{label}</span>
+              <span style={{ fontSize: 18, lineHeight: 1, marginTop: 1 }}>{icon}</span>
+              <div>
+                <div style={{ color: '#d1d5db', fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{label}</div>
+                <div style={{ color: '#4b5563', fontSize: 11, marginTop: 3 }}>{sub}</div>
+              </div>
             </div>
           ))}
         </div>
@@ -973,7 +971,7 @@ export default function GolfLanding() {
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
             <span style={{ color: '#fff', fontWeight: 900, fontSize: 32, lineHeight: 1 }}>$12.99</span>
-            <span style={{ color: '#9ca3af', fontSize: 14 }}>per tournament</span>
+            <span style={{ color: '#9ca3af', fontSize: 14 }}>per tournament to start</span>
           </div>
           <div style={{ color: '#6b7280', fontSize: 13, marginBottom: 12 }}>
             Competitors charge <span style={{ color: '#f87171', textDecoration: 'line-through' }}>$30–$110</span> for the same thing.
@@ -1022,8 +1020,8 @@ export default function GolfLanding() {
               {[
                 { feature: 'Live scoring',                      us: '✅ Included free',      them: '❌ Paid upgrade only',   highlight: true  },
                 { feature: 'Auto standings email after every round', us: '✅ Automatic',     them: '❌ Manual',              highlight: false },
-                { feature: 'Commissioner price',                us: '✅ $12.99/tournament',   them: '❌ $30–$110 per league', highlight: true  },
-                { feature: '300-player pool cost',              us: '✅ $49.99 flat',          them: '❌ ~$290 (Splash Sports)', highlight: false },
+                { feature: 'League fee',                        us: '✅ Starts at $12.99',    them: '❌ $30–$110 per league', highlight: true  },
+                { feature: '300-player pool cost',              us: '✅ $49.99 flat',          them: '❌ ~$600 (Splash Sports)', highlight: true  },
                 { feature: 'Mobile-first design',               us: '✅ Modern & fast',       them: '❌ Desktop only, dated', highlight: false },
                 { feature: 'ESPN auto-sync',                    us: '✅ Built in',            them: '⚠️ Varies',             highlight: true  },
                 { feature: 'FAAB waiver wire',                  us: '✅ Full support',        them: '⚠️ Some do',            highlight: false },
@@ -1047,7 +1045,7 @@ export default function GolfLanding() {
         </div>
 
         <p style={{ textAlign: 'center', color: '#4ade80', fontSize: 13, fontWeight: 600, marginTop: 14 }}>
-          A 300-person pool costs ~$290 on Splash Sports. Here it's $49.99. Flat.
+          A 300-person pool costs ~$600 on Splash Sports. Here it's $49.99. Flat.
         </p>
         <p style={{ textAlign: 'center', color: '#374151', fontSize: 12, marginTop: 8, fontStyle: 'italic' }}>
           We won't name names. You know who they are.
