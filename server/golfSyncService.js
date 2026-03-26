@@ -226,32 +226,44 @@ async function findEspnEvent(tournament) {
 
   // ── Step 1: Dated scoreboard — works for historical AND current events ─────
   // Format: ?dates=YYYYMMDD-YYYYMMDD  (tournament week window ± 1 day buffer)
+  let emptyMatchFromDated = null; // stash a found-but-empty event so Step 2 can override
   try {
     const startStr = toESPNDate(new Date(tStart.getTime() - 86400000).toISOString().slice(0, 10));
     const endStr   = toESPNDate(new Date(tEnd.getTime()   + 86400000).toISOString().slice(0, 10));
-    const data = await fetchJson(`${ESPN_SCOREBOARD}?dates=${startStr}-${endStr}`);
+    const datedUrl = `${ESPN_SCOREBOARD}?dates=${startStr}-${endStr}`;
+    console.log(`[golf-sync] Step 1: ${datedUrl}`);
+    const data = await fetchJson(datedUrl);
     const events = data?.events || [];
     const match = pickBest(events);
-    if (match && scoreFromEvent(match).length > 0) {
-      storeId(match.id);
-      return { event: match, source: `dated_scoreboard(${startStr}-${endStr})` };
-    }
     if (match) {
-      // Event found but no competitors yet (future tournament)
       storeId(match.id);
-      return { event: match, source: `dated_scoreboard_empty` };
+      const compCount = scoreFromEvent(match).length;
+      console.log(`[golf-sync] Step 1: matched "${match.name || match.shortName}" — ${compCount} competitor(s)`);
+      if (compCount > 0) {
+        return { event: match, source: `dated_scoreboard(${startStr}-${endStr})` };
+      }
+      // Event found but ESPN has 0 competitors — fall through to Step 2 for live data.
+      // This happens when a tournament just started and the dated scoreboard hasn't
+      // populated competitors yet, while the current scoreboard already has them.
+      console.log('[golf-sync] Step 1: event found but 0 competitors — trying current scoreboard for live data');
+      emptyMatchFromDated = match;
+    } else {
+      console.log(`[golf-sync] Step 1: no name match in ${events.length} events`);
     }
   } catch (e) {
     console.warn('[golf-sync] Dated scoreboard failed:', e.message);
   }
 
   // ── Step 2: Current scoreboard — fallback for active/upcoming ────────────
+  console.log('[golf-sync] Step 2: current scoreboard');
   try {
     const data = await fetchJson(ESPN_SCOREBOARD);
     const events = data?.events || [];
+    console.log(`[golf-sync] Step 2: ${events.length} event(s) on current scoreboard`);
     const match = pickBest(events);
     if (match) {
       storeId(match.id);
+      console.log(`[golf-sync] Step 2: matched "${match.name || match.shortName}" — ${scoreFromEvent(match).length} competitor(s)`);
       return { event: match, source: 'current_scoreboard' };
     }
     // Date proximity fallback
@@ -261,10 +273,18 @@ async function findEspnEvent(tournament) {
     });
     if (byDate) {
       storeId(byDate.id);
+      console.log(`[golf-sync] Step 2: date-proximity match "${byDate.name || byDate.shortName}"`);
       return { event: byDate, source: 'date_match' };
     }
+    console.log('[golf-sync] Step 2: no match found');
   } catch (e) {
     console.warn('[golf-sync] Current scoreboard failed:', e.message);
+  }
+
+  // Last resort: return the empty dated event if we got one (future tournament, not started yet)
+  if (emptyMatchFromDated) {
+    console.log('[golf-sync] Using empty dated event as last resort (tournament not yet started)');
+    return { event: emptyMatchFromDated, source: 'dated_scoreboard_empty' };
   }
 
   return null;
@@ -275,11 +295,38 @@ async function syncTournamentScores(tournamentId, { par = 72, silent = false } =
   const tournament = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tournamentId);
   if (!tournament) throw new Error('Tournament not found');
 
-  if (!silent) console.log(`[golf-sync] Syncing: ${tournament.name}`);
+  if (!silent) console.log(`[golf-sync] Syncing: "${tournament.name}" (db_id=${tournamentId}, espn_id=${tournament.espn_event_id || 'none'}, status=${tournament.status})`);
 
-  const found = await findEspnEvent(tournament);
+  // ── Fast path: if espn_event_id already known, hit the scoreboard directly ──
+  // Skips the date-matching heuristic which can return empty data for live events.
+  let found = null;
+  if (tournament.espn_event_id) {
+    const fastUrl = `${ESPN_SCOREBOARD}?event=${tournament.espn_event_id}`;
+    if (!silent) console.log(`[golf-sync] Fast path — ${fastUrl}`);
+    try {
+      const data = await fetchJson(fastUrl);
+      const events = data?.events || [];
+      const event = events.find(ev => String(ev.id) === String(tournament.espn_event_id)) || events[0];
+      if (event) {
+        const competitors = (event?.competitions?.[0]?.competitors) || (event?.competitors) || [];
+        if (!silent) console.log(`[golf-sync] Fast path: "${event.name || event.shortName}" — ${competitors.length} competitor(s)`);
+        if (competitors.length > 0) {
+          found = { event, source: `direct_espn_id(${tournament.espn_event_id})` };
+        } else {
+          if (!silent) console.log('[golf-sync] Fast path: 0 competitors — falling back to name-match');
+        }
+      } else {
+        if (!silent) console.log(`[golf-sync] Fast path: espn_id=${tournament.espn_event_id} not in response (${events.length} events) — falling back`);
+      }
+    } catch (e) {
+      if (!silent) console.warn(`[golf-sync] Fast path fetch failed: ${e.message} — falling back`);
+    }
+  }
+
+  if (!found) found = await findEspnEvent(tournament);
+
   if (!found) {
-    if (!silent) console.warn(`[golf-sync] No ESPN event found for: ${tournament.name}`);
+    if (!silent) console.warn(`[golf-sync] No ESPN event found for: "${tournament.name}"`);
     return { synced: 0, notMatched: [], error: 'No matching ESPN event found' };
   }
 
@@ -373,7 +420,12 @@ async function syncTournamentScores(tournamentId, { par = 72, silent = false } =
 
   if (!silent) {
     console.log(`[golf-sync] Done — synced: ${synced}, unmatched: ${notMatched.length}, completed: ${isCompleted}`);
-    if (notMatched.length) console.log('[golf-sync] Unmatched:', notMatched.slice(0, 10).join(', '));
+    if (notMatched.length) {
+      console.log(`[golf-sync] Unmatched (${notMatched.length}):`, notMatched.slice(0, 20).join(', '));
+    }
+    if (synced === 0 && notMatched.length > 0) {
+      console.error(`[golf-sync] WARNING: 0 players matched — name lookup may be broken. First 5 ESPN names: ${notMatched.slice(0, 5).join(', ')}`);
+    }
   }
 
   return { synced, notMatched, espnEventName: event.name || event.shortName, isCompleted };
@@ -541,9 +593,13 @@ function pushPoolStandings(tournamentId) {
 async function runAutoSync() {
   const now = new Date();
   const dow = now.getDay(); // 0=Sun, 4=Thu, 5=Fri, 6=Sat
+  console.log(`[golf-sync] runAutoSync triggered at ${now.toISOString()} (dow=${dow}, Thu=4 Fri=5 Sat=6 Sun=0)`);
 
   // Only sync Thu–Sun (tournament days)
-  if (![0, 4, 5, 6].includes(dow)) return;
+  if (![0, 4, 5, 6].includes(dow)) {
+    console.log('[golf-sync] Skipping — not a tournament day');
+    return;
+  }
 
   const tournaments = db.prepare(`
     SELECT * FROM golf_tournaments
@@ -552,19 +608,22 @@ async function runAutoSync() {
     ORDER BY start_date ASC
   `).all();
 
+  console.log(`[golf-sync] Found ${tournaments.length} tournament(s) to sync: ${tournaments.map(t => `"${t.name}"(${t.status})`).join(', ')}`);
   if (tournaments.length === 0) return;
 
   for (const tournament of tournaments) {
-    console.log(`[golf-sync] Auto-sync triggered for: ${tournament.name}`);
     try {
       const result = await syncTournamentScores(tournament.id, { silent: false });
       _lastSyncTime = new Date().toISOString();
       _lastSyncResult = { ...result, tournamentName: tournament.name };
+      // Verify what actually landed in the DB
+      const dbCount = db.prepare('SELECT COUNT(*) as c FROM golf_scores WHERE tournament_id = ?').get(tournament.id);
+      console.log(`[golf-sync] DB check: golf_scores rows for "${tournament.name}" = ${dbCount.c}`);
       if (result.synced > 0) {
         pushPoolStandings(tournament.id);
       }
     } catch (e) {
-      console.error(`[golf-sync] Auto-sync error for ${tournament.name}:`, e.message);
+      console.error(`[golf-sync] Auto-sync error for "${tournament.name}":`, e.message, e.stack);
     }
   }
 }
