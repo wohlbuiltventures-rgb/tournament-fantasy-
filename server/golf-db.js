@@ -1084,7 +1084,7 @@ try {
 // Sets country on golf_players every boot (idempotent) so reseed can't wipe it.
 try {
   const COUNTRY_MAP = [
-    ['US', ['Scottie Scheffler','Sam Burns','Ryan Gerard','Harris English','Michael Brennan','Pierceson Coody','Wyndham Clark','Cole Hammer','Nick Dunlap','Austin Eckroat','Tony Finau','Patrick Fishburn','Steven Fisk','David Ford','Rickie Fowler','Brice Garnett','Lucas Glover','Chris Gotterup','Max Greyserman','Ben Griffin','Harry Hall','Joe Highsmith','Lee Hodges','Charley Hoffman','Tom Hoge','Billy Horschel','Beau Hossler','Mason Howell','Mark Hubbard','Jeffrey Kang','Johnny Keefer','Michael Kim','Chris Kirk','Kurt Kitayama','Patton Kizzire','Jake Knapp','Brooks Koepka','Hank Lebioda','Peter Malnati','Denny McCarthy','Matt McCarty','Max McGreevy','Mac Meissner','Keith Mitchell','William Mouw','Trey Mullinax','Andrew Putnam','Chad Ramey','Davis Riley','Patrick Rodgers','Casey Russell','Isaiah Salinda','Gordon Sargent','Adam Schenk','Neal Shipley','Alex Smalley','Austin Smotherman','Sam Stevens','Sahith Theegala','Davis Thompson','Michael Thorbjornsen','John VanDerLaan','Vince Whaley','Aaron Wise','Gary Woodland','Dylan Wu','Zach Bauchou','Chandler Blanchet','Bronson Burgoon','Brian Campbell','Ricky Castillo','Bud Cauley','Davis Chatfield','Luke Clanton','Eric Cole','Kevin Roy','Danny Walker','Jimmy Stanger','Rico Hoey','Aaron Rai','Doug Ghim']],
+    ['US', ['Scottie Scheffler','Sam Burns','Ryan Gerard','Harris English','Michael Brennan','Pierceson Coody','Wyndham Clark','Cole Hammer','Nick Dunlap','Austin Eckroat','Tony Finau','Patrick Fishburn','Steven Fisk','David Ford','Rickie Fowler','Brice Garnett','Lucas Glover','Chris Gotterup','Max Greyserman','Ben Griffin','Harry Hall','Joe Highsmith','Lee Hodges','Charley Hoffman','Tom Hoge','Billy Horschel','Beau Hossler','Mason Howell','Mark Hubbard','Jeffrey Kang','Johnny Keefer','Michael Kim','Chris Kirk','Kurt Kitayama','Patton Kizzire','Jake Knapp','Brooks Koepka','Hank Lebioda','Peter Malnati','Denny McCarthy','Matt McCarty','Max McGreevy','Mac Meissner','Keith Mitchell','William Mouw','Trey Mullinax','Andrew Putnam','Chad Ramey','Davis Riley','Patrick Rodgers','Casey Russell','Isaiah Salinda','Gordon Sargent','Adam Schenk','Neal Shipley','Alex Smalley','Austin Smotherman','Sam Stevens','Sahith Theegala','Davis Thompson','Michael Thorbjornsen','John VanDerLaan','Vince Whaley','Aaron Wise','Gary Woodland','Dylan Wu','Zach Bauchou','Chandler Blanchet','Bronson Burgoon','Brian Campbell','Ricky Castillo','Bud Cauley','Davis Chatfield','Luke Clanton','Eric Cole','Kevin Roy','Danny Walker','Jimmy Stanger','Rico Hoey','Aaron Rai','Doug Ghim','J.J. Spaun','J.T. Poston','A.J. Ewart']],
     ['ZA', ['Christiaan Bezuidenhout','Garrick Higgo','Christo Lamprecht','Aldrich Potgieter','Erik van Rooyen']],
     ['GB', ['Dan Brown','Marco Penge','Jordan Smith','Matt Wallace','Paul Waring','Danny Willett','John Parry','Harry Hall']],
     ['AU', ['Jason Day','Min Woo Lee','Adam Scott','Karl Vilips']],
@@ -1292,10 +1292,11 @@ try {
   const _gpScheff = db.prepare("SELECT id, name FROM golf_players WHERE name = 'Scottie Scheffler'").get();
   console.log('[golf-db] golf_players Scheffler:', JSON.stringify(_gpScheff));
 
-  // Step 1: propagate from golf_players → pool_tier_players (by name)
+  // Step 1: propagate from golf_players → pool_tier_players (by name, period-insensitive for initials like J.T., J.J.)
   const r1 = db.prepare(`
     UPDATE pool_tier_players SET country = (
-      SELECT country FROM golf_players WHERE golf_players.name = pool_tier_players.player_name
+      SELECT country FROM golf_players
+        WHERE REPLACE(golf_players.name, '.', '') = REPLACE(pool_tier_players.player_name, '.', '')
         AND golf_players.country IS NOT NULL
     ) WHERE country IS NULL AND league_id = ?
   `).run(_HOU_LEAGUE);
@@ -1312,10 +1313,11 @@ try {
     ) WHERE country IS NULL AND league_id = ?
   `).run(_HOU_LEAGUE);
 
-  // Step 3: fallback — propagate from golf_players → pool_picks for any still-null rows
+  // Step 3: fallback — propagate from golf_players → pool_picks for any still-null rows (period-insensitive)
   const r3 = db.prepare(`
     UPDATE pool_picks SET country = (
-      SELECT country FROM golf_players WHERE golf_players.name = pool_picks.player_name
+      SELECT country FROM golf_players
+        WHERE REPLACE(golf_players.name, '.', '') = REPLACE(pool_picks.player_name, '.', '')
         AND golf_players.country IS NOT NULL
     ) WHERE country IS NULL AND league_id = ?
   `).run(_HOU_LEAGUE);
