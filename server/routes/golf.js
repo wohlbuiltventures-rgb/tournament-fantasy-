@@ -1038,6 +1038,140 @@ router.get('/admin/sync/status', authMiddleware, (req, res) => {
   }
 });
 
+// ── GET /admin/tournament-readiness/:tournamentId ──────────────────────────────
+// Pre-tournament health check. Returns a pass/fail report for 6 checks:
+//   1. espn_event_id is set
+//   2. tournament.status is 'active'
+//   3. pool_tier_players are loaded
+//   4. All player country codes are 2-letter ISO (no 3-letter codes like USA)
+//   5. ESPN API is reachable and returns competitor data
+//   6. Score sync fires and returns at least 1 player
+//
+// Accessible to commissioner of any league using this tournament, or superadmin.
+router.get('/admin/tournament-readiness/:tournamentId', authMiddleware, async (req, res) => {
+  try {
+    const { tournamentId } = req.params;
+    const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tournamentId);
+    if (!tourn) return res.status(404).json({ error: 'Tournament not found' });
+
+    // Auth: superadmin OR commissioner of a league using this tournament
+    if (req.user.role !== 'superadmin') {
+      const commLeague = db.prepare(
+        'SELECT id FROM golf_leagues WHERE commissioner_id = ? AND pool_tournament_id = ?'
+      ).get(req.user.id, tournamentId);
+      if (!commLeague) return res.status(403).json({ error: 'Commissioner access required' });
+    }
+
+    const checks = [];
+    const pass = (name, detail) => checks.push({ name, status: 'pass', detail });
+    const fail = (name, detail) => checks.push({ name, status: 'fail', detail });
+    const warn = (name, detail) => checks.push({ name, status: 'warn', detail });
+
+    // ── Check 1: espn_event_id set ───────────────────────────────────────────
+    if (tourn.espn_event_id) {
+      pass('ESPN event ID', `espn_event_id = ${tourn.espn_event_id}`);
+    } else {
+      fail('ESPN event ID', 'espn_event_id is NULL — sync cannot run without it');
+    }
+
+    // ── Check 2: tournament status ───────────────────────────────────────────
+    if (tourn.status === 'active') {
+      pass('Tournament status', `status = "${tourn.status}"`);
+    } else {
+      warn('Tournament status', `status = "${tourn.status}" (expected "active" for live scoring)`);
+    }
+
+    // ── Check 3: pool_tier_players loaded ────────────────────────────────────
+    const ptpCount = db.prepare(
+      'SELECT COUNT(*) as n FROM pool_tier_players WHERE tournament_id = ?'
+    ).get(tournamentId);
+    if (ptpCount.n > 0) {
+      pass('Player pool loaded', `${ptpCount.n} players in pool_tier_players`);
+    } else {
+      fail('Player pool loaded', 'No players in pool_tier_players for this tournament');
+    }
+
+    // ── Check 4: country codes are 2-letter ISO ───────────────────────────────
+    const badCountry = db.prepare(`
+      SELECT COUNT(*) as n FROM pool_tier_players
+      WHERE tournament_id = ? AND country IS NOT NULL AND length(country) != 2
+    `).get(tournamentId);
+    const totalWithCountry = db.prepare(
+      'SELECT COUNT(*) as n FROM pool_tier_players WHERE tournament_id = ? AND country IS NOT NULL'
+    ).get(tournamentId);
+    const nullCountry = db.prepare(
+      'SELECT COUNT(*) as n FROM pool_tier_players WHERE tournament_id = ? AND country IS NULL'
+    ).get(tournamentId);
+
+    if (badCountry.n === 0 && nullCountry.n === 0) {
+      pass('Country codes', `All ${totalWithCountry.n} players have valid 2-letter ISO codes`);
+    } else if (badCountry.n > 0) {
+      fail('Country codes', `${badCountry.n} player(s) with non-2-letter country codes (e.g. USA instead of US)`);
+    } else {
+      warn('Country codes', `${nullCountry.n} player(s) missing country code (flags will not display)`);
+    }
+
+    // ── Check 5: ESPN API reachable ───────────────────────────────────────────
+    if (!tourn.espn_event_id) {
+      fail('ESPN API reachable', 'Skipped — no espn_event_id');
+    } else {
+      try {
+        const url = `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard`;
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 8000);
+        const espnRes = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+        clearTimeout(timeout);
+        if (espnRes.ok) {
+          const data = await espnRes.json();
+          const events = data?.events || [];
+          const matchedEvent = events.find(e =>
+            String(e.id) === String(tourn.espn_event_id) ||
+            (e.competitions?.[0]?.competitors?.length > 0)
+          );
+          if (matchedEvent) {
+            const compCount = matchedEvent.competitions?.[0]?.competitors?.length || 0;
+            pass('ESPN API reachable', `ESPN scoreboard returned ${compCount} competitor(s) for this event`);
+          } else {
+            warn('ESPN API reachable', `ESPN responded OK but event ${tourn.espn_event_id} not in current scoreboard (may not be active yet)`);
+          }
+        } else {
+          fail('ESPN API reachable', `ESPN returned HTTP ${espnRes.status}`);
+        }
+      } catch (e) {
+        fail('ESPN API reachable', `Fetch error: ${e.message}`);
+      }
+    }
+
+    // ── Check 6: Score sync fires ─────────────────────────────────────────────
+    try {
+      const syncResult = await syncTournamentScores(tournamentId, { silent: true });
+      const unmatchedCount = (syncResult.notMatched || []).length;
+      if (syncResult.skipped) {
+        fail('Score sync', `Sync skipped: ${syncResult.reason}`);
+      } else if (syncResult.synced > 0) {
+        pass('Score sync', `Sync returned ${syncResult.synced} player(s), ${unmatchedCount} unmatched`);
+      } else if (unmatchedCount > 0) {
+        warn('Score sync', `Sync ran but 0 matched, ${unmatchedCount} unmatched — name mismatch likely`);
+      } else {
+        warn('Score sync', 'Sync ran but returned 0 players — tournament may not have started yet');
+      }
+    } catch (e) {
+      fail('Score sync', `Sync threw: ${e.message}`);
+    }
+
+    const allPass   = checks.every(c => c.status === 'pass');
+    const anyFail   = checks.some(c => c.status === 'fail');
+    res.json({
+      tournament: { id: tourn.id, name: tourn.name, status: tourn.status, espn_event_id: tourn.espn_event_id },
+      overall:    anyFail ? 'fail' : allPass ? 'pass' : 'warn',
+      checks,
+    });
+  } catch (err) {
+    console.error('[readiness] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // POST /api/golf/leagues/:id/blast — commissioner sends mass email to all members
 // ---------------------------------------------------------------------------

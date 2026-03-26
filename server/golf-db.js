@@ -235,6 +235,23 @@ const _golfColMigrations = [
 ];
 for (const sql of _golfColMigrations) { try { db.exec(sql); } catch (_) {} }
 
+// ── player_master — persistent country lookup that survives tournament resets ──
+// This table is the source of truth for player → country mapping.
+// It is populated once and updated additively; it never gets wiped when
+// pool_tier_players or golf_players are rebuilt for a new tournament.
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS player_master (
+      player_name TEXT PRIMARY KEY,
+      country     TEXT NOT NULL,
+      updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+} catch (_) {}
+
+// Populate player_master from the authoritative COUNTRY_MAP (defined below).
+// This runs after COUNTRY_MAP is defined — see the try/catch block near line 1107.
+
 // ── Seed known ESPN event IDs for 2026 completed tournaments ──────────────────
 // These allow the sync service to skip name-matching and hit the dated scoreboard
 // directly. IDs verified via ESPN core API on 2026-03-17.
@@ -1148,15 +1165,44 @@ try {
   console.log('[golf-db] US players in golf_players:', _cntUs.n);
   const _anyGp = db.prepare("SELECT name, country FROM golf_players ORDER BY rowid DESC LIMIT 3").all();
   console.log('[golf-db] Last 3 golf_players rows:', JSON.stringify(_anyGp));
-} catch (e) { console.log('[golf-db] country migration skipped:', e.message); }
+  // Populate player_master from COUNTRY_MAP so it persists across tournament resets
+  try {
+    const _pmUpsert = db.prepare(`
+      INSERT INTO player_master (player_name, country, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(player_name) DO UPDATE SET country = excluded.country, updated_at = CURRENT_TIMESTAMP
+    `);
+    db.transaction(() => {
+      for (const [code, names] of COUNTRY_MAP) {
+        for (const name of names) _pmUpsert.run(name, code);
+      }
+    })();
+    console.log('[golf-db] player_master populated from COUNTRY_MAP');
+  } catch (_pmE) { console.log('[golf-db] player_master upsert skipped:', _pmE.message); }
 
-try {
-  const _HOU_LEAGUE = 'ff568722-fbe9-4695-86a8-a31287c22841';
-  const _cntPtp = db.prepare("SELECT COUNT(*) as n FROM pool_tier_players WHERE country IS NOT NULL AND league_id = ?").get(_HOU_LEAGUE);
-  console.log('[golf-db] ptp with country set:', _cntPtp.n);
-  const _sampPtp = db.prepare("SELECT player_name, country FROM pool_tier_players WHERE league_id = ? LIMIT 3").all(_HOU_LEAGUE);
-  console.log('[golf-db] ptp sample:', JSON.stringify(_sampPtp));
-} catch (e) { console.log('[golf-db] country diagnostic skipped:', e.message); }
+  // Global 3-letter → 2-letter ISO country code normalization.
+  // Runs every boot — safe no-op if already correct.
+  // Covers every 3-letter code in common use on PGA Tour rosters.
+  const _ISO3TO2 = {
+    USA: 'US', AUS: 'AU', ENG: 'GB', NIR: 'GB', SCO: 'GB', WAL: 'GB',
+    RSA: 'ZA', CHN: 'CN', COL: 'CO', GER: 'DE', SWE: 'SE', NOR: 'NO',
+    KOR: 'KR', JPN: 'JP', IRL: 'IE', NZL: 'NZ', ARG: 'AR', BEL: 'BE',
+    FRA: 'FR', TWN: 'TW', VEN: 'VE', PHI: 'PH', FIN: 'FI', AUT: 'AT',
+    CAN: 'CA', DEN: 'DK', ESP: 'ES', ITA: 'IT', POR: 'PT', THA: 'TH',
+    ZIM: 'ZW', NAM: 'NA', PAR: 'PY', CHI: 'CL', MEX: 'MX',
+  };
+  const _normCountry = db.prepare('UPDATE golf_players SET country = ? WHERE country = ?');
+  const _normCtryPtp = db.prepare('UPDATE pool_tier_players SET country = ? WHERE country = ?');
+  const _normCtryPp  = db.prepare('UPDATE pool_picks SET country = ? WHERE country = ?');
+  db.transaction(() => {
+    for (const [old, neo] of Object.entries(_ISO3TO2)) {
+      _normCountry.run(neo, old);
+      _normCtryPtp.run(neo, old);
+      _normCtryPp.run(neo, old);
+    }
+  })();
+  console.log('[golf-db] 3-letter → 2-letter country normalization applied globally');
+} catch (e) { console.log('[golf-db] country migration skipped:', e.message); }
 
 // ── Manual odds / tier corrections (Houston Open) ─────────────────────────────
 // ESPN odds weren't available at sync time — apply known betting lines manually.

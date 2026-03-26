@@ -12,22 +12,13 @@
 'use strict';
 
 const db = require('./db');
+const { normalizePlayerName, matchPlayerName } = require('./utils/playerNameNorm');
 
 const ESPN_LEADERBOARD = id =>
   `https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard?event=${id}`;
 
-// Normalise a player name for fuzzy matching.
-// Strips diacritics first (ø→o, é→e, ü→u, ñ→n, etc.) so ESPN names like
-// "Thorbjørn Olesen" match DB entries stored as "Thorbjorn Olesen".
-function norm(name) {
-  return (name || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[.\-''']/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+// norm() — thin alias over the shared utility (kept for internal use below)
+const norm = normalizePlayerName;
 
 // Fantasy points — configurable par baseline, commissioner formula
 // Each round: (raw_score - par) * -1.5
@@ -134,9 +125,8 @@ async function syncTournament(tournamentId) {
     return { synced: 0, unmatched: 0, tournament: tourn.name };
   }
 
-  // Build name → player_id lookup from our golf_players table
+  // Build name → player object lookup from our golf_players table
   const allPlayers = db.prepare('SELECT id, name FROM golf_players').all();
-  const nameMap = new Map(allPlayers.map(p => [norm(p.name), p.id]));
 
   const isMajor  = !!tourn.is_major;
   const coursePar = tourn.par || DEFAULT_PAR;
@@ -151,19 +141,13 @@ async function syncTournament(tournamentId) {
         comp.displayName || '';
       if (!displayName) continue;
 
-      // Try exact norm match first, then last-name-only fallback
-      let playerId = nameMap.get(norm(displayName));
-      if (!playerId) {
-        const lastName = norm(displayName).split(' ').pop();
-        for (const [key, id] of nameMap) {
-          if (key.split(' ').pop() === lastName) { playerId = id; break; }
-        }
-      }
-      if (!playerId) {
-        console.warn(`[golf-sync] UNMATCHED player "${displayName}" in "${tourn.name}" — not found in golf_players table. Skipping.`);
+      // Use shared matchPlayerName — handles diacritics, periods, fallbacks
+      const matched = matchPlayerName(displayName, allPlayers, tourn.name);
+      if (!matched) {
         unmatched++;
         continue;
       }
+      const playerId = matched.id;
 
       // Parse linescores (per-round scores)
       const linescores = comp.linescores || comp.rounds || [];

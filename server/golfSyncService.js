@@ -58,37 +58,11 @@ function recalcMemberPoints(memberId) {
 }
 
 // ── Name matching ───────────────────────────────────────────────────────────────
-function norm(name) {
-  return (name || '').toLowerCase().trim()
-    .replace(/[^a-z\s]/g, '')
-    .replace(/\s+/g, ' ');
-}
+const { normalizePlayerName, matchPlayerName } = require('./utils/playerNameNorm');
+const norm = normalizePlayerName;
 
-function matchPlayer(espnName, players) {
-  const n = norm(espnName);
-
-  // 1. Exact
-  let m = players.find(p => norm(p.name) === n);
-  if (m) return m;
-
-  const parts = n.split(' ');
-  if (parts.length < 2) return null;
-
-  const last = parts[parts.length - 1];
-  const firstInit = parts[0][0];
-
-  // 2. Last name + first initial
-  m = players.find(p => {
-    const pp = norm(p.name).split(' ');
-    return pp[pp.length - 1] === last && pp[0]?.[0] === firstInit;
-  });
-  if (m) return m;
-
-  // 3. Last name only (fallback — risky, only if unique match)
-  const byLast = players.filter(p => norm(p.name).split(' ').pop() === last);
-  if (byLast.length === 1) return byLast[0];
-
-  return null;
+function matchPlayer(espnName, players, tournamentName) {
+  return matchPlayerName(espnName, players, tournamentName);
 }
 
 // ── Date helper ─────────────────────────────────────────────────────────────────
@@ -422,7 +396,7 @@ async function syncTournamentScores(tournamentId, { par = 72, silent = false } =
   if (!silent && competitors.length > 0) {
     const sample = competitors.slice(0, 3).map(comp => {
       const parsed = parseCompetitor(comp);
-      const matched = matchPlayer(parsed.name, allPlayers);
+      const matched = matchPlayer(parsed.name, allPlayers, tournament.name);
       return `${parsed.name} → r1=${parsed.r1} r2=${parsed.r2} matched=${matched ? matched.name : 'NO MATCH'}`;
     });
     console.log('[golf-sync] Sample parse:', sample.join(' | '));
@@ -433,7 +407,7 @@ async function syncTournamentScores(tournamentId, { par = 72, silent = false } =
       const { name, r1, r2, r3, r4, madeCut, finishPos } = parseCompetitor(comp);
       if (!name) continue;
 
-      const player = matchPlayer(name, allPlayers);
+      const player = matchPlayer(name, allPlayers, tournament.name);
       if (!player) {
         notMatched.push(name);
         continue;
