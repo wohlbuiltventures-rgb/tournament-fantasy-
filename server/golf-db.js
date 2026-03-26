@@ -549,6 +549,9 @@ const GOLF_PLAYERS = [
   { name: 'Alejandro Tosti',                country: 'ARG', world_ranking: 148, salary: 250 },
   { name: 'Carl Yuan',                      country: 'CHN', world_ranking: 149, salary: 250 },
   { name: 'Tiger Woods',                    country: 'USA', world_ranking: 150, salary: 250 },
+  // Houston Open field players not in OWGR top 150 — added here so they survive reseeds
+  // and the sync can always match their ESPN names without relying on the field-seed code.
+  { name: 'Sudarshan Yellamaraju',          country: 'CAN', world_ranking: 200, salary: 200 },
 ];
 
 // Force-replace players whenever the list changes (check count + sentinel player)
