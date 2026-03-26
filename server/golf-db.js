@@ -1108,7 +1108,7 @@ try {
 // Sets country on golf_players every boot (idempotent) so reseed can't wipe it.
 try {
   const COUNTRY_MAP = [
-    ['US', ['Scottie Scheffler','Sam Burns','Ryan Gerard','Harris English','Michael Brennan','Pierceson Coody','Wyndham Clark','Cole Hammer','Nick Dunlap','Austin Eckroat','Tony Finau','Patrick Fishburn','Steven Fisk','David Ford','Rickie Fowler','Brice Garnett','Lucas Glover','Chris Gotterup','Max Greyserman','Ben Griffin','Harry Hall','Joe Highsmith','Lee Hodges','Charley Hoffman','Tom Hoge','Billy Horschel','Beau Hossler','Mason Howell','Mark Hubbard','Jeffrey Kang','Johnny Keefer','Michael Kim','Chris Kirk','Kurt Kitayama','Patton Kizzire','Jake Knapp','Brooks Koepka','Hank Lebioda','Peter Malnati','Denny McCarthy','Matt McCarty','Max McGreevy','Mac Meissner','Keith Mitchell','William Mouw','Trey Mullinax','Andrew Putnam','Chad Ramey','Davis Riley','Patrick Rodgers','Casey Russell','Isaiah Salinda','Gordon Sargent','Adam Schenk','Neal Shipley','Alex Smalley','Austin Smotherman','Sam Stevens','Sahith Theegala','Davis Thompson','Michael Thorbjornsen','John VanDerLaan','Vince Whaley','Aaron Wise','Gary Woodland','Dylan Wu','Zach Bauchou','Chandler Blanchet','Bronson Burgoon','Brian Campbell','Ricky Castillo','Bud Cauley','Davis Chatfield','Luke Clanton','Eric Cole','Kevin Roy','Danny Walker','Jimmy Stanger','Rico Hoey','Aaron Rai','Doug Ghim','J.J. Spaun','J.T. Poston','A.J. Ewart']],
+    ['US', ['Scottie Scheffler','Sam Burns','Ryan Gerard','Harris English','Michael Brennan','Pierceson Coody','Wyndham Clark','Cole Hammer','Nick Dunlap','Austin Eckroat','Tony Finau','Patrick Fishburn','Steven Fisk','David Ford','Rickie Fowler','Brice Garnett','Lucas Glover','Chris Gotterup','Max Greyserman','Ben Griffin','Harry Hall','Joe Highsmith','Lee Hodges','Charley Hoffman','Tom Hoge','Billy Horschel','Beau Hossler','Mason Howell','Mark Hubbard','Jeffrey Kang','Johnny Keefer','Michael Kim','Chris Kirk','Kurt Kitayama','Patton Kizzire','Jake Knapp','Brooks Koepka','Hank Lebioda','Peter Malnati','Denny McCarthy','Matt McCarty','Max McGreevy','Mac Meissner','Keith Mitchell','William Mouw','Trey Mullinax','Andrew Putnam','Chad Ramey','Davis Riley','Patrick Rodgers','Casey Russell','Isaiah Salinda','Gordon Sargent','Adam Schenk','Neal Shipley','Alex Smalley','Austin Smotherman','Sam Stevens','Sahith Theegala','Davis Thompson','Michael Thorbjornsen','John VanDerLaan','Vince Whaley','Aaron Wise','Gary Woodland','Dylan Wu','Zach Bauchou','Chandler Blanchet','Bronson Burgoon','Brian Campbell','Ricky Castillo','Bud Cauley','Davis Chatfield','Luke Clanton','Eric Cole','Kevin Roy','Danny Walker','Jimmy Stanger','Rico Hoey','Aaron Rai','Doug Ghim','J.J. Spaun','J.T. Poston','A.J. Ewart','David Lipsky']],
     ['ZA', ['Christiaan Bezuidenhout','Garrick Higgo','Christo Lamprecht','Aldrich Potgieter','Erik van Rooyen']],
     ['GB', ['Dan Brown','Marco Penge','Jordan Smith','Matt Wallace','Paul Waring','Danny Willett','John Parry','Harry Hall']],
     ['AU', ['Jason Day','Min Woo Lee','Adam Scott','Karl Vilips']],
@@ -1354,26 +1354,44 @@ try {
 try {
   const _HOU_LEAGUE = 'ff568722-fbe9-4695-86a8-a31287c22841';
   const COUNTRY_FIXUPS = [
-    // Players whose country isn't propagating via golf_players name join
-    { name: 'Brooks Koepka',    country: 'US' },
-    { name: 'Chris Gotterup',   country: 'US' },
-    { name: 'Jake Knapp',       country: 'US' },
-    { name: 'Rickie Fowler',    country: 'US' },
-    { name: 'Wyndham Clark',    country: 'US' },
-    { name: 'Sahith Theegala',  country: 'US' },
-    { name: 'Mackenzie Hughes', country: 'CA' },
-    { name: 'Seamus Power',     country: 'IE' },
-    { name: 'Matt Kuchar',      country: 'US' },
-    { name: 'J.T. Poston',      country: 'US' },
+    // Players whose country isn't propagating via golf_players name join,
+    // or were stored with wrong/3-letter codes. Applied unconditionally.
+    { name: 'Brooks Koepka',              country: 'US' },
+    { name: 'Chris Gotterup',             country: 'US' },
+    { name: 'Jake Knapp',                 country: 'US' },
+    { name: 'Rickie Fowler',              country: 'US' },
+    { name: 'Wyndham Clark',              country: 'US' },
+    { name: 'Sahith Theegala',            country: 'US' },
+    { name: 'Mackenzie Hughes',           country: 'CA' },
+    { name: 'Seamus Power',               country: 'IE' },
+    { name: 'Matt Kuchar',                country: 'US' },
+    { name: 'J.T. Poston',                country: 'US' },
+    { name: 'David Lipsky',               country: 'US' },
+    { name: 'Andrew Putnam',              country: 'US' },
+    { name: 'Gary Woodland',              country: 'US' },
+    { name: 'Sudarshan Yellamaraju',      country: 'CA' },
+    { name: 'Karl Vilips',                country: 'AU' },
+    { name: 'Aldrich Potgieter',          country: 'ZA' },
+    { name: 'Christiaan Bezuidenhout',    country: 'ZA' },
+    { name: 'Marco Penge',                country: 'GB' },
+    { name: 'Haotong Li',                 country: 'CN' },
+    { name: 'Nico Echavarria',            country: 'CO' },
   ];
-  const _fixCtryTP = db.prepare('UPDATE pool_tier_players SET country = ? WHERE player_name = ? AND league_id = ? AND country IS NULL');
-  const _fixCtryPP = db.prepare('UPDATE pool_picks SET country = ? WHERE player_name = ? AND league_id = ? AND country IS NULL');
+  // Unconditional UPDATE — fixes wrong values (USA, ENG, RSA, etc.), not just NULLs.
+  const _fixCtryTP = db.prepare('UPDATE pool_tier_players SET country = ? WHERE player_name = ? AND league_id = ?');
+  const _fixCtryPP = db.prepare('UPDATE pool_picks SET country = ? WHERE player_name = ? AND league_id = ?');
   db.transaction(() => {
     for (const f of COUNTRY_FIXUPS) {
       _fixCtryTP.run(f.country, f.name, _HOU_LEAGUE);
       _fixCtryPP.run(f.country, f.name, _HOU_LEAGUE);
     }
   })();
+
+  // Normalise any remaining 3-letter "USA" codes → "US" in both tables globally
+  db.prepare("UPDATE golf_players SET country = 'US' WHERE country = 'USA'").run();
+  db.prepare("UPDATE pool_tier_players SET country = 'US' WHERE country = 'USA'").run();
+  db.prepare("UPDATE pool_picks SET country = 'US' WHERE country = 'USA'").run();
+  console.log('[golf-db] Country fixups applied (incl. USA→US normalization)');
 } catch (e) { console.log('[golf-db] country fallback fixups skipped:', e.message); }
 
 // ── One-time: restore Jon Wohlfert to Houston Open pool league ────────────────

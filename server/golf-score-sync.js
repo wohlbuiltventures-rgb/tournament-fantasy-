@@ -16,9 +16,13 @@ const db = require('./db');
 const ESPN_LEADERBOARD = id =>
   `https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard?event=${id}`;
 
-// Normalise a player name for fuzzy matching
+// Normalise a player name for fuzzy matching.
+// Strips diacritics first (ø→o, é→e, ü→u, ñ→n, etc.) so ESPN names like
+// "Thorbjørn Olesen" match DB entries stored as "Thorbjorn Olesen".
 function norm(name) {
   return (name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[.\-''']/g, '')
     .replace(/\s+/g, ' ')
