@@ -51,22 +51,26 @@ const FORMATS = [
 
 const SCORING_STYLES = [
   {
+    value: 'total_score',
+    icon: '⛳',
+    title: 'Finish Scoring',
+    subtitle: 'Award points for finishing position. Simple and beginner-friendly.',
+    description: '',
+    example: 'Win = 30pts · Top 5 = 15pts · Top 10 = 8pts · Top 25 = 3pts. Highest points wins.',
+    recommended: false,
+    isNew: false,
+    isPopular: true,
+  },
+  {
     value: 'stroke_play',
     icon: '🏌️',
     title: 'Classic Stroke Play',
     subtitle: 'Raw total strokes across all picked golfers — lowest score wins',
     description: '',
+    example: 'e.g. Your 7 players combine for −14 for the week. Lowest combined score wins.',
     recommended: false,
     isNew: false,
-  },
-  {
-    value: 'total_score',
-    icon: '⛳',
-    title: 'Total Score',
-    subtitle: 'Combined total score for the tournament',
-    description: 'Classic golf — lowest combined score wins',
-    recommended: false,
-    isNew: false,
+    isPopular: false,
   },
   {
     value: 'tourneyrun',
@@ -74,8 +78,10 @@ const SCORING_STYLES = [
     title: 'TourneyRun Style',
     subtitle: 'Eagle +8 · Birdie +3 · Par +0.5 · Bogey −0.5 · Double+ −2',
     description: 'Points per shot, every hole matters',
+    example: 'Win +30 · Top 5 +15 · Top 10 +8 · Top 25 +3 on top of shot scoring.',
     recommended: false,
     isNew: true,
+    isPopular: false,
   },
 ];
 
@@ -156,7 +162,6 @@ function PoolTierSelector({ maxTeams, poolTier, onChange }) {
       <style>{`
         @media (max-width:480px) {
           .max-teams-grid { grid-template-columns: repeat(2,1fr) !important; }
-          .max-teams-grid .enterprise-card { grid-column: 1 / -1; }
         }
       `}</style>
       <div className="max-teams-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
@@ -200,6 +205,11 @@ function ScoringStyleSelector({ value, onChange }) {
                 <span className={`font-bold text-sm ${value === s.value ? 'text-white' : 'text-gray-300'}`}>
                   {s.title}
                 </span>
+                {s.isPopular && (
+                  <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400">
+                    POPULAR
+                  </span>
+                )}
                 {s.isNew && (
                   <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-green-500/20 border border-green-500/30 text-green-400">
                     NEW
@@ -210,6 +220,9 @@ function ScoringStyleSelector({ value, onChange }) {
               <p className={`text-xs font-medium ${value === s.value ? 'text-green-400/80' : 'text-gray-600'}`}>
                 {s.description}
               </p>
+              {s.example && (
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{s.example}</p>
+              )}
             </div>
           </div>
         </button>

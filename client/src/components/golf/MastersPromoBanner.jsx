@@ -55,7 +55,7 @@ export default function MastersPromoBanner() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
         {POOL_TIERS.map(({ price, promoPrice }) => (
           <div key={price} style={{
             display: 'flex', alignItems: 'center', gap: 5,

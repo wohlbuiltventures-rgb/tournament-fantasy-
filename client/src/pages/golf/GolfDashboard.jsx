@@ -274,6 +274,117 @@ function SectionHeader({ label, count }) {
   );
 }
 
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+const NOTIF_STYLE = {
+  PICKS_DUE:       { color: '#f59e0b', label: 'Picks Due'       },
+  PICKS_LOCKED:    { color: '#f59e0b', label: 'Picks Locked'    },
+  TOURNAMENT_LIVE: { color: '#22c55e', label: 'Tournament Live' },
+  ROUND_COMPLETE:  { color: '#60a5fa', label: 'Scores Updated'  },
+  WINNER:          { color: '#eab308', label: 'Results In!'     },
+};
+
+function buildNotifications(activeLeagues, poolPicksMap, standingsMap, userId) {
+  const notifs = [];
+  for (const league of activeLeagues) {
+    if (league.format_type !== 'pool') continue;
+    const picks  = poolPicksMap[league.id] || {};
+    const sData  = standingsMap[league.id];
+    const status = league.pool_tournament_status;
+    const tName  = league.pool_tournament_name || 'the tournament';
+
+    if (status === 'completed' && sData?.standings?.length) {
+      const winner = sData.standings[0];
+      notifs.push({
+        id: `winner-${league.id}`, type: 'WINNER', leagueName: league.name,
+        title: `${tName} complete!`,
+        body: winner ? `🏆 ${winner.team_name} wins ${league.name}.` : `${league.name} is complete.`,
+        cta: { label: 'View Results', href: `/golf/league/${league.id}?tab=standings` },
+      });
+      continue;
+    }
+
+    if (status === 'active' && picks.submitted) {
+      const allStandings = sData?.standings || [];
+      const myTeam  = allStandings.find(s => s.user_id === userId);
+      const hasScores = allStandings.some(s => s.picks?.some(p => p.round1 != null || p.round2 != null));
+      notifs.push({
+        id: `live-${league.id}`, type: hasScores ? 'ROUND_COMPLETE' : 'TOURNAMENT_LIVE',
+        leagueName: league.name,
+        title: hasScores ? `${tName} — scores updated` : `${tName} is live!`,
+        body: myTeam ? `You're currently ranked #${myTeam.rank} in ${league.name}.` : `${league.name} is in progress.`,
+        cta: { label: 'View Standings', href: `/golf/league/${league.id}?tab=standings` },
+      });
+      continue;
+    }
+
+    if (picks.picks_locked && !picks.submitted) {
+      notifs.push({
+        id: `picks-locked-${league.id}`, type: 'PICKS_LOCKED', leagueName: league.name,
+        title: 'Picks are locked',
+        body: `You didn't submit picks for ${tName} — picks are now locked.`,
+        cta: null,
+      });
+      continue;
+    }
+
+    if (!picks.submitted && !picks.picks_locked && status !== 'completed') {
+      notifs.push({
+        id: `picks-due-${league.id}`, type: 'PICKS_DUE', leagueName: league.name,
+        title: 'Submit your picks',
+        body: `You haven't submitted picks for ${tName} yet.`,
+        cta: { label: 'Make Picks', href: `/golf/league/${league.id}?tab=roster` },
+      });
+    }
+  }
+  return notifs;
+}
+
+function NotificationCard({ notif, onDismiss }) {
+  const s = NOTIF_STYLE[notif.type];
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, background: `${s.color}08`, border: `1px solid ${s.color}30`, borderLeft: `3px solid ${s.color}`, borderRadius: 12, padding: '10px 14px' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: s.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>· {notif.leagueName}</span>
+        </div>
+        <p style={{ fontSize: 13, color: '#d1d5db', margin: 0, lineHeight: 1.5 }}>{notif.body}</p>
+        {notif.cta && (
+          <Link to={notif.cta.href} style={{ display: 'inline-block', marginTop: 5, fontSize: 12, fontWeight: 700, color: s.color, textDecoration: 'none' }}>
+            {notif.cta.label} →
+          </Link>
+        )}
+      </div>
+      <button onClick={() => onDismiss(notif.id)} aria-label="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#4b5563', padding: '0 2px', fontSize: 18, lineHeight: 1, flexShrink: 0, marginTop: -2 }}>×</button>
+    </div>
+  );
+}
+
+function NotificationsSection({ notifications, dismissed, onDismiss }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = notifications.filter(n => !dismissed.has(n.id));
+  if (visible.length === 0) return null;
+  const shown = expanded ? visible : visible.slice(0, 3);
+  const hiddenCount = visible.length - 3;
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2 mb-3">
+        <h2 className="text-base font-black text-white">Notifications</h2>
+        <span className="text-xs font-bold text-gray-500 bg-gray-800 border border-gray-700 px-2 py-0.5 rounded-full">{visible.length}</span>
+      </div>
+      <div className="space-y-2">
+        {shown.map(n => <NotificationCard key={n.id} notif={n} onDismiss={onDismiss} />)}
+      </div>
+      {!expanded && hiddenCount > 0 && (
+        <button onClick={() => setExpanded(true)} className="mt-3 text-xs font-semibold text-gray-400 hover:text-gray-200 transition-colors">
+          Show {hiddenCount} more notification{hiddenCount !== 1 ? 's' : ''}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export default function GolfDashboard() {
@@ -286,6 +397,20 @@ export default function GolfDashboard() {
   const [loading, setLoading]           = useState(true);
   const [pastOpen, setPastOpen]         = useState(false);
   const [poolPicksMap, setPoolPicksMap] = useState({});
+  const [standingsMap, setStandingsMap] = useState({});
+  const [dismissed, setDismissed]       = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('golf-notif-dismissed') || '[]')); }
+    catch { return new Set(); }
+  });
+
+  function dismissNotif(id) {
+    setDismissed(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      try { localStorage.setItem('golf-notif-dismissed', JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }
 
   useEffect(() => {
     Promise.all([
@@ -310,6 +435,22 @@ export default function GolfDashboard() {
       setNextTournament(upcoming[0] || null);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  // Fetch standings for active/completed pool leagues to power notifications
+  useEffect(() => {
+    const targets = leagues.filter(l =>
+      l.format_type === 'pool' &&
+      (l.pool_tournament_status === 'active' || l.pool_tournament_status === 'completed')
+    );
+    if (!targets.length) return;
+    Promise.allSettled(
+      targets.map(l => api.get(`/golf/leagues/${l.id}/standings`).then(r => ({ id: l.id, data: r.data })))
+    ).then(results => {
+      const map = {};
+      results.forEach(r => { if (r.status === 'fulfilled') map[r.value.id] = r.value.data; });
+      setStandingsMap(map);
+    });
+  }, [leagues]);
 
   if (loading) return <GolfLoader />;
 
@@ -412,6 +553,13 @@ export default function GolfDashboard() {
           </div>
         </div>
       )}
+
+      {/* ── Notifications ── */}
+      <NotificationsSection
+        notifications={buildNotifications(activeLeagues, poolPicksMap, standingsMap, user?.id)}
+        dismissed={dismissed}
+        onDismiss={dismissNotif}
+      />
 
       {/* ── Active Leagues ── */}
       {activeLeagues.length > 0 && (
