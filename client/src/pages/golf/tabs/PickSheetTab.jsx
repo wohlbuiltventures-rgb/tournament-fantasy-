@@ -251,6 +251,11 @@ export default function TieredPickSheet({ leagueId, league }) {
                   <span style={{ color: isComplete ? '#22c55e' : colors.accent, fontWeight: 700, fontSize: 14 }}>
                     {TIER_NAMES[tier.tier] || `Tier ${tier.tier}`}
                   </span>
+                  {tier.odds_min && (
+                    <span style={{ color: '#6b7280', fontSize: 11 }}>
+                      · {tier.odds_min}{tier.odds_max ? `–${tier.odds_max}` : '+'}
+                    </span>
+                  )}
                   <span style={{ color: '#4b5563', fontSize: 12 }}>· pick {tier.picks}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

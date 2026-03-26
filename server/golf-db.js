@@ -1230,10 +1230,10 @@ try { db.exec('ALTER TABLE pool_picks ADD COLUMN is_withdrawn INTEGER DEFAULT 0'
 try {
   const _HOU_RESET = 'ff568722-fbe9-4695-86a8-a31287c22841';
   db.prepare(
-    "UPDATE pool_tier_players SET is_withdrawn=0 WHERE league_id=? AND player_name NOT IN ('Scottie Scheffler','Bud Cauley')"
+    "UPDATE pool_tier_players SET is_withdrawn=0 WHERE league_id=? AND player_name NOT IN ('Scottie Scheffler','Bud Cauley','Si Woo Kim')"
   ).run(_HOU_RESET);
   db.prepare(
-    "UPDATE pool_picks SET is_withdrawn=0 WHERE league_id=? AND player_name NOT IN ('Scottie Scheffler','Bud Cauley')"
+    "UPDATE pool_picks SET is_withdrawn=0 WHERE league_id=? AND player_name NOT IN ('Scottie Scheffler','Bud Cauley','Si Woo Kim')"
   ).run(_HOU_RESET);
   console.log('[golf-db] HOU WD reset: cleared spurious is_withdrawn flags (kept Scheffler + Cauley)');
 } catch (e) { console.log('[golf-db] HOU WD reset skipped:', e.message); }
@@ -1245,8 +1245,8 @@ try {
 
   // Flag withdrawn players in pool_tier_players and pool_picks
   if (_WDTID) {
-    db.prepare("UPDATE pool_tier_players SET is_withdrawn=1 WHERE player_name IN ('Scottie Scheffler','Bud Cauley') AND league_id=? AND tournament_id=?").run(_HOU, _WDTID);
-    db.prepare("UPDATE pool_picks SET is_withdrawn=1 WHERE player_name IN ('Scottie Scheffler','Bud Cauley') AND league_id=? AND tournament_id=?").run(_HOU, _WDTID);
+    db.prepare("UPDATE pool_tier_players SET is_withdrawn=1 WHERE player_name IN ('Scottie Scheffler','Bud Cauley','Si Woo Kim') AND league_id=? AND tournament_id=?").run(_HOU, _WDTID);
+    db.prepare("UPDATE pool_picks SET is_withdrawn=1 WHERE player_name IN ('Scottie Scheffler','Bud Cauley','Si Woo Kim') AND league_id=? AND tournament_id=?").run(_HOU, _WDTID);
 
     // Add replacement players to golf_players if not present
     const _gpInsert = db.prepare('INSERT OR IGNORE INTO golf_players (id, name, country, world_ranking) VALUES (?, ?, ?, ?)');
@@ -1338,6 +1338,7 @@ try {
     { name: 'Mackenzie Hughes', country: 'CA' },
     { name: 'Seamus Power',     country: 'IE' },
     { name: 'Matt Kuchar',      country: 'US' },
+    { name: 'J.T. Poston',      country: 'US' },
   ];
   const _fixCtryTP = db.prepare('UPDATE pool_tier_players SET country = ? WHERE player_name = ? AND league_id = ? AND country IS NULL');
   const _fixCtryPP = db.prepare('UPDATE pool_picks SET country = ? WHERE player_name = ? AND league_id = ? AND country IS NULL');

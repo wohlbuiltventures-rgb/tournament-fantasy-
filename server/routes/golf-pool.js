@@ -214,7 +214,7 @@ router.get('/leagues/:id/tier-players', authMiddleware, (req, res) => {
     if (!tid) return res.json({ tiers: [], tournament_id: null });
 
     const players = db.prepare(
-      'SELECT * FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? ORDER BY tier_number ASC, world_ranking ASC'
+      'SELECT * FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND (is_withdrawn IS NULL OR is_withdrawn = 0) ORDER BY tier_number ASC, world_ranking ASC'
     ).all(league.id, tid);
 
     let tiersConfig = [];
