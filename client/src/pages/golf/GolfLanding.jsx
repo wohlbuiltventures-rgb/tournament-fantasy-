@@ -1,7 +1,7 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDocTitle } from '../../hooks/useDocTitle';
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api';
 import MastersPromoBanner from '../../components/golf/MastersPromoBanner';
 import { ArrowRight, Plus, MessageCircle, CheckCircle, XCircle, Trophy, DollarSign, Star, Flag, BarChart2, Clipboard, Mail, FileText } from 'lucide-react';
