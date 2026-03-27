@@ -791,6 +791,16 @@ router.post('/leagues/:id/commissioner/add-picks', authMiddleware, async (req, r
         continue;
       }
 
+      // Cap check — must come before insert to prevent any double-insertion
+      const picksMax = league.picks_per_team || 8;
+      const pickCount = db.prepare(
+        'SELECT COUNT(*) AS cnt FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ?'
+      ).get(req.params.id, tid, user.id).cnt;
+      if (pickCount >= picksMax) {
+        results.push({ username, player_name, status: 'skipped', reason: 'team already at max picks' });
+        continue;
+      }
+
       // Find player in pool_tier_players
       const normN = n => (n || '').toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim();
       const target = normN(player_name);
