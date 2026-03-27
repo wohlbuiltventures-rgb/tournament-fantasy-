@@ -42,7 +42,7 @@ async function sendEmailBatch(emails) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared HTML builder helpers (dark brand system — inline CSS only)
+// Shared HTML builder helpers (dark brand system — inline CSS only, no shorthand)
 // bg #0f1923 · cards #1a2733 · green #22c55e · CTA text #0a1a10
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -50,8 +50,8 @@ function emailShell(content) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0f1923;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0f1923;">
+<body style="margin-top:0;margin-right:0;margin-bottom:0;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;background-color:#0f1923;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f1923;">
   <tr><td align="center">
     <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;">
 ${content}
@@ -63,29 +63,29 @@ ${content}
 }
 
 function emailHeader() {
-  return `      <tr><td style="padding:28px 32px 20px;border-bottom:2px solid #22c55e;background:#0f1923;">
+  return `      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:20px;padding-left:32px;border-bottom-width:2px;border-bottom-style:solid;border-bottom-color:#22c55e;background-color:#0f1923;">
         <span style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;font-family:-apple-system,sans-serif;">tourney<span style="color:#22c55e;">run</span></span>
       </td></tr>`;
 }
 
 function emailFooter(note) {
   const text = note || 'tourneyrun.app &middot; Sent by your commissioner &middot; Unsubscribe';
-  return `      <tr><td style="padding:16px 32px;border-top:1px solid #1a2733;font-size:12px;color:#6b7280;text-align:center;background:#0f1923;">
+  return `      <tr><td style="padding-top:16px;padding-right:32px;padding-bottom:16px;padding-left:32px;border-top-width:1px;border-top-style:solid;border-top-color:#1a2733;font-size:12px;color:#6b7280;text-align:center;background-color:#0f1923;">
         ${text}
       </td></tr>`;
 }
 
-// Single data card
+// Single data card — no padding shorthand
 function card(label, value) {
-  return `<div style="background:#1a2733;border-radius:8px;padding:16px 20px;margin-bottom:12px;">
+  return `<div style="background-color:#1a2733;border-radius:8px;padding-top:16px;padding-right:20px;padding-bottom:16px;padding-left:20px;margin-bottom:12px;">
           <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">${label}</div>
           <div style="font-size:15px;color:#ffffff;font-weight:500;">${value}</div>
         </div>`;
 }
 
-// Primary CTA button — full-width block
+// Primary CTA button — full-width block, no padding shorthand
 function ctaButton(href, label) {
-  return `<a href="${href}" style="display:block;background:#22c55e;color:#0a1a10;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;text-align:center;text-decoration:none;margin-bottom:20px;">${label}</a>`;
+  return `<a href="${href}" style="display:block;background-color:#22c55e;color:#0a1a10;padding-top:14px;padding-right:28px;padding-bottom:14px;padding-left:28px;border-radius:8px;font-weight:700;font-size:15px;text-align:center;text-decoration:none;margin-bottom:20px;">${label}</a>`;
 }
 
 // ── Password reset ────────────────────────────────────────────────────────────
@@ -95,12 +95,12 @@ async function sendPasswordReset(toEmail, resetUrl) {
     subject: 'Reset your TourneyRun password',
     html: emailShell(`
 ${emailHeader()}
-      <tr><td style="padding:28px 32px;background:#0f1923;">
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">Account Security</div>
-        <h1 style="margin:0 0 16px;font-size:26px;font-weight:700;color:#ffffff;">Reset your password</h1>
-        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin:0 0 24px;">You requested a password reset for your TourneyRun account. Click the button below to set a new password. This link expires in <span style="color:#ffffff;font-weight:600;">1 hour</span>.</p>
-        ${ctaButton(resetUrl, 'Reset Password →')}
-        <p style="font-size:13px;color:#6b7280;line-height:1.6;margin:0;">If you didn't request this, you can safely ignore this email. Your password won't change.</p>
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:16px;margin-left:0;font-size:26px;font-weight:700;color:#ffffff;">Reset your password</h1>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:24px;margin-left:0;">You requested a password reset for your TourneyRun account. Click the button below to set a new password. This link expires in <span style="color:#ffffff;font-weight:600;">1 hour</span>.</p>
+        ${ctaButton(resetUrl, 'Reset Password &rarr;')}
+        <p style="font-size:13px;color:#6b7280;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:0;margin-left:0;">If you didn't request this, you can safely ignore this email. Your password won't change.</p>
       </td></tr>
 ${emailFooter('tourneyrun.app &middot; Security notice &middot; Do not share this link')}
 `),
@@ -116,17 +116,17 @@ async function sendWelcome(toEmail, username) {
     subject: 'Welcome to TourneyRun ⛳',
     html: emailShell(`
 ${emailHeader()}
-      <tr><td style="padding:28px 32px;background:#0f1923;">
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">Getting Started</div>
-        <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;">Welcome, ${username}!</h1>
-        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin:0 0 24px;">You're in. Draft real college basketball players, score points every time they score, and win your league's prize pool.</p>
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0;font-size:26px;font-weight:700;color:#ffffff;">Welcome, ${username}!</h1>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:24px;margin-left:0;">You're in. Draft real college basketball players, score points every time they score, and win your league's prize pool.</p>
         <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
           <tr>
             <td style="padding-right:6px;">
-              <a href="${baseUrl}/basketball/create-league" style="display:block;background:#22c55e;color:#0a1a10;padding:13px 0;border-radius:8px;font-weight:700;font-size:14px;text-align:center;text-decoration:none;">Create a League &rarr;</a>
+              <a href="${baseUrl}/basketball/create-league" style="display:block;background-color:#22c55e;color:#0a1a10;padding-top:13px;padding-right:0;padding-bottom:13px;padding-left:0;border-radius:8px;font-weight:700;font-size:14px;text-align:center;text-decoration:none;">Create a League &rarr;</a>
             </td>
             <td style="padding-left:6px;">
-              <a href="${baseUrl}/basketball/join-league" style="display:block;background:#1a2733;color:#ffffff;padding:12px 0;border-radius:8px;font-weight:600;font-size:14px;text-align:center;text-decoration:none;border:1px solid #374151;">Join a League</a>
+              <a href="${baseUrl}/basketball/join-league" style="display:block;background-color:#1a2733;color:#ffffff;padding-top:12px;padding-right:0;padding-bottom:12px;padding-left:0;border-radius:8px;font-weight:600;font-size:14px;text-align:center;text-decoration:none;border-top-width:1px;border-top-style:solid;border-top-color:#374151;border-right-width:1px;border-right-style:solid;border-right-color:#374151;border-bottom-width:1px;border-bottom-style:solid;border-bottom-color:#374151;border-left-width:1px;border-left-style:solid;border-left-color:#374151;">Join a League</a>
             </td>
           </tr>
         </table>
@@ -151,11 +151,11 @@ async function sendLeagueStandingsEmail(toEmail, { username, leagueName, roundNa
     const rank  = i + 1;
     const medal = rank === 1 ? '&#129351;' : rank === 2 ? '&#129352;' : rank === 3 ? '&#129353;' : `${rank}.`;
     const isYou = s.username === username;
-    return `<tr style="background:${isYou ? '#162a1a' : 'transparent'};">
-      <td style="padding:9px 12px;font-size:14px;color:${isYou ? '#22c55e' : '#6b7280'};font-weight:${isYou ? '700' : '400'};">${medal}</td>
-      <td style="padding:9px 12px;font-size:14px;color:${isYou ? '#ffffff' : '#d1d5db'};font-weight:${isYou ? '700' : '400'};">${s.team_name || s.username}${isYou ? ' <span style="font-size:11px;color:#22c55e;">(you)</span>' : ''}</td>
-      <td style="padding:9px 12px;font-size:14px;color:${isYou ? '#22c55e' : '#9ca3af'};font-weight:600;text-align:right;">${s.total_points} pts</td>
-      <td style="padding:9px 12px;font-size:12px;color:#6b7280;text-align:right;">${s.aliveCount}/${s.totalPlayers}</td>
+    return `<tr style="background-color:${isYou ? '#162a1a' : 'transparent'};">
+      <td style="padding-top:9px;padding-right:12px;padding-bottom:9px;padding-left:12px;font-size:14px;color:${isYou ? '#22c55e' : '#6b7280'};font-weight:${isYou ? '700' : '400'};">${medal}</td>
+      <td style="padding-top:9px;padding-right:12px;padding-bottom:9px;padding-left:12px;font-size:14px;color:${isYou ? '#ffffff' : '#d1d5db'};font-weight:${isYou ? '700' : '400'};">${s.team_name || s.username}${isYou ? ' <span style="font-size:11px;color:#22c55e;">(you)</span>' : ''}</td>
+      <td style="padding-top:9px;padding-right:12px;padding-bottom:9px;padding-left:12px;font-size:14px;color:${isYou ? '#22c55e' : '#9ca3af'};font-weight:600;text-align:right;">${s.total_points} pts</td>
+      <td style="padding-top:9px;padding-right:12px;padding-bottom:9px;padding-left:12px;font-size:12px;color:#6b7280;text-align:right;">${s.aliveCount}/${s.totalPlayers}</td>
     </tr>`;
   }).join('');
 
@@ -164,18 +164,18 @@ async function sendLeagueStandingsEmail(toEmail, { username, leagueName, roundNa
     subject: `${roundName} complete — ${leagueName} standings`,
     html: emailShell(`
 ${emailHeader()}
-      <tr><td style="padding:28px 32px;background:#0f1923;">
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">${leagueName}</div>
-        <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;">${roundName} complete &#127936;</h1>
-        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin:0 0 24px;">Here are the updated standings for your league.</p>
-        <div style="background:#1a2733;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0;font-size:26px;font-weight:700;color:#ffffff;">${roundName} complete &#127936;</h1>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:24px;margin-left:0;">Here are the updated standings for your league.</p>
+        <div style="background-color:#1a2733;border-radius:8px;overflow:hidden;margin-bottom:20px;">
           <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
             <thead>
-              <tr style="border-bottom:1px solid #0f1923;">
-                <th style="padding:10px 12px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;text-align:left;font-weight:600;">#</th>
-                <th style="padding:10px 12px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;text-align:left;font-weight:600;">Team</th>
-                <th style="padding:10px 12px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;text-align:right;font-weight:600;">Points</th>
-                <th style="padding:10px 12px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;text-align:right;font-weight:600;">Alive</th>
+              <tr style="border-bottom-width:1px;border-bottom-style:solid;border-bottom-color:#0f1923;">
+                <th style="padding-top:10px;padding-right:12px;padding-bottom:10px;padding-left:12px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;text-align:left;font-weight:600;">#</th>
+                <th style="padding-top:10px;padding-right:12px;padding-bottom:10px;padding-left:12px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;text-align:left;font-weight:600;">Team</th>
+                <th style="padding-top:10px;padding-right:12px;padding-bottom:10px;padding-left:12px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;text-align:right;font-weight:600;">Points</th>
+                <th style="padding-top:10px;padding-right:12px;padding-bottom:10px;padding-left:12px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;text-align:right;font-weight:600;">Alive</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -213,10 +213,10 @@ async function sendGolfPaymentConfirmation(toEmail, username, type, meta) {
     subject,
     html: emailShell(`
 ${emailHeader()}
-      <tr><td style="padding:28px 32px;background:#0f1923;">
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">Golf Fantasy</div>
-        <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;">Payment confirmed &#10003;</h1>
-        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin:0 0 24px;">Hey ${username} &mdash; ${bodyText}</p>
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0;font-size:26px;font-weight:700;color:#ffffff;">Payment confirmed &#10003;</h1>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:24px;margin-left:0;">Hey ${username} &mdash; ${bodyText}</p>
         ${card('Status', '<span style="color:#22c55e;font-weight:600;">&#10003; Active</span>')}
         ${meta.tournament_name ? card('Tournament', meta.tournament_name) : ''}
         ${ctaButton(`${baseUrl}/golf/dashboard`, 'Go to Golf Dashboard &rarr;')}
@@ -236,10 +236,10 @@ async function sendCommProUnlocked(toEmail, username, leagueName) {
     subject: '&#127942; You unlocked Commissioner Pro — free for 2026!',
     html: emailShell(`
 ${emailHeader()}
-      <tr><td style="padding:28px 32px;background:#0f1923;">
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">Commissioner</div>
-        <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;">Commissioner Pro unlocked! &#127942;</h1>
-        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin:0 0 24px;">Hey ${username}, your league <span style="color:#ffffff;font-weight:600;">${leagueName}</span> hit 6 members &mdash; so we unlocked Commissioner Pro for the 2026 season at no charge.</p>
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0;font-size:26px;font-weight:700;color:#ffffff;">Commissioner Pro unlocked! &#127942;</h1>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:24px;margin-left:0;">Hey ${username}, your league <span style="color:#ffffff;font-weight:600;">${leagueName}</span> hit 6 members &mdash; so we unlocked Commissioner Pro for the 2026 season at no charge.</p>
         ${card('League', leagueName)}
         ${card('Unlocked Features', 'Auto-emails &middot; Payment tracker &middot; FAAB results &middot; CSV export &middot; Member roster &middot; Mass blast')}
         ${ctaButton(`${baseUrl}/golf/dashboard`, 'Open Commissioner Hub &rarr;')}
@@ -259,10 +259,10 @@ async function sendGolfPoolLive(toEmail, { username, leagueName, leagueId, spots
     subject: 'Your TourneyRun pool is live! &#127952;',
     html: emailShell(`
 ${emailHeader()}
-      <tr><td style="padding:28px 32px;background:#0f1923;">
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">${leagueName}</div>
-        <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;">Your pool is live! &#9989;</h1>
-        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin:0 0 24px;">Hey ${username} &mdash; <span style="color:#ffffff;font-weight:600;">${leagueName}</span> is open and ready for picks. Share the link below to get your group in before Thursday.</p>
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0;font-size:26px;font-weight:700;color:#ffffff;">Your pool is live! &#9989;</h1>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:24px;margin-left:0;">Hey ${username} &mdash; <span style="color:#ffffff;font-weight:600;">${leagueName}</span> is open and ready for picks. Share the link below to get your group in before Thursday.</p>
         ${tournamentName ? card('Tournament', tournamentName) : ''}
         ${card('Open Spots', String(spotsOpen))}
         ${card('Invite Link', '<a href="' + leagueUrl + '" style="color:#22c55e;text-decoration:none;word-break:break-all;">' + leagueUrl + '</a>')}
@@ -298,10 +298,10 @@ async function sendGolfLeagueWelcome(toEmail, { username, leagueName, leagueId, 
     subject: `&#9971; Welcome to ${leagueName} — you're in!`,
     html: emailShell(`
 ${emailHeader()}
-      <tr><td style="padding:28px 32px;background:#0f1923;">
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">${leagueName}</div>
-        <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;">You're in!</h1>
-        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin:0 0 24px;">Welcome, ${username}! You've been added to <span style="color:#ffffff;font-weight:600;">${leagueName}</span>. Here's everything you need to get started.</p>
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0;font-size:26px;font-weight:700;color:#ffffff;">You're in!</h1>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:24px;margin-left:0;">Welcome, ${username}! You've been added to <span style="color:#ffffff;font-weight:600;">${leagueName}</span>. Here's everything you need to get started.</p>
         ${card('Tournament', tournamentValue)}
         ${picksDue ? card('Picks Due', picksDue) : ''}
         ${picksLabel ? card('Picks Per Team', picksLabel) : ''}
@@ -329,11 +329,11 @@ async function sendGolfMassBlast(toEmail, { leagueName, leagueId, message }) {
     subject: `&#128227; Message from your ${leagueName} commissioner`,
     html: emailShell(`
 ${emailHeader()}
-      <tr><td style="padding:28px 32px;background:#0f1923;">
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">${leagueName}</div>
-        <h1 style="margin:0 0 16px;font-size:26px;font-weight:700;color:#ffffff;">A message from your commissioner</h1>
-        <div style="background:#1a2733;border-radius:8px;padding:20px 24px;margin-bottom:24px;">
-          <p style="font-size:15px;color:#ffffff;line-height:1.7;margin:0;">${message.replace(/\n/g, '<br>')}</p>
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:16px;margin-left:0;font-size:26px;font-weight:700;color:#ffffff;">A message from your commissioner</h1>
+        <div style="background-color:#1a2733;border-radius:8px;padding-top:20px;padding-right:24px;padding-bottom:20px;padding-left:24px;margin-bottom:24px;">
+          <p style="font-size:15px;color:#ffffff;line-height:1.7;margin-top:0;margin-right:0;margin-bottom:0;margin-left:0;">${message.replace(/\n/g, '<br>')}</p>
         </div>
         ${ctaButton(leagueUrl, 'View Your League &rarr;')}
       </td></tr>
@@ -361,10 +361,10 @@ async function sendGolfRoundComplete(toEmail, { username, leagueName, leagueId, 
     subject: `&#128202; Round ${roundNumber} complete &mdash; ${leagueName}`,
     html: emailShell(`
 ${emailHeader()}
-      <tr><td style="padding:28px 32px;background:#0f1923;">
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">${leagueName}</div>
-        <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;">Round ${roundNumber} complete</h1>
-        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin:0 0 24px;">Scores are in for ${leagueName}. Here's where you stand, ${username}.</p>
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0;font-size:26px;font-weight:700;color:#ffffff;">Round ${roundNumber} complete</h1>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:24px;margin-left:0;">Scores are in for ${leagueName}. Here's where you stand, ${username}.</p>
         ${myRank != null ? card('Your Rank', `#${myRank}${totalPlayers ? ' of ' + totalPlayers : ''}`) : ''}
         ${myScore != null ? card('Your Score', fmtScore(myScore)) : ''}
         ${leaderName ? card('Current Leader', `${leaderName} &mdash; ${fmtScore(leaderScore)}`) : ''}
