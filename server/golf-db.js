@@ -1080,7 +1080,7 @@ try {
 // T2 Contenders (14) picks=2 — Lowry through Min Woo Lee
 // T3 Longshots (18)  picks=2 — Clark through Dan Brown
 // T4 The Field (93)  picks=2 — everyone else
-// picks_per_team=7, pool_drop_count=0
+// picks_per_team=7, pool_drop_count=2
 // Guard: re-runs whenever sum(tier picks) ≠ 7
 try {
   const _HOU4_ID = 'ff568722-fbe9-4695-86a8-a31287c22841';
@@ -1144,7 +1144,7 @@ try {
         { tier: 3, odds_min: '150:1', odds_max: '250:1', picks: 2, approxPlayers: _hc[2] },
         { tier: 4, odds_min: '275:1', odds_max: '',       picks: 2, approxPlayers: _hc[3] },
       ];
-      db.prepare('UPDATE golf_leagues SET pool_tiers = ?, picks_per_team = 7, pool_drop_count = 0 WHERE id = ?')
+      db.prepare('UPDATE golf_leagues SET pool_tiers = ?, picks_per_team = 7, pool_drop_count = 2 WHERE id = ?')
         .run(JSON.stringify(_hCfg), _HOU4_ID);
 
       console.log(`[golf-db] Houston Open tiers set: T1=${_hc[0]} T2=${_hc[1]} T3=${_hc[2]} T4=${_hc[3]}, picks=1/2/2/2`);
