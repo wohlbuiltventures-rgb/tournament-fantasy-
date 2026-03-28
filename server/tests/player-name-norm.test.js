@@ -131,4 +131,34 @@ describe('matchPlayerName', () => {
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('Valero Texas Open'));
     errSpy.mockRestore();
   });
+
+  // ── Multi-initial regression tests (Houston Open bug) ───────────────────────
+
+  test('K.H. Lee does NOT match Min Woo Lee — multi-initial regression (Houston Open bug)', () => {
+    // K.H. Lee (Kyoung-Hoon Lee) was an ESPN abbreviation. It normalizes to "kh lee"
+    // (first token length=2). Level-2 and level-3 fallbacks must be skipped so it
+    // does NOT match the only "Lee" in the DB (Min Woo Lee), which would corrupt
+    // Min Woo Lee's score with K.H. Lee's round data.
+    const playersWithLee = [...players, { id: 'p7', name: 'Min Woo Lee' }];
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const m = matchPlayerName('K.H. Lee', playersWithLee, 'Houston Open');
+    expect(m).toBeNull();
+    errSpy.mockRestore();
+  });
+
+  test('T.J. Kim does NOT match Tom Kim — multi-initial regression', () => {
+    // Same pattern: "T.J." normalizes to "tj" (length=2), so level-2 and level-3
+    // must be skipped. Must not match Tom Kim even if he is the only Kim.
+    const playersWithKim = [...players, { id: 'p8', name: 'Tom Kim' }];
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const m = matchPlayerName('T.J. Kim', playersWithKim, 'Houston Open');
+    expect(m).toBeNull();
+    errSpy.mockRestore();
+  });
+
+  test('T. Woods (single initial) still matches Tiger Woods via level-2 fallback', () => {
+    // Single-letter initial "T." normalizes to "t" (length=1), allowed through fallback.
+    const m = matchPlayerName('T. Woods', players, 'The Masters');
+    expect(m?.id).toBe('p5');
+  });
 });

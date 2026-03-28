@@ -1,4 +1,6 @@
 'use strict';
+const https = require('https');
+const { EventEmitter } = require('events');
 /**
  * Integration test for the full sync pipeline.
  *
@@ -68,7 +70,7 @@ beforeAll(() => {
 afterAll(() => { console.log.mockRestore(); console.warn.mockRestore(); });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const { calcFantasyPts, parseCompetitor } = require('../golfSyncService');
+const { calcFantasyPts, parseCompetitor, syncTournamentScores } = require('../golfSyncService');
 const { applyDropScoring } = require('../pool-utils');
 const { normalizePlayerName, validatePlayerData } = require('../utils/playerNameNorm');
 
@@ -137,6 +139,30 @@ describe('parseCompetitor', () => {
     const comp = makeCompetitor('Rory McIlroy', -4, -2, -3, -1);
     const result = parseCompetitor(comp);
     expect(result.madeCut).toBe(true);
+  });
+
+  test('historical format (period-keyed linescores) parses R1/R2 via athlete.displayName', () => {
+    // Reproduces the Houston Open R2 format: ESPN dated scoreboard uses period-keyed
+    // objects and name is under comp.athlete.displayName (not comp.displayName).
+    // Empty linescores arrays on unplayed rounds must produce null, not 0.
+    const comp = {
+      athlete: { displayName: 'Thorbjørn Olesen' },
+      linescores: [
+        { period: 1, displayValue: '-5', value: 67, linescores: [{ displayValue: '4' }] },
+        { period: 2, displayValue: '-3', value: 69, linescores: [{ displayValue: '3' }] },
+        { period: 3, displayValue: '--', value: null, linescores: [] },  // unplayed → null
+        { period: 4, displayValue: '--', value: null, linescores: [] },  // unplayed → null
+      ],
+      order: 1,
+    };
+    const result = parseCompetitor(comp);
+    expect(result.name).toBe('Thorbjørn Olesen');
+    expect(result.r1).toBe(-5);
+    expect(result.r2).toBe(-3);
+    expect(result.r3).toBeNull();   // empty linescores array → treated as unplayed
+    expect(result.r4).toBeNull();
+    expect(result.finishPos).toBe(1);
+    expect(result.madeCut).toBeNull();  // no status field, no R3/R4 → in progress
   });
 
   test('live-format with nested hole linescores (no period field) returns correct r1 — regression for isHistorical false-positive', () => {
@@ -283,5 +309,154 @@ describe('validatePlayerData', () => {
   test('diacritic name is normalized', () => {
     const result = validatePlayerData({ name: 'Thorbjørn Olesen', country_code: 'DK', r1: -3 });
     expect(result.normalized_name).toBe('thorbjorn olesen');
+  });
+});
+
+// ── syncTournamentScores end-to-end ───────────────────────────────────────────
+// Uses mocked https.get to simulate ESPN returning historical-format data.
+// Validates round scores, fantasy_points, and the K.H. Lee regression:
+//   K.H. Lee (ESPN abbreviation) must appear in notMatched, must NOT corrupt
+//   Min Woo Lee's score row.
+
+describe('syncTournamentScores end-to-end', () => {
+  const E2E_TOURN_ID  = 'tourn-e2e-001';
+  const E2E_ESPN_ID   = 'espn-test-42';
+  // p1/p2/p3 already in golf_players from the top-level beforeAll.
+  // Only Min Woo Lee needs to be inserted for the regression test.
+  const MINWOO_ID = 'e4';
+
+  // Build a historical-format ESPN competitor object (period-keyed linescores)
+  function makeHistorical(displayName, rounds, order) {
+    return {
+      athlete: { displayName },
+      linescores: [1, 2, 3, 4].map(period => ({
+        period,
+        displayValue: rounds[period - 1] != null ? String(rounds[period - 1]) : '--',
+        value: null,
+        linescores: rounds[period - 1] != null ? [{ displayValue: '4' }] : [],
+      })),
+      order,
+    };
+  }
+
+  // ESPN response returned by mocked https.get
+  const espnResponse = {
+    events: [{
+      id: E2E_ESPN_ID,
+      name: 'The Masters',
+      competitions: [{
+        status: { type: { name: 'STATUS_FINAL' }, period: 2 },
+        competitors: [
+          makeHistorical('Thorbjørn Olesen', [-5, -3, null, null], 1),
+          makeHistorical('Rory McIlroy',     [-4, -2, null, null], 2),
+          makeHistorical('J.T. Poston',      [2,  3,  null, null], 30),
+          makeHistorical('Min Woo Lee',      [-2, -7, null, null], 4),
+          makeHistorical('K.H. Lee',         [-1,  3, null, null], 20),  // must NOT match Min Woo Lee
+        ],
+      }],
+    }],
+  };
+
+  // Spy that replaces https.get with a mock returning espnResponse
+  let httpsSpy;
+
+  beforeAll(() => {
+    // Insert E2E tournament
+    mockMemDb.prepare(`
+      INSERT INTO golf_tournaments (id, name, status, espn_event_id, is_major, start_date, end_date)
+      VALUES (?, 'The Masters', 'active', ?, 0, '2026-04-06', '2026-04-12')
+    `).run(E2E_TOURN_ID, E2E_ESPN_ID);
+
+    // Only Min Woo Lee is new — p1/p2/p3 already exist from the top-level beforeAll.
+    mockMemDb.prepare('INSERT OR IGNORE INTO golf_players (id, name, country, is_active) VALUES (?, ?, ?, 1)')
+      .run(MINWOO_ID, 'Min Woo Lee', 'AU');
+
+    // Mock https.get — must return the same object reference that golfSyncService.js uses.
+    // Because Node module cache is shared, spying on require('https').get patches the
+    // same 'https' module the already-loaded golfSyncService references.
+    httpsSpy = jest.spyOn(https, 'get').mockImplementation((url, options, cb) => {
+      const req = new EventEmitter();
+      req.destroy = jest.fn();
+      setImmediate(() => {
+        const res = new EventEmitter();
+        cb(res);
+        res.emit('data', JSON.stringify(espnResponse));
+        res.emit('end');
+      });
+      return req;
+    });
+  });
+
+  afterAll(() => {
+    if (httpsSpy) httpsSpy.mockRestore();
+  });
+
+  test('syncs round scores and fantasy_points for known players', async () => {
+    const result = await syncTournamentScores(E2E_TOURN_ID, { par: 72, silent: true });
+
+    expect(result.synced).toBeGreaterThanOrEqual(3);
+
+    // Verify Thorbjørn Olesen (diacritic ESPN name → plain DB name p1)
+    const olesen = mockMemDb.prepare(
+      'SELECT * FROM golf_scores WHERE tournament_id = ? AND player_id = ?'
+    ).get(E2E_TOURN_ID, 'p1');
+    expect(olesen).not.toBeNull();
+    expect(olesen.round1).toBe(-5);
+    expect(olesen.round2).toBe(-3);
+    expect(olesen.round3).toBeNull();
+    expect(olesen.round4).toBeNull();
+    // fantasy_points: (-5 + -3) × -1.5 + 30 (1st) = 12 + 30 = 42
+    expect(olesen.fantasy_points).toBe(42);
+
+    // Verify Rory McIlroy (p2)
+    const mcilroy = mockMemDb.prepare(
+      'SELECT * FROM golf_scores WHERE tournament_id = ? AND player_id = ?'
+    ).get(E2E_TOURN_ID, 'p2');
+    expect(mcilroy.round1).toBe(-4);
+    expect(mcilroy.round2).toBe(-2);
+    // fantasy_points: (4+2) × 1.5 + 12 (top-5) = 9 + 12 = 21
+    expect(mcilroy.fantasy_points).toBe(21);
+
+    // Verify J.T. Poston (periods stripped in name matching, p3)
+    const poston = mockMemDb.prepare(
+      'SELECT * FROM golf_scores WHERE tournament_id = ? AND player_id = ?'
+    ).get(E2E_TOURN_ID, 'p3');
+    expect(poston.round1).toBe(2);
+    expect(poston.round2).toBe(3);
+    // fantasy_points: -(2+3) × 1.5 + 0 = -7.5
+    expect(poston.fantasy_points).toBe(-7.5);
+  });
+
+  test('K.H. Lee is in notMatched — multi-initial regression (Houston Open bug)', async () => {
+    const result = await syncTournamentScores(E2E_TOURN_ID, { par: 72, silent: true });
+    // K.H. Lee must not match any player — multi-initial guard prevents level-2 and level-3 fallbacks
+    expect(result.notMatched).toContain('K.H. Lee');
+  });
+
+  test('Min Woo Lee scores are NOT corrupted by K.H. Lee', async () => {
+    const result = await syncTournamentScores(E2E_TOURN_ID, { par: 72, silent: true });
+
+    // K.H. Lee must not match Min Woo Lee
+    expect(result.notMatched).toContain('K.H. Lee');
+    expect(result.notMatched).not.toContain('Min Woo Lee');
+
+    // Min Woo Lee must have his own correct scores — NOT K.H. Lee's +3
+    const minWoo = mockMemDb.prepare(
+      'SELECT * FROM golf_scores WHERE tournament_id = ? AND player_id = ?'
+    ).get(E2E_TOURN_ID, MINWOO_ID);
+    expect(minWoo).not.toBeNull();
+    expect(minWoo.round1).toBe(-2);
+    expect(minWoo.round2).toBe(-7);   // must be -7, not K.H. Lee's +3
+    // fantasy_points: (2+7) × 1.5 + 12 (top-5, pos=4) = 13.5 + 12 = 25.5
+    expect(minWoo.fantasy_points).toBe(25.5);
+  });
+
+  test('golf_espn_players is populated with ESPN display names', async () => {
+    await syncTournamentScores(E2E_TOURN_ID, { par: 72, silent: true });
+    const olesenEspn = mockMemDb.prepare(
+      "SELECT * FROM golf_espn_players WHERE espn_name = 'Thorbjørn Olesen'"
+    ).get();
+    expect(olesenEspn).not.toBeNull();
+    expect(olesenEspn.normalized_name).toBe('thorbjorn olesen');
   });
 });
