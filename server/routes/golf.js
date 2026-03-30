@@ -1259,7 +1259,7 @@ router.patch('/leagues/:id/settings', authMiddleware, (req, res) => {
     if (!league) return res.status(404).json({ error: 'League not found' });
     if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Not commissioner' });
 
-    const { buy_in_amount, payout_1st, payout_2nd, payout_3rd, venmo, zelle, paypal } = req.body;
+    const { buy_in_amount, payout_1st, payout_2nd, payout_3rd, venmo, zelle, paypal, pool_drop_count, pool_tiers } = req.body;
 
     // Payout settings — only if provided
     if (payout_1st !== undefined) {
@@ -1272,6 +1272,22 @@ router.patch('/leagues/:id/settings', authMiddleware, (req, res) => {
       db.prepare(
         'UPDATE golf_leagues SET buy_in_amount = ?, payout_first = ?, payout_second = ?, payout_third = ? WHERE id = ?'
       ).run(parseFloat(buy_in_amount) || 0, p1, p2, p3, req.params.id);
+    }
+
+    // Pool-specific settings
+    if (pool_drop_count !== undefined) {
+      const dc = Math.max(0, parseInt(pool_drop_count) || 0);
+      db.prepare('UPDATE golf_leagues SET pool_drop_count = ? WHERE id = ?').run(dc, req.params.id);
+    }
+    if (pool_tiers !== undefined && Array.isArray(pool_tiers)) {
+      // Only update the picks count per tier; preserve odds_min/odds_max/approxPlayers from existing config
+      let existing = [];
+      try { existing = JSON.parse(db.prepare('SELECT pool_tiers FROM golf_leagues WHERE id = ?').get(req.params.id)?.pool_tiers || '[]'); } catch (_) {}
+      const merged = pool_tiers.map(incoming => {
+        const ex = existing.find(e => e.tier === incoming.tier) || {};
+        return { ...ex, ...incoming, picks: Math.max(1, parseInt(incoming.picks) || 1) };
+      });
+      db.prepare('UPDATE golf_leagues SET pool_tiers = ? WHERE id = ?').run(JSON.stringify(merged), req.params.id);
     }
 
     // Payment methods — saved independently, no payout validation needed

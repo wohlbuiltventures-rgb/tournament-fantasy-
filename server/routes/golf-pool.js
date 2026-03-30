@@ -39,6 +39,24 @@ function rankToOdds(rank) {
   return { odds_display: `${nice}:1`, odds_decimal: nice + 1 };
 }
 
+// Golf-pool tier size helper.
+// For a 4-tier pool the target structure (scaled from 132-player baseline) is:
+//   T1: ~10 elite favorites, T2: ~22, T3: ~38, T4: everyone else
+// For other tier counts, fall back to equal split.
+function golfPoolTierSizes(total, tierCount) {
+  if (tierCount === 4) {
+    const t1 = Math.max(5, Math.round(total * 10 / 132));
+    const t2 = Math.max(t1 + 1, Math.round(total * 22 / 132));
+    const t3 = Math.max(t2 + 1, Math.round(total * 38 / 132));
+    const t4 = total - t1 - t2 - t3;
+    if (t4 >= 1) return [t1, t2, t3, t4];
+  }
+  // Fallback: equal split
+  const base = Math.floor(total / tierCount);
+  const rem  = total % tierCount;
+  return Array.from({ length: tierCount }, (_, i) => base + (i < rem ? 1 : 0));
+}
+
 function calculatePlayerSalary({ world_ranking, odds_decimal, recent_form = [], course_history = null }) {
   const r = world_ranking || 9999;
   let base;
@@ -600,13 +618,14 @@ router.get('/tournaments/:id/suggested-tiers', authMiddleware, (req, res) => {
     if (!players.length) return res.status(404).json({ error: 'No players found' });
 
     const total = players.length;
-    const baseSize = Math.floor(total / tierCount);
-    const remainder = total % tierCount;
+    // Golf-pool tier structure: T1=elite favorites (tight group of ~10), T2=next ~22, T3=next ~38, T4=rest
+    // Scaled proportionally from a 132-player baseline.
+    const tierSizes = golfPoolTierSizes(total, tierCount);
     const tiers = [];
     let offset = 0;
 
     for (let i = 0; i < tierCount; i++) {
-      const size = baseSize + (i < remainder ? 1 : 0);
+      const size  = tierSizes[i];
       const group = players.slice(offset, offset + size);
       offset += size;
       tiers.push({
@@ -665,13 +684,12 @@ router.post('/leagues/:id/tiers/auto-balance', authMiddleware, (req, res) => {
     }).sort((a, b) => (a._dec || 999) - (b._dec || 999));
 
     const total    = players.length;
-    const baseSize = Math.floor(total / tierCount);
-    const remainder = total % tierCount;
+    const tierSizes = golfPoolTierSizes(total, tierCount);
     const newTiers = [];
     let offset = 0;
 
     for (let i = 0; i < tierCount; i++) {
-      const size  = baseSize + (i < remainder ? 1 : 0);
+      const size  = tierSizes[i];
       const group = players.slice(offset, offset + size);
       offset += size;
       const oldTier = tiersConfig.find(t => t.tier === i + 1) || {};

@@ -366,6 +366,10 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   const [payout1, setPayout1] = useState(String(league?.payout_first   ?? 70));
   const [payout2, setPayout2] = useState(String(league?.payout_second  ?? 20));
   const [payout3, setPayout3] = useState(String(league?.payout_third   ?? 10));
+  const [dropCount, setDropCount] = useState(String(league?.pool_drop_count ?? 2));
+  const [tierPicksCfg, setTierPicksCfg] = useState(() => {
+    try { return JSON.parse(league?.pool_tiers || '[]'); } catch { return []; }
+  });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSaved,  setSettingsSaved]  = useState(false);
   const [settingsError,  setSettingsError]  = useState('');
@@ -533,11 +537,15 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
     setSettingsSaving(true);
     setSettingsError('');
     try {
+      // Merge updated picks counts back into tier config JSON
+      const updatedTiers = tierPicksCfg.map(t => ({ ...t }));
       await api.patch(`/golf/leagues/${leagueId}/settings`, {
         buy_in_amount: parseFloat(buyIn) || 0,
         payout_1st: parseFloat(payout1) || 0,
         payout_2nd: parseFloat(payout2) || 0,
         payout_3rd: parseFloat(payout3) || 0,
+        pool_drop_count: Math.max(0, parseInt(dropCount) || 0),
+        pool_tiers: updatedTiers.length ? updatedTiers : undefined,
       });
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 3000);
@@ -745,27 +753,21 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
           {/* ── Edit Pool Settings ── */}
           {league?.format_type === 'pool' && (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
-              <h4 className="text-white text-sm font-bold mb-1">⚙️ Edit Pool Settings</h4>
-              {settingsLocked ? (
-                <p style={{ color: '#eab308', fontSize: 12, marginBottom: 12 }}>
-                  🔒 Settings locked — tournament starts Thursday
-                </p>
-              ) : (
-                <p className="text-gray-500 text-xs mb-3">Editable until Thursday 8am ET</p>
-              )}
-              <div className="space-y-3">
+              <h4 className="text-white text-sm font-bold mb-3">⚙️ Edit Pool Settings</h4>
+              <div className="space-y-4">
+                {/* Buy-in */}
                 <div>
                   <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">
                     Buy-in per player ($)
                   </label>
                   <input
                     type="number" min="0" step="0.01" value={buyIn}
-                    disabled={settingsLocked}
                     onChange={e => setBuyIn(e.target.value)}
                     className="input w-32 text-sm"
-                    style={settingsLocked ? { opacity: 0.5 } : {}}
                   />
                 </div>
+
+                {/* Payout splits */}
                 <div>
                   <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">
                     Payout splits
@@ -780,10 +782,8 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                         <span className="text-gray-500 text-xs w-9">{label}</span>
                         <input
                           type="number" min="0" max="100" step="1" value={val}
-                          disabled={settingsLocked}
                           onChange={e => set(e.target.value)}
                           className="input w-16 text-sm text-center"
-                          style={settingsLocked ? { opacity: 0.5 } : {}}
                         />
                       </div>
                     ))}
@@ -797,20 +797,69 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                     </p>
                   )}
                 </div>
-              </div>
-              {!settingsLocked && (
-                <div className="flex items-center gap-3 mt-4">
-                  <button
-                    disabled={settingsSaving || !payoutsValid}
-                    onClick={saveSettings}
-                    className="text-sm bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
-                  >
-                    {settingsSaving ? 'Saving…' : 'Save settings'}
-                  </button>
-                  {settingsSaved  && <span style={{ color: '#4ade80', fontSize: 13 }}>✓ Saved</span>}
-                  {settingsError  && <span style={{ color: '#f87171', fontSize: 13 }}>{settingsError}</span>}
+
+                {/* Picks per tier */}
+                {tierPicksCfg.length > 0 && (
+                  <div>
+                    <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">
+                      Picks per tier
+                    </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {tierPicksCfg.map((t, i) => (
+                        <div key={t.tier} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ color: '#6b7280', fontSize: 12, width: 52, flexShrink: 0 }}>Tier {t.tier}</span>
+                          <input
+                            type="number" min="1" max="10" step="1"
+                            value={t.picks}
+                            onChange={e => {
+                              const v = Math.max(1, parseInt(e.target.value) || 1);
+                              setTierPicksCfg(prev => prev.map((tier, idx) => idx === i ? { ...tier, picks: v } : tier));
+                            }}
+                            className="input text-sm text-center"
+                            style={{ width: 56 }}
+                          />
+                          <span style={{ color: '#4b5563', fontSize: 11 }}>
+                            pick{t.picks !== 1 ? 's' : ''} · ~{t.approxPlayers ?? '?'} players
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p style={{ color: '#4b5563', fontSize: 11, marginTop: 6 }}>
+                      Reducing picks after submissions are in will not remove existing picks.
+                    </p>
+                  </div>
+                )}
+
+                {/* Cut / drop rule */}
+                <div>
+                  <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">
+                    Drops after Round 2 (cut rule)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <input
+                      type="number" min="0" max="4" step="1" value={dropCount}
+                      onChange={e => setDropCount(e.target.value)}
+                      className="input text-sm text-center"
+                      style={{ width: 56 }}
+                    />
+                    <span style={{ color: '#4b5563', fontSize: 12 }}>
+                      {parseInt(dropCount) === 0 ? 'No drops — all picks count' : `Worst ${dropCount} pick${parseInt(dropCount) !== 1 ? 's' : ''} dropped after Round 2`}
+                    </span>
+                  </div>
                 </div>
-              )}
+              </div>
+
+              <div className="flex items-center gap-3 mt-4">
+                <button
+                  disabled={settingsSaving || !payoutsValid}
+                  onClick={saveSettings}
+                  className="text-sm bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  {settingsSaving ? 'Saving…' : 'Save settings'}
+                </button>
+                {settingsSaved  && <span style={{ color: '#4ade80', fontSize: 13 }}>✓ Saved</span>}
+                {settingsError  && <span style={{ color: '#f87171', fontSize: 13 }}>{settingsError}</span>}
+              </div>
             </div>
           )}
 
