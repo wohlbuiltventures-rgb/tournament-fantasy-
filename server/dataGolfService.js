@@ -374,11 +374,15 @@ function _applyFieldToTournament(tourn, field) {
     db.prepare('DELETE FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND manually_overridden = 0')
       .run(league.id, tourn.id);
 
-    // Use odds from golf_players + golf_tournament_fields; field was just updated
+    // Use odds from golf_players + golf_tournament_fields; field was just updated.
+    // GROUP BY gp.id deduplicates players who have multiple name-variant rows in
+    // golf_tournament_fields (UNIQUE on player_name, not player_id), which would
+    // otherwise produce N rows per player and N duplicate pool_tier_players inserts.
     const allTF = db.prepare(`
       SELECT gp.*, tf.odds_display AS tf_od, tf.odds_decimal AS tf_dec
       FROM golf_players gp
       INNER JOIN golf_tournament_fields tf ON tf.player_id = gp.id AND tf.tournament_id = ?
+      GROUP BY gp.id
       ORDER BY COALESCE(tf.odds_decimal, gp.odds_decimal, 999) ASC
     `).all(tourn.id);
 

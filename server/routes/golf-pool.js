@@ -232,7 +232,7 @@ router.get('/leagues/:id/tier-players', authMiddleware, (req, res) => {
     if (!tid) return res.json({ tiers: [], tournament_id: null });
 
     const players = db.prepare(
-      'SELECT * FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND (is_withdrawn IS NULL OR is_withdrawn = 0) ORDER BY tier_number ASC, world_ranking ASC'
+      'SELECT * FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND (is_withdrawn IS NULL OR is_withdrawn = 0) GROUP BY player_id ORDER BY tier_number ASC, world_ranking ASC'
     ).all(league.id, tid);
 
     let tiersConfig = [];
@@ -527,6 +527,7 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
       FROM pool_tier_players ptp
       LEFT JOIN golf_players gp ON gp.id = ptp.player_id
       WHERE ptp.league_id = ? AND ptp.tournament_id = ? AND (ptp.is_withdrawn IS NULL OR ptp.is_withdrawn = 0)
+      GROUP BY ptp.player_id
       ORDER BY ptp.tier_number ASC, ptp.odds_decimal ASC, ptp.world_ranking ASC
     `).all(league.id, tid);
 

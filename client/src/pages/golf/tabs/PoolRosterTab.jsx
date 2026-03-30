@@ -88,7 +88,11 @@ function TierPickerModal({ tierNum, tierConfig, players, currentSel, onPick, onC
   const tc = ROSTER_TIER_COLORS[tierNum] || ROSTER_TIER_COLORS[4];
   const limit = tierConfig?.picks || 1;
   const remaining = limit - currentSel.length;
-  const sorted = [...players].sort((a, b) => (a.odds_decimal || 999) - (b.odds_decimal || 999));
+  // Deduplicate by player_id (safety net — duplicates can exist if golf_tournament_fields
+  // has multiple name-variant rows for the same player, causing N-fold JOIN expansion)
+  const seen = new Set();
+  const unique = players.filter(p => { if (seen.has(p.player_id)) return false; seen.add(p.player_id); return true; });
+  const sorted = unique.sort((a, b) => (a.odds_decimal || 999) - (b.odds_decimal || 999));
   const rgbMap = { '#f59e0b': '245,158,11', '#8b5cf6': '139,92,246', '#3b82f6': '59,130,246', '#10b981': '16,185,129' };
   const rgb = rgbMap[tc.accent] || '16,185,129';
 
