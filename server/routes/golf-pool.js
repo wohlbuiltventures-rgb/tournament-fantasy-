@@ -508,7 +508,7 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
         COALESCE(ptp.is_withdrawn, 0) AS is_withdrawn
       FROM pool_tier_players ptp
       LEFT JOIN golf_players gp ON gp.id = ptp.player_id
-      WHERE ptp.league_id = ? AND ptp.tournament_id = ?
+      WHERE ptp.league_id = ? AND ptp.tournament_id = ? AND (ptp.is_withdrawn IS NULL OR ptp.is_withdrawn = 0)
       ORDER BY ptp.tier_number ASC, ptp.odds_decimal ASC, ptp.world_ranking ASC
     `).all(league.id, tid);
 
