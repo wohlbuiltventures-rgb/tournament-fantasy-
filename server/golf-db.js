@@ -1582,6 +1582,18 @@ runOnce('reset-houston-open-r2-drops-null-fix', () => {
   }
 });
 
+// ── One-time: set Valero Texas Open ESPN event ID + activate ──────────────────
+runOnce('set-valero-espn-event-id-2026', () => {
+  try {
+    const r = db.prepare(
+      "UPDATE golf_tournaments SET espn_event_id = '401811940', status = 'active' WHERE name = 'Valero Texas Open' AND season_year = 2026"
+    ).run();
+    console.log(`[migration] set-valero-espn-event-id: ${r.changes} row(s) updated`);
+  } catch (e) {
+    console.error('[migration] set-valero-espn-event-id error:', e.message);
+  }
+});
+
 // ── One-time: add Valero Texas Open 2026 ──────────────────────────────────────
 runOnce('add-valero-texas-open-2026', () => {
   try {

@@ -840,4 +840,157 @@ async function backfillCompleted() {
   }
 }
 
-module.exports = { syncTournamentScores, scheduleAutoSync, getSyncStatus, backfillCompleted, setIo, syncPoolOdds, syncTournamentField, parseCompetitor, calcFantasyPts };
+// ── Shared helpers (mirrors golf-admin.js) ──────────────────────────────────────
+function _oddsToDecimal(str) {
+  if (!str) return 999;
+  const [a, b] = String(str).split(':').map(parseFloat);
+  if (isNaN(a) || isNaN(b) || b === 0) return 999;
+  return a / b + 1;
+}
+function _rankToOdds(rank) {
+  const r = rank || 9999;
+  const bands = [
+    { minRank:1,   maxRank:5,    minOdds:8,   maxOdds:15   },
+    { minRank:6,   maxRank:15,   minOdds:15,  maxOdds:30   },
+    { minRank:16,  maxRank:30,   minOdds:30,  maxOdds:60   },
+    { minRank:31,  maxRank:50,   minOdds:60,  maxOdds:100  },
+    { minRank:51,  maxRank:100,  minOdds:100, maxOdds:200  },
+    { minRank:101, maxRank:200,  minOdds:200, maxOdds:500  },
+  ];
+  const band = bands.find(b => r >= b.minRank && r <= b.maxRank)
+             || { minOdds: 500, maxOdds: 1000 };
+  const dec = (band.minOdds + band.maxOdds) / 2 + 1;
+  return { odds_display: `${Math.round(dec - 1)}:1`, odds_decimal: dec };
+}
+
+// ── syncEspnFieldForTournament ──────────────────────────────────────────────────
+// Fetches the ESPN entry list for a tournament, populates golf_tournament_fields
+// and golf_players, then rebuilds pool_tier_players for any pool leagues using it.
+// Safe to call at startup — idempotent (clears and re-inserts field each run).
+async function syncEspnFieldForTournament(tournamentId) {
+  const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tournamentId);
+  if (!tourn) throw new Error(`Tournament ${tournamentId} not found`);
+  if (!tourn.espn_event_id) throw new Error(`Tournament ${tourn.name} has no espn_event_id`);
+
+  const eid = tourn.espn_event_id;
+  console.log(`[field-sync] Starting ESPN field sync for ${tourn.name} (event ${eid})`);
+
+  // ── Fetch field ──────────────────────────────────────────────────────────────
+  const espnData = await fetchJson(`https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=${eid}`);
+  const events = espnData?.events || [];
+  if (!events.length) throw new Error('ESPN returned no events');
+  const competitors = (events[0].competitions || []).flatMap(c => c.competitors || []);
+  if (!competitors.length) throw new Error('ESPN returned no competitors');
+
+  // ── Fetch odds (ESPN futures endpoint) ──────────────────────────────────────
+  const oddsMap = {};      // espnId → { odds_display, odds_decimal }
+  const nameOddsMap = {};  // lowercase full name → odds
+  const lastNameCount = {};
+  const lastNameOddsMap = {};
+  try {
+    const oddsData = await fetchJson(
+      `https://sports.core.api.espn.com/v2/sports/golf/leagues/pga/events/${eid}/competitions/${eid}/odds`
+    );
+    for (const item of (oddsData?.items || [])) {
+      const futures = item.futures || [];
+      if (!futures.length) continue;
+      for (const f of futures) {
+        const espnId = String(f.athlete?.id || '');
+        const american = parseInt(f.value || f.current?.moneyLine || 0);
+        if (american <= 0) continue;
+        const ratio = american / 100;
+        const nice = ratio < 5   ? Math.round(ratio * 4) / 4 :
+                     ratio < 20  ? Math.round(ratio * 2) / 2 :
+                     ratio < 100 ? Math.round(ratio / 5) * 5 :
+                                   Math.round(ratio / 25) * 25;
+        const oddsObj = { odds_display: `${nice}:1`, odds_decimal: nice + 1 };
+        if (espnId) oddsMap[espnId] = oddsObj;
+        const fName = (f.athlete?.displayName || f.athlete?.fullName || '').toLowerCase().trim();
+        if (fName) {
+          nameOddsMap[fName] = oddsObj;
+          const lastName = fName.split(' ').pop();
+          lastNameCount[lastName] = (lastNameCount[lastName] || 0) + 1;
+          lastNameOddsMap[lastName] = lastNameCount[lastName] === 1 ? oddsObj : null;
+        }
+      }
+      break;
+    }
+  } catch (oddsErr) {
+    console.warn('[field-sync] ESPN odds fetch non-fatal:', oddsErr.message);
+  }
+
+  // ── Upsert golf_tournament_fields + golf_players ─────────────────────────────
+  const _getGP   = db.prepare('SELECT * FROM golf_players WHERE name = ? LIMIT 1');
+  const _insGP   = db.prepare('INSERT OR IGNORE INTO golf_players (id, name, country, is_active, world_ranking) VALUES (?, ?, ?, 1, ?)');
+  const _insTF   = db.prepare(`INSERT OR REPLACE INTO golf_tournament_fields (id, tournament_id, player_name, player_id, espn_player_id, world_ranking, odds_display, odds_decimal) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+  const _updGP   = db.prepare('UPDATE golf_players SET odds_display = ?, odds_decimal = ? WHERE id = ?');
+  const _updGPCo = db.prepare('UPDATE golf_players SET country = ? WHERE id = ? AND (country IS NULL OR length(country) != 2)');
+
+  db.prepare('DELETE FROM golf_tournament_fields WHERE tournament_id = ?').run(tournamentId);
+
+  let fieldCount = 0;
+  db.transaction(() => {
+    for (const c of competitors) {
+      const name    = c.athlete?.displayName || c.athlete?.fullName;
+      const espnId  = String(c.athlete?.id || '');
+      const ranking = c.athlete?.ranking ? parseInt(c.athlete.ranking) : null;
+      const country = c.athlete?.flag?.alt || c.athlete?.country || null;
+      if (!name) continue;
+
+      let gp = _getGP.get(name);
+      if (!gp) { _insGP.run(uuidv4(), name, country, 1, ranking || 200); gp = _getGP.get(name); }
+      if (!gp) continue;
+      if (country) _updGPCo.run(country, gp.id);
+
+      const nameLower = name.toLowerCase();
+      const lastName  = nameLower.split(' ').pop();
+      const playerOdds = oddsMap[espnId] || nameOddsMap[nameLower] || lastNameOddsMap[lastName] || null;
+      _insTF.run(uuidv4(), tournamentId, name, gp.id, espnId, ranking || gp.world_ranking || 200,
+                 playerOdds?.odds_display || null, playerOdds?.odds_decimal || null);
+      if (playerOdds) _updGP.run(playerOdds.odds_display, playerOdds.odds_decimal, gp.id);
+      fieldCount++;
+    }
+  })();
+  console.log(`[field-sync] ${tourn.name}: ${fieldCount} players inserted into golf_tournament_fields`);
+
+  // ── Rebuild pool_tier_players for affected leagues ───────────────────────────
+  const affectedLeagues = db.prepare(
+    "SELECT * FROM golf_leagues WHERE format_type = 'pool' AND pool_tournament_id = ? AND status != 'archived'"
+  ).all(tournamentId);
+
+  for (const league of affectedLeagues) {
+    let tiersConfig = [];
+    try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
+    if (!tiersConfig.length) { console.log(`[field-sync] League ${league.name}: no tier config, skipping`); continue; }
+
+    const insTP = db.prepare(`INSERT OR REPLACE INTO pool_tier_players (id, league_id, tournament_id, player_id, player_name, tier_number, odds_display, odds_decimal, world_ranking, salary, manually_overridden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`);
+    db.prepare('DELETE FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND manually_overridden = 0').run(league.id, tournamentId);
+
+    const allTF = db.prepare(`
+      SELECT gp.*, tf.odds_display AS tf_od, tf.odds_decimal AS tf_dec
+      FROM golf_players gp
+      INNER JOIN golf_tournament_fields tf ON tf.player_id = gp.id AND tf.tournament_id = ?
+      ORDER BY COALESCE(tf.odds_decimal, gp.odds_decimal, 999) ASC
+    `).all(tournamentId);
+
+    let count = 0;
+    db.transaction(() => {
+      for (const p of allTF) {
+        const gen = (!p.tf_od && !p.odds_display) ? _rankToOdds(p.world_ranking || 200) : null;
+        const odds_display = p.tf_od || p.odds_display || gen.odds_display;
+        const odds_decimal = p.tf_dec || p.odds_decimal || gen.odds_decimal;
+        let tierNum = tiersConfig[tiersConfig.length - 1]?.tier || 1;
+        for (const t of tiersConfig) {
+          if (odds_decimal >= _oddsToDecimal(t.odds_min) && odds_decimal <= _oddsToDecimal(t.odds_max)) { tierNum = t.tier; break; }
+        }
+        insTP.run(uuidv4(), league.id, tournamentId, p.id, p.name, tierNum, odds_display, odds_decimal, p.world_ranking || 200);
+        count++;
+      }
+    })();
+    console.log(`[field-sync] League "${league.name}": ${count} players assigned to tiers`);
+  }
+
+  return { fieldCount, leaguesRebuilt: affectedLeagues.length };
+}
+
+module.exports = { syncTournamentScores, scheduleAutoSync, getSyncStatus, backfillCompleted, setIo, syncPoolOdds, syncTournamentField, parseCompetitor, calcFantasyPts, syncEspnFieldForTournament };

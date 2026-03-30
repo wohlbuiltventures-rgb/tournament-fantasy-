@@ -635,4 +635,35 @@ setTimeout(pollNews, 60 * 1000); // initial poll 60s after startup
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+
+  // Auto-sync ESPN field for any tournament that has an espn_event_id
+  // but no players yet in golf_tournament_fields. Fires once at startup.
+  const { syncEspnFieldForTournament } = require('./golfSyncService');
+  const golfDb = require('./golf-db');
+  setTimeout(async () => {
+    try {
+      const needsField = golfDb.prepare(`
+        SELECT t.id, t.name FROM golf_tournaments t
+        WHERE t.espn_event_id IS NOT NULL
+          AND t.status = 'active'
+          AND (SELECT COUNT(*) FROM golf_tournament_fields f WHERE f.tournament_id = t.id) = 0
+        ORDER BY t.start_date ASC
+      `).all();
+      if (!needsField.length) {
+        console.log('[startup] Field sync: all active tournaments already have field data');
+        return;
+      }
+      for (const t of needsField) {
+        console.log(`[startup] Field sync: populating field for ${t.name}...`);
+        try {
+          const result = await syncEspnFieldForTournament(t.id);
+          console.log(`[startup] Field sync complete: ${t.name} — ${result.fieldCount} players, ${result.leaguesRebuilt} leagues rebuilt`);
+        } catch (e) {
+          console.error(`[startup] Field sync failed for ${t.name}:`, e.message);
+        }
+      }
+    } catch (e) {
+      console.error('[startup] Field sync startup error:', e.message);
+    }
+  }, 5000); // 5s delay to let DB migrations settle
 });
