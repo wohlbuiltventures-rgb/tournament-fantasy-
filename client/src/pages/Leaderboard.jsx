@@ -37,6 +37,12 @@ function secondsAgo(date) {
   return `${m}m ago`;
 }
 
+function toOrdinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 // ── Tooltip ────────────────────────────────────────────────────────────────────
 
 function InfoTooltip({ text }) {
@@ -546,6 +552,18 @@ export default function Leaderboard() {
           return sortDir === 'desc' ? -cmp : cmp;
         });
 
+        // Build a rank map across all drafted players in the league.
+        // Sort all players by fantasy_points desc; ties share the same rank.
+        const allLeaguePlayers = standings.flatMap(t => t.players || []);
+        const sortedByPts = [...allLeaguePlayers].sort((a, b) => b.fantasy_points - a.fantasy_points);
+        const playerRankMap = new Map();
+        sortedByPts.forEach(p => {
+          if (!playerRankMap.has(p.player_id)) {
+            const rank = sortedByPts.findIndex(x => x.fantasy_points === p.fantasy_points) + 1;
+            playerRankMap.set(p.player_id, rank);
+          }
+        });
+
         const ColHdr = ({ col, label }) => {
           const active = sortBy === col;
           const arrow = active ? (sortDir === 'desc' ? ' ↓' : ' ↑') : '';
@@ -788,6 +806,20 @@ export default function Leaderboard() {
                                     })}
                                   </div>
 
+                                  {/* Rank */}
+                                  <div className="flex-shrink-0 text-right" style={{ minWidth: 28 }}>
+                                    {player.fantasy_points > 0 ? (
+                                      <>
+                                        <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: 13, lineHeight: 1.2 }}>
+                                          {toOrdinal(playerRankMap.get(player.player_id) ?? 0)}
+                                        </div>
+                                        <div style={{ color: '#6b7280', fontSize: 10, lineHeight: 1 }}>rank</div>
+                                      </>
+                                    ) : (
+                                      <div style={{ color: '#4b5563', fontSize: 13 }}>—</div>
+                                    )}
+                                  </div>
+
                                   {/* Points */}
                                   <div className="font-bold text-sm flex-shrink-0 w-7 text-right"
                                     style={{ color: player.fantasy_points > 0 ? '#378ADD' : '#4b5563' }}>
@@ -822,7 +854,7 @@ export default function Leaderboard() {
                                               <span className="text-gray-400 text-xs flex-1 truncate">vs {game.opponent || '—'}</span>
                                               <span className="text-xs font-semibold shrink-0"
                                                 style={{ color: game.points > 0 ? '#60a5fa' : '#6b7280' }}>
-                                                {game.points > 0 ? `${game.points} pts` : '0 pts'}
+                                                {game.points > 0 ? `${game.points} pts` : '—'}
                                               </span>
                                             </div>
                                           );
