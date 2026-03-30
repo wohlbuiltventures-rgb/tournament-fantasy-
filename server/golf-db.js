@@ -1090,7 +1090,7 @@ try {
     try { _hou4Cfg = JSON.parse(_hou4L.pool_tiers || '[]'); } catch (_) {}
     const _hou4Picks = _hou4Cfg.reduce((s, t) => s + (t.picks || 0), 0);
 
-    if (_hou4Picks !== 7) {
+    if (_hou4Picks !== 7 || _hou4L.pool_drop_count !== 2) {
       console.log('[golf-db] Houston Open: applying 4-tier structure (T1×1 T2×2 T3×2 T4×2)...');
       const _tid = _hou4L.pool_tournament_id;
 
