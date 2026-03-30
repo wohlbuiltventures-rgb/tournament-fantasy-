@@ -1590,10 +1590,22 @@ runOnce('add-valero-texas-open-2026', () => {
     db.prepare(`
       INSERT INTO golf_tournaments (id, name, course, start_date, end_date, season_year, is_major, is_signature, status, purse, prize_money)
       VALUES (?, ?, ?, ?, ?, 2026, 0, 0, 'scheduled', ?, ?)
-    `).run(uuidv4(), 'Valero Texas Open', 'TPC San Antonio (Oaks Course), TX', '2026-04-03', '2026-04-06', 8700000, 8700000);
+    `).run(uuidv4(), 'Valero Texas Open', 'TPC San Antonio (Oaks Course), TX', '2026-04-02', '2026-04-05', 8700000, 8700000);
     console.log('[migration] add-valero-texas-open: inserted');
   } catch (e) {
     console.error('[migration] add-valero-texas-open error:', e.message);
+  }
+});
+
+// ── One-time: fix Valero Texas Open dates (Thu Apr 2 – Sun Apr 5) ─────────────
+runOnce('fix-valero-texas-open-dates-2026', () => {
+  try {
+    const r = db.prepare(
+      "UPDATE golf_tournaments SET start_date='2026-04-02', end_date='2026-04-05' WHERE name='Valero Texas Open' AND season_year=2026"
+    ).run();
+    console.log(`[migration] fix-valero-dates: ${r.changes} row(s) updated`);
+  } catch (e) {
+    console.error('[migration] fix-valero-dates error:', e.message);
   }
 });
 
