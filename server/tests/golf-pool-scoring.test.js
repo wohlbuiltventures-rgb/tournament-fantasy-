@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Golf pool scoring — regression tests for three bugs found during Houston Open R1.
+ * Golf pool scoring — regression tests for bugs found during Houston Open.
  *
  * BUG 1: stroke_play enrichedPicks showed TourneyRun fantasy_points (e.g. -0.5, +6)
  *        instead of raw to-par totals (-1, -2). Fixed by using player_total.
@@ -13,6 +13,10 @@
  *        ESPN includes placeholder period entries {linescores: []} for unplayed rounds.
  *        parsePar('E') returns 0, which looks like even par but means "not played".
  *
+ * BUG 4: computeDropIds excluded players with round1=null AND round2=null from the
+ *        candidate pool entirely. A player with null/null (treated as 0, even par)
+ *        should be droppable — 0 is worse than -3 in stroke play.
+ *
  * Tests here cover the pure scoring functions that can be tested without a DB.
  * golfSyncService requires ./db at module level, so we mock it below.
  */
@@ -24,7 +28,7 @@ jest.mock('../db', () => ({
 }));
 
 const { parseCompetitor, calcFantasyPts } = require('../golfSyncService');
-const { applyDropScoring } = require('../pool-utils');
+const { applyDropScoring, computeDropIds } = require('../pool-utils');
 
 
 // ── BUG 3: Empty-linescore period entries should return null, not 0 ───────────
@@ -321,6 +325,63 @@ describe('calcFantasyPts — TourneyRun formula', () => {
     const pts = calcFantasyPts(-4, null, null, null, null, true, 72, true);
     // (6 + 2) * 1.5 = 12
     expect(pts).toBe(12);
+  });
+
+});
+
+
+// ── BUG 4: computeDropIds — null/null players must be included as 0 ───────────
+
+describe('computeDropIds — BUG 4: null rounds treated as 0 (Houston Open R2)', () => {
+
+  test('player with null/null rounds is droppable (treated as 0, even par)', () => {
+    // Gotterup R1=-3 is better than Putnam null/null (0). Putnam should drop.
+    const picks = [
+      { player_id: 'glover',   round1: 7,    round2: 3,    made_cut: null },  // +10 worst
+      { player_id: 'gotterup', round1: -3,   round2: null, made_cut: null },  // -3  best active
+      { player_id: 'putnam',   round1: null,  round2: null, made_cut: null }, // 0   should drop
+    ];
+    const dropped = computeDropIds(picks, 2);
+    expect(dropped.has('glover')).toBe(true);    // +10 — correct
+    expect(dropped.has('putnam')).toBe(true);    // 0 > -3 — should drop
+    expect(dropped.has('gotterup')).toBe(false); // -3 best — should keep
+  });
+
+  test('two null/null players both drop before a negative-total player', () => {
+    const picks = [
+      { player_id: 'a', round1: -5, round2: -3, made_cut: null }, // -8 best
+      { player_id: 'b', round1: null, round2: null, made_cut: null }, // 0
+      { player_id: 'c', round1: null, round2: null, made_cut: null }, // 0 tied
+    ];
+    const dropped = computeDropIds(picks, 2);
+    expect(dropped.has('a')).toBe(false);
+    expect(dropped.has('b')).toBe(true);
+    expect(dropped.has('c')).toBe(true);
+  });
+
+  test('MC player fills a drop slot before null/null player is reached', () => {
+    const picks = [
+      { player_id: 'mc',      round1: 2,    round2: 3,    made_cut: 0 },    // MC — auto drop
+      { player_id: 'putnam',  round1: null,  round2: null, made_cut: null }, // 0
+      { player_id: 'good',    round1: -4,   round2: -3,   made_cut: null }, // -7 best
+    ];
+    // dropCount=2: MC fills slot 1, Putnam (0) fills slot 2, good (-7) kept
+    const dropped = computeDropIds(picks, 2);
+    expect(dropped.has('mc')).toBe(true);
+    expect(dropped.has('putnam')).toBe(true);
+    expect(dropped.has('good')).toBe(false);
+  });
+
+  test('sort is descending — highest total drops first', () => {
+    const picks = [
+      { player_id: 'best',  round1: -6, round2: -2, made_cut: null }, // -8
+      { player_id: 'mid',   round1:  1, round2:  0, made_cut: null }, // +1
+      { player_id: 'worst', round1:  3, round2:  4, made_cut: null }, // +7
+    ];
+    const dropped = computeDropIds(picks, 1);
+    expect(dropped.has('worst')).toBe(true);
+    expect(dropped.has('mid')).toBe(false);
+    expect(dropped.has('best')).toBe(false);
   });
 
 });

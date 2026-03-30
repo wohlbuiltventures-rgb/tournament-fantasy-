@@ -1565,4 +1565,21 @@ runOnce('restore-thefounder-houston-open-2026', () => {
   }
 });
 
+// One-shot: reset Houston Open R2 drops so commissioner can re-apply
+// after the computeDropIds null-round bug fix.
+const HOU_POOL_LEAGUE = 'ff568722-fbe9-4695-86a8-a31287c22841';
+runOnce('reset-houston-open-r2-drops-null-fix', () => {
+  try {
+    const r = db.prepare(
+      "UPDATE pool_picks SET is_dropped=0, dropped_at=NULL WHERE league_id=?"
+    ).run(HOU_POOL_LEAGUE);
+    const l = db.prepare(
+      "UPDATE golf_leagues SET pool_drops_applied=0 WHERE id=?"
+    ).run(HOU_POOL_LEAGUE);
+    console.log(`[migration] reset-houston-open-r2-drops: picks=${r.changes} league=${l.changes}`);
+  } catch (e) {
+    console.error('[migration] reset-houston-open-r2-drops error:', e.message);
+  }
+});
+
 module.exports = db;

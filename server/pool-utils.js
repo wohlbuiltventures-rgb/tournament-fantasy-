@@ -128,8 +128,11 @@ function applyDropScoring(picks, dropCount, { lockedDroppedIds = null } = {}) {
 function computeDropIds(picks, dropCount) {
   if (dropCount <= 0) return new Set();
 
-  const mc      = picks.filter(p => p.made_cut === 0);
-  const active  = picks.filter(p => p.made_cut !== 0 && (p.round1 != null || p.round2 != null));
+  const mc     = picks.filter(p => p.made_cut === 0);
+  // Include ALL non-MC players — null rounds count as 0 (even par).
+  // Previously excluded null/null players, which caused them to be invisible
+  // to the sort and allowed better-scoring players to be dropped in their place.
+  const active = picks.filter(p => p.made_cut !== 0);
 
   const droppedIds = new Set(mc.map(p => p.player_id));
   const remainingDrops = Math.max(0, dropCount - mc.length);
@@ -139,7 +142,7 @@ function computeDropIds(picks, dropCount) {
       .sort((a, b) => {
         const totalA = (a.round1 ?? 0) + (a.round2 ?? 0);
         const totalB = (b.round1 ?? 0) + (b.round2 ?? 0);
-        return totalB - totalA ||                    // worst R1+R2 first
+        return totalB - totalA ||                    // highest (worst) total first
                (b.round1 ?? 0) - (a.round1 ?? 0);   // tiebreaker: worst R1
       })
       .slice(0, remainingDrops)
