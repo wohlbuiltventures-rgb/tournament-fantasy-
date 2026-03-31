@@ -432,9 +432,6 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
         {!hasPrize && (
           <p style={{ color: '#374151', fontSize: 11, textAlign: 'center' }}>No buy-in · bragging rights only</p>
         )}
-        <p style={{ color: '#374151', fontSize: 11, textAlign: 'center' }}>
-          {isLive ? 'Scores sync automatically from ESPN' : hasScores ? 'Tournament complete' : 'Scores sync from ESPN once tournament begins'}
-        </p>
       </div>
     );
   }
