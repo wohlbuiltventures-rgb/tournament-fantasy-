@@ -25,10 +25,10 @@ const FORMATS = [
     Icon: DollarSign,
     iconBg: 'bg-blue-500/10',
     iconColor: 'text-blue-400',
-    title: 'Daily Fantasy',
-    badge: 'DFS',
+    title: 'Salary Cap',
+    badge: 'Budget',
     badgeColor: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-    description: 'Salary cap resets every tournament. Pick from scratch each week. No season commitment.',
+    description: 'Build a roster under a budget. Each player has a price based on betting odds. Stay under the cap — top score wins.',
     activeBorder: 'border-blue-500/50',
     activeBg: 'bg-blue-500/5',
   },
@@ -241,14 +241,6 @@ const PICK_SHEET_FORMATS = [
     description: 'Players grouped into tiers by betting odds. Members pick a set number from each tier. Classic office pool format.',
     example: 'e.g. Tier 1 (favorites) pick 2 · Tier 2 pick 3 · Tier 3 pick 2',
     recommended: true,
-  },
-  {
-    value: 'salary_cap',
-    icon: '💰',
-    title: 'Salary Cap',
-    description: 'Each player assigned a price based on odds and recent performance. Members build a roster under the cap. Similar to DraftKings.',
-    example: 'e.g. $50,000 cap · Top players cost more',
-    recommended: false,
   },
 ];
 
@@ -685,7 +677,7 @@ export default function CreateGolfLeague() {
               <input
                 type="text"
                 className="input text-base"
-                placeholder={format === 'dk' ? 'DFS Golf 2026' : format === 'pool' ? 'Golf Pool 2026' : 'Golf Degens 2026'}
+                placeholder={format === 'dk' ? 'Salary Cap Golf 2026' : format === 'pool' ? 'Golf Pool 2026' : 'Golf Degens 2026'}
                 value={form.name}
                 onChange={e => set('name', e.target.value)}
                 required
@@ -808,46 +800,21 @@ export default function CreateGolfLeague() {
                 <ScoringStyleSelector value={form.scoring_style} onChange={v => set('scoring_style', v)} />
               </div>
 
-              {/* Pick Sheet Format */}
+              {/* Tier config */}
               <div>
-                <label className="label mb-1">Pick Sheet Format</label>
-                <p className="text-gray-600 text-xs mb-3">How will members make their picks each tournament?</p>
-                <PickSheetFormatSelector
-                  value={form.pick_sheet_format}
-                  onChange={v => set('pick_sheet_format', v)}
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2.5">Tier Setup</p>
+                {tiersAutoBalanced ? (
+                  <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/25 rounded-lg px-3 py-2 mb-3">
+                    <span className="text-green-400 text-xs">⚖️</span>
+                    <p className="text-green-400 text-xs font-medium">Tiers auto-balanced for this tournament's field. Adjust before launching.</p>
+                  </div>
+                ) : (
+                  <p className="text-gray-600 text-xs mb-3">Customize your tiers. Members will pick from each.</p>
+                )}
+                <TierConfigEditor
+                  tiers={form.pool_tiers}
+                  onChange={v => { set('pool_tiers', v); setTiersAutoBalanced(false); }}
                 />
-
-                {/* Tier config */}
-                {form.pick_sheet_format === 'tiered' && (
-                  <div className="mt-4">
-                    <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2.5">Tier Setup</p>
-                    {tiersAutoBalanced ? (
-                      <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/25 rounded-lg px-3 py-2 mb-3">
-                        <span className="text-green-400 text-xs">⚖️</span>
-                        <p className="text-green-400 text-xs font-medium">Tiers auto-balanced for this tournament's field. Adjust before launching.</p>
-                      </div>
-                    ) : (
-                      <p className="text-gray-600 text-xs mb-3">Customize your tiers. Members will pick from each.</p>
-                    )}
-                    <TierConfigEditor
-                      tiers={form.pool_tiers}
-                      onChange={v => { set('pool_tiers', v); setTiersAutoBalanced(false); }}
-                    />
-                  </div>
-                )}
-
-                {/* Salary cap config */}
-                {form.pick_sheet_format === 'salary_cap' && (
-                  <div className="mt-4">
-                    <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-3">Salary Cap Settings</p>
-                    <SalaryCapConfig
-                      cap={form.pool_salary_cap}
-                      capUnit={form.pool_cap_unit}
-                      onCapChange={v => set('pool_salary_cap', v)}
-                      onUnitChange={v => set('pool_cap_unit', v)}
-                    />
-                  </div>
-                )}
               </div>
 
             </div>
@@ -1022,11 +989,11 @@ export default function CreateGolfLeague() {
           </div>
         )}
 
-        {/* ── 3. League Settings — DAILY FANTASY ── */}
+        {/* ── 3. League Settings — SALARY CAP ── */}
         {format === 'dk' && (
           <div className="animate-format">
           <Card>
-            <CardHeader icon={Settings} title="⚙️ Daily Fantasy Settings" />
+            <CardHeader icon={Settings} title="⚙️ Salary Cap Settings" />
             <div className="space-y-5">
 
               {/* Max Teams */}
@@ -1037,6 +1004,12 @@ export default function CreateGolfLeague() {
                   value={form.max_teams}
                   onChange={v => set('max_teams', v)}
                 />
+              </div>
+
+              {/* Scoring Style */}
+              <div>
+                <label className="label mb-1">Scoring Style</label>
+                <ScoringStyleSelector value={form.scoring_style} onChange={v => set('scoring_style', v)} />
               </div>
 
               {/* Picks Per Tournament */}
@@ -1263,11 +1236,24 @@ export default function CreateGolfLeague() {
           <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 sm:p-5">
             <div className="flex items-center gap-2 mb-2">
               <Zap className="w-4 h-4 text-blue-400" />
-              <span className="text-blue-400 font-bold text-sm">DFS Scoring</span>
+              <span className="text-blue-400 font-bold text-sm">Salary Cap Scoring</span>
             </div>
-            <p className="text-gray-400 text-xs leading-relaxed">
-              Same eagle/birdie/par points system. Salary cap resets each tournament — build a fresh lineup every week within your cap.
-            </p>
+            {form.scoring_style === 'stroke_play' && (
+              <p className="text-gray-400 text-xs leading-relaxed">
+                Lowest combined strokes across your {form.starters_count} picks wins. Cap resets each tournament.
+              </p>
+            )}
+            {form.scoring_style === 'tourneyrun' && (
+              <>
+                <p className="text-gray-400 text-xs mb-1">Eagle +8 · Birdie +3 · Par +0.5 · Bogey −0.5 · Double+ −2</p>
+                <p className="text-gray-500 text-xs">Finish bonuses: Win +30, Top 5 +15, Top 10 +8, Top 25 +3. Cap resets each tournament.</p>
+              </>
+            )}
+            {form.scoring_style === 'total_score' && (
+              <p className="text-gray-400 text-xs leading-relaxed">
+                Win = 30pts · Top 5 = 15pts · Top 10 = 8pts · Top 25 = 3pts. Highest points total wins. Cap resets each tournament.
+              </p>
+            )}
           </div>
         )}
 
@@ -1343,7 +1329,7 @@ export default function CreateGolfLeague() {
           onMouseLeave={e => { if (!loading) { e.currentTarget.style.background = '#22c55e'; e.currentTarget.style.transform = 'scale(1)'; } }}
         >
           {loading ? 'Creating League...' : (
-            { pool: 'Launch Office Pool →', dk: 'Launch DFS League →', tourneyrun: 'Launch Fantasy League →' }[selectedFmt?.key] ?? `Create ${selectedFmt?.title} League →`
+            { pool: 'Launch Office Pool →', dk: 'Launch Salary Cap League →', tourneyrun: 'Launch Fantasy League →' }[selectedFmt?.key] ?? `Create ${selectedFmt?.title} League →`
           )}
         </button>
       </form>

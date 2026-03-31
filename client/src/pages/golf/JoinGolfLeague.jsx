@@ -108,7 +108,7 @@ export default function JoinGolfLeague() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border bg-green-500/15 border-green-500/30 text-green-400 uppercase">
-                {preview.format_type === 'pool' ? '⛳ Pool' : preview.format_type === 'dk' ? '💰 DFS' : '🏆 TourneyRun'}
+                {preview.format_type === 'pool' ? '⛳ Pool' : preview.format_type === 'dk' ? '💰 Salary Cap' : '🏆 TourneyRun'}
               </span>
               {parseFloat(preview.buy_in_amount) === 0 && (
                 <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border bg-yellow-500/10 border-yellow-500/30 text-yellow-400">FREE</span>

@@ -559,7 +559,7 @@ export default function HubLanding() {
                     {[
                       { icon: '🏆', name: 'Season Long', desc: 'Full PGA season' },
                       { icon: '⛳', name: 'Office Pool', desc: 'Per tournament' },
-                      { icon: '⚡', name: 'Daily Fantasy', desc: 'Salary cap DFS' },
+                      { icon: '💰', name: 'Salary Cap', desc: 'Budget-based picks' },
                     ].map(({ icon, name, desc }) => (
                       <div key={name} style={{
                         flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
@@ -672,11 +672,11 @@ export default function HubLanding() {
                   <div style={{ fontSize: 40, marginBottom: 12 }}>⛳</div>
                   <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 900, color: '#fff', letterSpacing: '-0.02em' }}>Fantasy Golf</h3>
                   <p style={{ margin: 0, fontSize: 14, color: 'rgba(255,255,255,0.5)', lineHeight: 1.65 }}>
-                    PGA Tour season-long fantasy, office pools, and DFS. One platform, every format.
+                    PGA Tour season-long fantasy, office pools, and salary cap. One platform, every format.
                   </p>
                 </div>
                 <ul style={{ margin: '0 0 28px', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {['Season-long auction draft', 'Masters & major office pools', 'Daily fantasy (DFS)', 'Majors score 1.5×'].map(b => (
+                  {['Season-long auction draft', 'Masters & major office pools', 'Salary cap leagues', 'Majors score 1.5×'].map(b => (
                     <li key={b} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: 'rgba(255,255,255,0.65)' }}>
                       <span style={{ color: '#16a34a', fontWeight: 800, flexShrink: 0 }}>✓</span>{b}
                     </li>
@@ -869,7 +869,7 @@ export default function HubLanding() {
             {[
               { icon: '🗓️', title: 'Season-Long Fantasy', desc: 'Draft once, compete all season. Waiver wire, weekly lineups, FAAB bidding.', tag: '→ Golf & College Basketball' },
               { icon: '📋', title: 'Office Pool', desc: 'No draft needed. Pick your players each tournament. Perfect for casual groups.', tag: '→ Golf only' },
-              { icon: '⚡', title: 'Daily Fantasy', desc: 'New roster every tournament. Salary cap, no season commitment.', tag: '→ Golf only' },
+              { icon: '💰', title: 'Salary Cap', desc: 'New roster every tournament. Budget-based picks, no season commitment.', tag: '→ Golf only' },
             ].map(({ icon, title, desc, tag }) => (
               <div key={title}
                 className="hub-card-hover"

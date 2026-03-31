@@ -25,7 +25,7 @@ const ACTIVE_STATUSES = new Set(['active', 'lobby', 'draft', 'draft_pending', 'd
 
 const FORMAT_META = {
   pool:       { label: '⛳ Pool',       pill: 'bg-green-500/15 border-green-500/30 text-green-400',  duration: 'Per Tournament', dPill: 'bg-amber-500/15 border-amber-500/30 text-amber-400',  bar: 'bg-green-500'  },
-  dk:         { label: '💰 DFS',        pill: 'bg-blue-500/15 border-blue-500/30 text-blue-400',    duration: 'Per Tournament', dPill: 'bg-amber-500/15 border-amber-500/30 text-amber-400',  bar: 'bg-blue-500'   },
+  dk:         { label: '💰 Salary Cap',  pill: 'bg-blue-500/15 border-blue-500/30 text-blue-400',    duration: 'Per Tournament', dPill: 'bg-amber-500/15 border-amber-500/30 text-amber-400',  bar: 'bg-blue-500'   },
   tourneyrun: { label: '🏆 TourneyRun', pill: 'bg-teal-500/15 border-teal-500/30 text-teal-400',   duration: 'Season Long',    dPill: 'bg-gray-700/60 border-gray-700 text-gray-400',         bar: 'bg-teal-500'   },
 };
 function getMeta(fmt) { return FORMAT_META[fmt] || FORMAT_META.tourneyrun; }

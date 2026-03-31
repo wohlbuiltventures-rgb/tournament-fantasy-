@@ -530,17 +530,17 @@ export default function GolfLanding() {
               </div>
             </div>
 
-            {/* Card 3: Daily Fantasy Pool */}
+            {/* Card 3: Salary Cap */}
             <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 sm:p-6 hover:border-green-500/30 transition-colors">
-              <div className="text-2xl mb-2">⛳</div>
-              <h3 className="text-white font-black text-base">Daily Fantasy Pool</h3>
-              <p className="text-gray-400 text-xs mt-0.5 mb-4">DFS-style picks without the salary cap hassle</p>
+              <div className="text-2xl mb-2">💰</div>
+              <h3 className="text-white font-black text-base">Salary Cap</h3>
+              <p className="text-gray-400 text-xs mt-0.5 mb-4">Build a roster under a budget. Top score wins.</p>
               <ul className="space-y-2 text-sm text-gray-400">
                 {[
-                  'Pick your lineup each tournament',
-                  'Player pools with tiers and odds',
+                  'Each player priced by betting odds',
+                  'Stay under the cap — pick your best value',
                   'Score based on real tournament results',
-                  'New lineups every week — no season commitment',
+                  'Fresh picks every tournament — no season commitment',
                   'Great for casual and competitive players',
                 ].map(item => (
                   <li key={item} className="flex items-start gap-2">
@@ -554,7 +554,7 @@ export default function GolfLanding() {
                   to="/golf/create?format=dk"
                   className="inline-flex items-center gap-1.5 text-[12px] font-bold text-green-400 hover:text-green-300 transition-colors uppercase tracking-widest"
                 >
-                  Start a DFS League <ArrowRight className="w-3 h-3" />
+                  Start a Salary Cap League <ArrowRight className="w-3 h-3" />
                 </Link>
               </div>
             </div>
@@ -785,24 +785,24 @@ export default function GolfLanding() {
         </div>
       </Section>
 
-      {/* Section B — Daily Fantasy Pool */}
+      {/* Section B — Salary Cap */}
       <Section style={{ background: '#0d1117' }} className="py-16 sm:py-24 px-4 border-b border-gray-800">
         <div className="max-w-5xl mx-auto">
           <div className="grid sm:grid-cols-2 gap-10 sm:gap-16 items-center">
             <div style={{ order: 2 }}>
               <h2 style={{ color: '#fff', fontSize: 'clamp(28px,4vw,42px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 16, letterSpacing: '-0.02em' }}>
-                DFS without<br />
-                <span style={{ color: '#22c55e' }}>the complexity.</span>
+                Salary cap golf.<br />
+                <span style={{ color: '#22c55e' }}>Your budget. Your picks.</span>
               </h2>
               <p style={{ color: '#9ca3af', fontSize: 16, lineHeight: 1.7, marginBottom: 24 }}>
-                New tournament, new picks. No salary cap math, no complicated rules. Just pick your golfers and compete.
+                Each player is priced by betting odds. Build the best roster you can under the cap — then let the tournament do the rest.
               </p>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {[
-                  'Tier-based picks — Elite, Contenders, Longshots, The Field',
-                  'Real DraftKings odds shown for every player',
+                  'Player salaries set by betting odds each week',
+                  'Stay under the cap — strategy beats luck',
                   'Score based on actual tournament performance',
-                  'Start fresh every week — no season commitment',
+                  'Start fresh every tournament — no season commitment',
                   'Perfect for Masters, US Open, The Open',
                 ].map(item => (
                   <li key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, color: '#d1d5db', fontSize: 14, lineHeight: 1.5 }}>
@@ -815,7 +815,7 @@ export default function GolfLanding() {
                 to="/golf/create?format=dk"
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#22c55e', color: '#001a0d', fontWeight: 800, fontSize: 15, padding: '14px 28px', borderRadius: 999, textDecoration: 'none' }}
               >
-                Start a DFS League <ArrowRight size={16} />
+                Start a Salary Cap League <ArrowRight size={16} />
               </Link>
             </div>
             <div style={{ order: 1, background: '#060d07', border: '1px solid #0f1a10', borderRadius: 20, padding: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
@@ -1452,7 +1452,7 @@ export default function GolfLanding() {
             Invite Friends
           </div>
           <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight mb-4">
-            Forget daily fantasy.<br />Do this all season long.
+            Skip the weekly grind.<br />Do this all season long.
           </h2>
           <p className="text-gray-400 text-base leading-relaxed mb-8">
             Grab your crew and draft before the Masters.

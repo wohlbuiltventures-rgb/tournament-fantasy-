@@ -76,9 +76,9 @@ export default function RosterTab({ leagueId, league }) {
         <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-3">
           <Zap className="w-7 h-7 text-purple-400" />
         </div>
-        <h3 className="text-white font-bold mb-2">Daily Fantasy Mode</h3>
+        <h3 className="text-white font-bold mb-2">Salary Cap Mode</h3>
         <p className="text-gray-400 text-sm max-w-xs mx-auto">
-          No persistent roster in DFS mode. Set your {league.starters_per_week || 6} starters fresh each tournament from the Lineup tab.
+          No persistent roster in salary cap mode. Set your {league.starters_per_week || 6} starters fresh each tournament from the Lineup tab.
         </p>
       </div>
     );

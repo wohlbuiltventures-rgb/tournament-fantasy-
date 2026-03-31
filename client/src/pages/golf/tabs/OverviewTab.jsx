@@ -4,7 +4,7 @@ import { Button, Badge } from '../../../components/ui';
 
 const FORMAT_META = {
   pool:        { label: 'Pool',          color: 'blue'  },
-  dk:          { label: 'Daily Fantasy', color: 'purple' },
+  dk:          { label: 'Salary Cap', color: 'blue' },
   tourneyrun:  { label: 'TourneyRun',    color: 'green' },
 };
 
@@ -233,7 +233,7 @@ export default function OverviewTab({ league, members, user, isComm, navigate, p
         <div className="bg-purple-500/8 border border-purple-500/20 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <Zap className="w-4 h-4 text-purple-400" />
-            <span className="text-purple-400 font-bold text-sm">Daily Fantasy Mode</span>
+            <span className="text-blue-400 font-bold text-sm">Salary Cap Mode</span>
           </div>
           <p className="text-gray-400 text-sm mb-4">
             No draft — pick {league.starters_per_week || 6} golfers fresh each tournament with a ${(league.weekly_salary_cap || 50000).toLocaleString()} cap.

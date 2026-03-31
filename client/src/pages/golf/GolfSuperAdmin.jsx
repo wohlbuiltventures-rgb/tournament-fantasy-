@@ -114,7 +114,7 @@ function LeaguesTab() {
   }
   function formatLabel(f) {
     if (f === 'pool')        return 'Pool';
-    if (f === 'dk')          return 'DFS';
+    if (f === 'dk')          return 'Salary Cap';
     if (f === 'tourneyrun')  return 'TourneyRun';
     if (f === 'office_pool') return 'Office Pool';
     if (f === 'pickem')      return 'Pick\'em';

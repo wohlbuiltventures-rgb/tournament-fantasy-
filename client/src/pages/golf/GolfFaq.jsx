@@ -12,7 +12,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: 'How is this different from DraftKings or FanDuel golf?',
-        a: 'Daily fantasy (DFS) resets every tournament — you build a new lineup and pay an entry fee each week. TourneyRun Golf is season-long: one draft, one roster, all season. Points accumulate across every tournament your players enter. It\'s closer to a traditional fantasy baseball or football league than DFS.',
+        a: 'Salary cap sites reset every tournament — you build a new lineup and pay an entry fee each week. TourneyRun Golf is season-long: one draft, one roster, all season. Points accumulate across every tournament your players enter. It\'s closer to a traditional fantasy baseball or football league than a weekly salary cap game.',
       },
       {
         q: 'Do I need to know golf to play?',
