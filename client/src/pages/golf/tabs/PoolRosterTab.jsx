@@ -356,13 +356,16 @@ function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagu
               </div>
             )}
           </>
+        ) : ((!isCUT && !isWD && !isPending && onRemove) || (isPreTournWD && onRemove && !picksLocked)) ? (
+          <>
+            {teeTxt && <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, textAlign: 'right' }}>{teeTxt}</span>}
+            <button
+              onClick={e => { e.stopPropagation(); onRemove(); }}
+              style={{ width: 44, height: 44, background: isPreTournWD ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.06)', border: `1px solid ${isPreTournWD ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)'}`, borderRadius: '50%', cursor: 'pointer', color: isPreTournWD ? '#f87171' : '#9ca3af', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: -6 }}
+            >×</button>
+          </>
         ) : teeTxt ? (
           <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, textAlign: 'right' }}>{teeTxt}</span>
-        ) : ((!isCUT && !isWD && !isPending && onRemove) || (isPreTournWD && onRemove && !picksLocked)) ? (
-          <button
-            onClick={e => { e.stopPropagation(); onRemove(); }}
-            style={{ width: 44, height: 44, background: isPreTournWD ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.06)', border: `1px solid ${isPreTournWD ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)'}`, borderRadius: '50%', cursor: 'pointer', color: isPreTournWD ? '#f87171' : '#9ca3af', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: -6 }}
-          >×</button>
         ) : !isCUT && !isWD && !isPending ? (
           <span style={{ fontSize: 12, color: '#4b5563' }}>—</span>
         ) : null}
