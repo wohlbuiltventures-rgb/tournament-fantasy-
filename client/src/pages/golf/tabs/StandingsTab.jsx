@@ -410,7 +410,7 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
             <div style={{ width: 30, flexShrink: 0 }} />
             <div style={{ width: 32, flexShrink: 0 }} />
             <div style={{ flex: 1, color: '#4b5563', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Team</div>
-            {hasPrize && <div style={{ minWidth: 44, textAlign: 'right', color: '#4b5563', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>Prize</div>}
+            {hasPrize && <div style={{ minWidth: 44, flexShrink: 0 }} />}
             <div style={{ minWidth: 50, textAlign: 'right', color: '#4b5563', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>{isTotalStrokes ? 'Score' : 'Pts'}</div>
             <div style={{ width: 12, flexShrink: 0 }} />
           </div>

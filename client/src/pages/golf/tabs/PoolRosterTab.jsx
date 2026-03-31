@@ -529,7 +529,6 @@ export default function PoolRosterTab({ leagueId, league }) {
             <div style={{ background: 'rgba(0,232,122,0.05)', border: '1px solid rgba(0,232,122,0.15)', borderRadius: 12, padding: '12px 16px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div>
                 <div style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{tourn.name}</div>
-                <div style={{ color: '#4b5563', fontSize: 12, marginTop: 2 }}>Picks lock 1 hour before first tee time Thursday</div>
               </div>
               {lockTime && <PicksCountdown lockTime={lockTime} />}
             </div>
@@ -725,10 +724,7 @@ export default function PoolRosterTab({ leagueId, league }) {
 
             {/* ── Team running total ── */}
             {submitted && (tournStatus === 'active' || tournStatus === 'completed') && teamScore != null && (
-              <div style={{ marginTop: 16, background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(0,232,122,0.15)', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <div style={{ color: '#6b7280', fontSize: 12 }}>
-                  {dropCount > 0 ? `Best ${picksPerTeam - dropCount} of ${picksPerTeam} counting` : `All ${picksPerTeam} counting`}
-                </div>
+              <div style={{ marginTop: 16, background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(0,232,122,0.15)', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12 }}>
                 <div>
                   <span style={{ fontSize: 20, fontWeight: 900, color: teamScore < 0 ? '#22c55e' : teamScore > 0 ? '#ef4444' : '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>
                     {teamScore === 0 ? 'E' : (teamScore > 0 ? '+' : '') + teamScore}
@@ -760,8 +756,7 @@ export default function PoolRosterTab({ leagueId, league }) {
       {showConfirm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 300, padding: '0 16px 16px' }}>
           <div style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: 24, width: '100%', maxWidth: 420 }}>
-            <h3 style={{ color: '#fff', fontWeight: 800, fontSize: 18, margin: '0 0 4px' }}>Submit your picks?</h3>
-            <p style={{ color: '#6b7280', fontSize: 13, margin: '0 0 18px' }}>You can still change your picks up until 1 hour before Thursday's first tee time. After that, picks are locked for good.</p>
+            <h3 style={{ color: '#fff', fontWeight: 800, fontSize: 18, margin: '0 0 18px' }}>Submit your picks?</h3>
             <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: '12px 16px', marginBottom: 18 }}>
               {tiers.map(t => {
                 const tc = ROSTER_TIER_COLORS[t.tier] || ROSTER_TIER_COLORS[4];

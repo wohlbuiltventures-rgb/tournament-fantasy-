@@ -25,7 +25,6 @@ export default function OverviewTab({ league, members, user, isComm, navigate, p
     if (league.format_type === 'pool') return [
       { label: 'Members',         value: `${members.length}/${league.max_teams}` },
       { label: 'Picks Per Team',  value: String(league.picks_per_team || 8) },
-      { label: 'Format',          value: 'Pool' },
     ];
     if (league.format_type === 'dk') return [
       { label: 'Members',         value: `${members.length}/${league.max_teams}` },
