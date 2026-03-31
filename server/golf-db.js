@@ -1001,14 +1001,14 @@ try {
           }
           if (!_p) continue;
 
-          _insTF.run(uuidv4(), _tid, _pname, _p.id, _p.world_ranking || 200);
+          _insTF.run(uuidv4(), _tid, _pname, _p.id, _p.world_ranking || null);
 
           const _gen2 = (!_p.odds_display || !_p.odds_decimal) ? _rankToOddsLocal(_p.world_ranking || 200) : null;
           const _od2 = _p.odds_display || _gen2.odds_display;
           const _dec2 = _p.odds_decimal || _gen2.odds_decimal;
           const _tier2 = _houTiersConfig.length ? _pickTier(_dec2, _houTiersConfig) : 6;
 
-          _insTP.run(uuidv4(), _HOU_LEAGUE_ID, _tid, _p.id, _p.name, _tier2, _od2, _dec2, _p.world_ranking || 200);
+          _insTP.run(uuidv4(), _HOU_LEAGUE_ID, _tid, _p.id, _p.name, _tier2, _od2, _dec2, _p.world_ranking || null);
         }
       })();
 

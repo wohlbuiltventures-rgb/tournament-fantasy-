@@ -316,7 +316,7 @@ function _applyFieldToTournament(tourn, field) {
       let gp = dgId ? _getGP.get(dgId) : null;
       if (!gp) gp = _getGPN.get(name);
       if (!gp) {
-        _insGP.run(uuidv4(), name, country, 200, dgId || null);
+        _insGP.run(uuidv4(), name, country, null, dgId || null);
         gp = dgId ? _getGP.get(dgId) : _getGPN.get(name);
         if (gp) created++;
       }
@@ -327,7 +327,7 @@ function _applyFieldToTournament(tourn, field) {
       if (dgId)     _updDgId.run(dgId, gp.id);
 
       fieldPlayerIds.add(gp.id);
-      _insTF.run(uuidv4(), tourn.id, name, gp.id, gp.world_ranking || 200);
+      _insTF.run(uuidv4(), tourn.id, name, gp.id, gp.world_ranking || null);
       inserted++;
     }
   })();
@@ -405,7 +405,7 @@ function _applyFieldToTournament(tourn, field) {
             tierNum = t.tier; break;
           }
         }
-        insTP.run(uuidv4(), league.id, tourn.id, p.id, p.name, tierNum, odds_display, odds_decimal, p.world_ranking || 200);
+        insTP.run(uuidv4(), league.id, tourn.id, p.id, p.name, tierNum, odds_display, odds_decimal, p.world_ranking || null);
         count++;
       }
     })();

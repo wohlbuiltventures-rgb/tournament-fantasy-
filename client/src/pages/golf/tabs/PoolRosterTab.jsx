@@ -13,6 +13,19 @@ const ROSTER_TIER_COLORS = {
 };
 const TIER_NAMES_ROSTER = { 1: 'Tier 1 · Elite', 2: 'Tier 2 · Premium', 3: 'Tier 3 · Mid-Field', 4: 'Tier 4 · Longshots' };
 
+// Convert "Last, First" (DataGolf format) → "First Last"
+function flipName(name) {
+  if (!name) return name;
+  if (name.includes(',')) {
+    const [last, first] = name.split(',').map(s => s.trim());
+    return first ? `${first} ${last}` : last;
+  }
+  return name;
+}
+
+// Show world ranking only when it's a real value (not the 200 placeholder)
+function isRealRanking(r) { return r && r > 0 && r !== 200; }
+
 function fmtOdds(raw) {
   if (!raw) return '';
   return (raw + '').replace(':', '/');
@@ -106,7 +119,7 @@ function TierPickerModal({ tierNum, tierConfig, players, currentSel, onPick, onC
   }, []);
 
   const q = query.trim().toLowerCase();
-  const filtered = q ? sorted.filter(p => p.player_name.toLowerCase().includes(q)) : sorted;
+  const filtered = q ? sorted.filter(p => flipName(p.player_name).toLowerCase().includes(q) || p.player_name.toLowerCase().includes(q)) : sorted;
 
   return (
     <div
@@ -203,10 +216,10 @@ function TierPickerModal({ tierNum, tierConfig, players, currentSel, onPick, onC
                   <span style={{ fontSize: 24, lineHeight: 1, flexShrink: 0 }}>{toFlag(p.country)}</span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ color: isWDPlayer ? '#6b7280' : '#f1f5f9', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isWDPlayer ? 'line-through' : 'none' }}>{p.player_name}</span>
+                      <span style={{ color: isWDPlayer ? '#6b7280' : '#f1f5f9', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isWDPlayer ? 'line-through' : 'none' }}>{flipName(p.player_name)}</span>
                       {isWDPlayer && <span style={{ fontSize: 9, fontWeight: 700, color: '#f87171', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>WD</span>}
                     </div>
-                    {p.world_ranking && <div style={{ color: '#4b5563', fontSize: 11, marginTop: 1 }}>WR #{p.world_ranking}</div>}
+                    {isRealRanking(p.world_ranking) && <div style={{ color: '#4b5563', fontSize: 11, marginTop: 1 }}>WR #{p.world_ranking}</div>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 8 }}>
@@ -278,7 +291,7 @@ function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagu
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 700, fontSize: 14, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {pick.player_name}
+            {flipName(pick.player_name)}
           </span>
           {pick.odds_display && (
             <span style={{ fontSize: 11, color: tc.label, fontWeight: 600 }}>{fmtOdds(pick.odds_display)}</span>
@@ -295,7 +308,7 @@ function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagu
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-          {pick.world_ranking && (
+          {isRealRanking(pick.world_ranking) && (
             <span style={{ fontSize: 11, color: '#6b7280' }}>WR #{pick.world_ranking}</span>
           )}
           {isLive && hasScores && (

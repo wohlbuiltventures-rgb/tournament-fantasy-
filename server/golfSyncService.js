@@ -860,7 +860,7 @@ async function syncEspnFieldForTournament(tournamentId) {
         for (const t of tiersConfig) {
           if (odds_decimal >= _oddsToDecimal(t.odds_min) && odds_decimal <= _oddsToDecimal(t.odds_max)) { tierNum = t.tier; break; }
         }
-        insTP.run(uuidv4(), league.id, tournamentId, p.id, p.name, tierNum, odds_display, odds_decimal, p.world_ranking || 200);
+        insTP.run(uuidv4(), league.id, tournamentId, p.id, p.name, tierNum, odds_display, odds_decimal, p.world_ranking || null);
         count++;
       }
     })();

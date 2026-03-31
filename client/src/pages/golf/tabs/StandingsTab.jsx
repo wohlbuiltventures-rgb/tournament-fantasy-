@@ -3,6 +3,16 @@ import { Flag, Trophy } from 'lucide-react';
 import api from '../../../api';
 import { isStrokeBased, computeRanks, scoreColor } from './golfScoringUtils';
 
+// Convert "Last, First" (DataGolf format) → "First Last"
+function flipName(name) {
+  if (!name) return name;
+  if (name.includes(',')) {
+    const [last, first] = name.split(',').map(s => s.trim());
+    return first ? `${first} ${last}` : last;
+  }
+  return name;
+}
+
 const FORMAT_META = {
   pool:        { label: 'Pool',          color: 'blue'  },
   dk:          { label: 'Daily Fantasy', color: 'purple' },
@@ -287,7 +297,7 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
                       <div key={pi} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderTop: pi > 0 ? '1px solid rgba(255,255,255,0.03)' : 'none', opacity: isDropped ? 0.45 : 1 }}>
                         <span style={{ flex: 1, color: isDropped ? '#6b7280' : '#d1d5db', fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDropped ? 'line-through' : 'none', display: 'flex', alignItems: 'center', gap: 5 }}>
                           <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{toFlag(p.country)}</span>
-                          {p.player_name}
+                          {flipName(p.player_name)}
                         </span>
                         {isDropped && <span style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', background: 'rgba(107,114,128,0.15)', border: '1px solid rgba(107,114,128,0.3)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>DROPPED</span>}
                         {isMC && !isDropped && <span style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', background: 'rgba(107,114,128,0.15)', border: '1px solid rgba(107,114,128,0.3)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>MC</span>}

@@ -36,13 +36,23 @@ function Countdown({ lockTime }) {
   );
 }
 
+// Convert "Last, First" (DataGolf format) → "First Last"
+function flipName(name) {
+  if (!name) return name;
+  if (name.includes(',')) {
+    const [last, first] = name.split(',').map(s => s.trim());
+    return first ? `${first} ${last}` : last;
+  }
+  return name;
+}
+
 // ── Confirm modal ─────────────────────────────────────────────────────────────
 
 function ConfirmModal({ tiers, selected, names, onConfirm, onCancel, submitting }) {
   // Build flat list grouped by tier for display
   const lines = tiers.map(t => ({
     tier: t.tier,
-    players: (selected[t.tier] || []).map(pid => names[pid] || pid),
+    players: (selected[t.tier] || []).map(pid => flipName(names[pid]) || pid),
     needed: t.picks,
   }));
 
@@ -230,7 +240,7 @@ function TieredPickSheet({ tiers, selected, names, onToggle }) {
                         {isSelected && <Check className="w-3 h-3 text-white" />}
                       </div>
                       <span className={`text-sm font-semibold truncate ${isSelected ? 'text-white' : 'text-gray-300'}`}>
-                        {p.player_name}
+                        {flipName(p.player_name)}
                       </span>
                     </div>
                     <span className={`text-xs shrink-0 ml-2 tabular-nums ${isSelected ? 'text-green-300' : 'text-gray-500'}`}>

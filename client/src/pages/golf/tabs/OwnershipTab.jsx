@@ -13,6 +13,16 @@ const toFlag = code => {
   return code.toUpperCase().replace(/./g, c => String.fromCodePoint(c.charCodeAt(0) + 127397));
 };
 
+// Convert "Last, First" (DataGolf format) → "First Last"
+function flipName(name) {
+  if (!name) return name;
+  if (name.includes(',')) {
+    const [last, first] = name.split(',').map(s => s.trim());
+    return first ? `${first} ${last}` : last;
+  }
+  return name;
+}
+
 export default function OwnershipTab({ leagueId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +103,7 @@ export default function OwnershipTab({ leagueId }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{toFlag(p.country)}</span>
                   <span style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.player_name}
+                    {flipName(p.player_name)}
                   </span>
                 </div>
                 <div style={{ marginTop: 4, height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.06)' }}>

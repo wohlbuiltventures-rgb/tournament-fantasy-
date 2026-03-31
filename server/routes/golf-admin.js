@@ -1053,7 +1053,7 @@ router.post('/admin/dev/sync-espn-field', superadmin, async (req, res) => {
           for (const t of tiersConfig) {
             if (odds_decimal >= _oddsToDecimal(t.odds_min) && odds_decimal <= _oddsToDecimal(t.odds_max)) { tierNum = t.tier; break; }
           }
-          insTP.run(uuidv4(), league.id, tournament_id, p.id, p.name, tierNum, odds_display, odds_decimal, p.world_ranking || 200);
+          insTP.run(uuidv4(), league.id, tournament_id, p.id, p.name, tierNum, odds_display, odds_decimal, p.world_ranking || null);
           count++;
         }
       })();
@@ -1497,6 +1497,77 @@ router.post('/admin/dev/sync-datagolf-odds-tiers', superadmin, async (req, res) 
   } catch (err) {
     console.error('[admin] sync-datagolf-odds-tiers error:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /admin/dev/datagolf-odds-test ─────────────────────────────────────────
+// Diagnostic: calls DataGolf outrights endpoint live, returns first 5 players
+// + specific search for Fleetwood/Morikawa/Spieth/Henley/Matsuyama.
+router.get('/admin/dev/datagolf-odds-test', superadmin, async (req, res) => {
+  const key = process.env.DATAGOLF_API_KEY;
+  if (!key) return res.json({ ok: false, error: 'DATAGOLF_API_KEY not set in environment' });
+
+  const https = require('https');
+  const url = `https://feeds.datagolf.com/betting-tools/outrights?tour=pga&market=win&odds_format=american&key=${key}`;
+
+  try {
+    const raw = await new Promise((resolve, reject) => {
+      const req = https.get(url, { headers: { Accept: 'application/json' }, timeout: 15000 }, r => {
+        let body = '';
+        r.on('data', c => body += c);
+        r.on('end', () => {
+          try { resolve({ status: r.statusCode, body: JSON.parse(body) }); }
+          catch { resolve({ status: r.statusCode, body: body.slice(0, 500) }); }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    });
+
+    if (raw.status !== 200) {
+      return res.json({ ok: false, http_status: raw.status, body: raw.body });
+    }
+
+    const data = raw.body;
+    const players = Array.isArray(data) ? data : (data.odds || data.players || data.data || []);
+    const eventName = data.event_name || data.tour_event || '(unknown)';
+
+    // First 5 players
+    const first5 = players.slice(0, 5).map(p => ({
+      name: p.player_name,
+      dg_id: p.dg_id,
+      draftkings: p.draftkings,
+      fanduel: p.fanduel,
+      betmgm: p.betmgm,
+    }));
+
+    // Search for specific players
+    const SEARCH = ['fleetwood', 'morikawa', 'spieth', 'henley', 'matsuyama', 'min woo', 'gotterup', 'knapp'];
+    const found = players
+      .filter(p => SEARCH.some(s => (p.player_name || '').toLowerCase().includes(s)))
+      .map(p => ({
+        name: p.player_name,
+        dg_id: p.dg_id,
+        draftkings: p.draftkings,
+        fanduel: p.fanduel,
+        betmgm: p.betmgm,
+        caesars: p.caesars,
+      }));
+
+    // Sample raw keys from first player so we can see field names
+    const sampleKeys = players[0] ? Object.keys(players[0]) : [];
+
+    res.json({
+      ok: true,
+      http_status: raw.status,
+      event_name: eventName,
+      total_players: players.length,
+      sample_keys: sampleKeys,
+      first_5: first5,
+      searched_players: found,
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

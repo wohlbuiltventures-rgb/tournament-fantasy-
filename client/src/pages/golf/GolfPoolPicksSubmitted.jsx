@@ -4,6 +4,16 @@ import { Check, Trophy, Lock, ArrowLeft } from 'lucide-react';
 import api from '../../api';
 import { useDocTitle } from '../../hooks/useDocTitle';
 
+// Convert "Last, First" (DataGolf format) → "First Last"
+function flipName(name) {
+  if (!name) return name;
+  if (name.includes(',')) {
+    const [last, first] = name.split(',').map(s => s.trim());
+    return first ? `${first} ${last}` : last;
+  }
+  return name;
+}
+
 // ── Countdown to tournament start ─────────────────────────────────────────────
 
 function Countdown({ targetDate }) {
@@ -148,7 +158,7 @@ export default function GolfPoolPicksSubmitted() {
               <p className="text-gray-500 text-sm px-5 py-4 text-center">No picks on file.</p>
             ) : picks.map((p, i) => (
               <div key={i} className="flex items-center justify-between px-5 py-3">
-                <span className="text-gray-200 text-sm font-medium">{p.player_name}</span>
+                <span className="text-gray-200 text-sm font-medium">{flipName(p.player_name)}</span>
                 {p.salary_used ? (
                   <span className="text-gray-500 text-xs">${p.salary_used.toLocaleString()}</span>
                 ) : null}
@@ -172,7 +182,7 @@ export default function GolfPoolPicksSubmitted() {
                     <div className="w-5 h-5 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center shrink-0">
                       <Check className="w-3 h-3 text-green-400" />
                     </div>
-                    <span className="text-gray-200 text-sm font-medium">{p.player_name}</span>
+                    <span className="text-gray-200 text-sm font-medium">{flipName(p.player_name)}</span>
                   </div>
                   {p.odds_display ? (
                     <span className="text-gray-500 text-xs">{p.odds_display}</span>
