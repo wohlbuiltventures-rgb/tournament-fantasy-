@@ -162,8 +162,19 @@ router.post('/leagues/:id/assign-tiers', authMiddleware, (req, res) => {
     try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
     if (!tiersConfig.length) return res.status(400).json({ error: 'No tier config. Configure tiers on league creation.' });
 
-    // Save tournament selection on league
-    try { db.prepare('UPDATE golf_leagues SET pool_tournament_id = ? WHERE id = ?').run(tournament_id, league.id); } catch (_) {}
+    // Save tournament selection on league and reset all per-tournament state so each
+    // new event starts fresh: picks window open, drops not yet applied.
+    const isSameTournament = league.pool_tournament_id === tournament_id;
+    try {
+      db.prepare(`
+        UPDATE golf_leagues
+        SET pool_tournament_id = ?,
+            picks_locked       = CASE WHEN ? THEN picks_locked ELSE 0 END,
+            picks_lock_time    = CASE WHEN ? THEN picks_lock_time ELSE NULL END,
+            pool_drops_applied = CASE WHEN ? THEN pool_drops_applied ELSE 0 END
+        WHERE id = ?
+      `).run(tournament_id, isSameTournament ? 1 : 0, isSameTournament ? 1 : 0, isSameTournament ? 1 : 0, league.id);
+    } catch (_) {}
 
     // Clear non-manually-overridden assignments for this tournament
     db.prepare('DELETE FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND manually_overridden = 0').run(league.id, tournament_id);
