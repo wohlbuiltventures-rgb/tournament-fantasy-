@@ -358,7 +358,7 @@ function PlayerCard({ pick, tier, idx, tournStatus, picksLocked, navigate, leagu
               </div>
             )}
           </>
-        ) : ((!isCUT && !isWD && !isPending && onRemove) || (isPreTournWD && onRemove && !picksLocked)) ? (
+        ) : ((!isCUT && !isWD && onRemove) || (isPreTournWD && onRemove && !picksLocked)) ? (
           <>
             {teeTxt && <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, textAlign: 'right' }}>{teeTxt}</span>}
             <button
