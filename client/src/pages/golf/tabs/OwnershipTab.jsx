@@ -50,7 +50,7 @@ export default function OwnershipTab({ leagueId }) {
         </div>
         <h3 style={{ color: '#fff', fontWeight: 800, fontSize: 18, margin: '0 0 8px' }}>Picks are hidden</h3>
         <p style={{ color: '#6b7280', fontSize: 13, maxWidth: 300, margin: '0 auto' }}>
-          Ownership data is revealed once picks lock 1 hour before Thursday&apos;s first tee time. This prevents teams from gaining an unfair advantage.
+          Picks are hidden — check back once the tournament is live.
         </p>
       </div>
     );

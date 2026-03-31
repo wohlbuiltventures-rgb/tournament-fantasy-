@@ -400,7 +400,7 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
         {!picksRevealed && (
           <div style={{ background: 'rgba(107,114,128,0.08)', border: '1px solid rgba(107,114,128,0.2)', borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 13 }}>🔒</span>
-            <span style={{ color: '#6b7280', fontSize: 12 }}>Other teams&apos; picks are hidden until picks lock 1 hour before Thursday tee time. You can expand your own row to see your picks.</span>
+            <span style={{ color: '#6b7280', fontSize: 12 }}>Other teams&apos; picks are hidden — check back once the tournament is live. You can expand your own row to see your picks.</span>
           </div>
         )}
 
