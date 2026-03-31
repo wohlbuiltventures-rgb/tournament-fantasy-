@@ -654,9 +654,6 @@ export default function CreateGolfLeague() {
                   <span className={`font-black text-sm sm:text-base ${format === f.key ? 'text-white' : 'text-gray-300'}`}>
                     {f.title}
                   </span>
-                  <span className={`inline-block border px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${f.badgeColor}`}>
-                    {f.badge}
-                  </span>
                   {f.recommended && (
                     <span className="inline-block bg-green-500/20 border border-green-500/30 text-green-400 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide">
                       Season Long Fantasy
