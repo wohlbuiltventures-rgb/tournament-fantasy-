@@ -261,15 +261,15 @@ router.post('/leagues', authMiddleware, (req, res) => {
     const p3 = Math.max(0, parseInt(payout_third) || 0);
     if (p1 + p2 + p3 > 100) return res.status(400).json({ error: 'Payouts exceed 100%' });
 
-    const fmt = ['pool', 'dk', 'tourneyrun'].includes(format_type) ? format_type : 'tourneyrun';
+    const fmt = ['pool', 'salary_cap', 'tourneyrun'].includes(format_type) ? format_type : 'tourneyrun';
 
     // Derive roster_size and starters_per_week from format
     let roster_size, starters_per_week;
     if (fmt === 'pool') {
       roster_size = Math.min(16, Math.max(4, parseInt(picks_per_team) || 8));
       starters_per_week = roster_size;
-    } else if (fmt === 'dk') {
-      roster_size = Math.min(10, Math.max(4, parseInt(starters_count) || 6));
+    } else if (fmt === 'salary_cap') {
+      roster_size = Math.min(20, Math.max(3, parseInt(starters_count) || 6));
       starters_per_week = roster_size;
     } else {
       const cs = Math.max(1, parseInt(core_spots) || 4);
@@ -341,6 +341,15 @@ router.post('/leagues', authMiddleware, (req, res) => {
       } catch (_) {}
     }
 
+    // Seed a single flat tier for salary_cap leagues so my-roster returns players
+    if (fmt === 'salary_cap') {
+      try {
+        const startersCount = Math.min(20, Math.max(3, parseInt(starters_count) || 6));
+        db.prepare(`INSERT OR IGNORE INTO pool_tiers (id, league_id, tier_number, odds_min, odds_max, picks_allowed) VALUES (?, ?, 1, '', '', ?)`)
+          .run(uuidv4(), id, startersCount);
+      } catch (_) {}
+    }
+
     const memberId = uuidv4();
     db.prepare(`INSERT INTO golf_league_members (id, golf_league_id, user_id, team_name, season_budget) VALUES (?, ?, ?, ?, ?)`).run(memberId, id, req.user.id, team_name, parseInt(salary_cap) || 2400);
 
@@ -409,7 +418,7 @@ router.get('/leagues/my-rosters', authMiddleware, (req, res) => {
       JOIN golf_league_members glm ON glm.golf_league_id = gl.id AND glm.user_id = ?
       LEFT JOIN pool_picks pp ON pp.league_id = gl.id AND pp.user_id = ?
         AND pp.tournament_id = gl.pool_tournament_id
-      WHERE gl.format_type = 'pool' AND gl.pool_tournament_id IS NOT NULL
+      WHERE gl.format_type IN ('pool', 'salary_cap') AND gl.pool_tournament_id IS NOT NULL
       GROUP BY gl.id
     `).all(req.user.id, req.user.id);
     const result = {};
@@ -451,8 +460,8 @@ router.get('/leagues/:id/standings', authMiddleware, (req, res) => {
     if (!league) return res.status(404).json({ error: 'Not found' });
     if (!getMember(req.params.id, req.user.id) && league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Not a member' });
 
-    // ── Pool format: rank by pool_picks × golf_scores ─────────────────────────
-    if (league.format_type === 'pool') {
+    // ── Pool / Salary Cap format: rank by pool_picks × golf_scores ───────────
+    if (['pool', 'salary_cap'].includes(league.format_type)) {
       const tid = league.pool_tournament_id || null;
       const tourn = tid ? db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tid) : null;
       const members = db.prepare(`
@@ -620,9 +629,9 @@ router.get('/leagues/:id/pga-live', authMiddleware, async (req, res) => {
       db.prepare("SELECT id FROM golf_tournaments WHERE status='active' ORDER BY start_date ASC LIMIT 1").get()?.id;
     const tourn = tid ? db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tid) : null;
 
-    // Picks for the current user (pool format)
+    // Picks for the current user (pool / salary_cap format)
     let myPickNames = [];
-    if (league.format_type === 'pool' && tid) {
+    if (['pool', 'salary_cap'].includes(league.format_type) && tid) {
       myPickNames = db.prepare(`
         SELECT pl.name as player_name
         FROM pool_picks pp JOIN golf_players pl ON pl.id = pp.player_id
@@ -1269,7 +1278,8 @@ router.patch('/leagues/:id/settings', authMiddleware, (req, res) => {
     if (!league) return res.status(404).json({ error: 'League not found' });
     if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Not commissioner' });
 
-    const { buy_in_amount, payout_1st, payout_2nd, payout_3rd, venmo, zelle, paypal, pool_drop_count, pool_tiers, picks_per_team } = req.body;
+    const { buy_in_amount, payout_1st, payout_2nd, payout_3rd, venmo, zelle, paypal, pool_drop_count, pool_tiers, picks_per_team,
+            weekly_salary_cap, starters_per_week, scoring_style } = req.body;
 
     // Payout settings — only if provided
     if (payout_1st !== undefined) {
@@ -1302,6 +1312,23 @@ router.patch('/leagues/:id/settings', authMiddleware, (req, res) => {
         return { ...ex, ...incoming, picks: Math.max(1, parseInt(incoming.picks) || 1) };
       });
       db.prepare('UPDATE golf_leagues SET pool_tiers = ? WHERE id = ?').run(JSON.stringify(merged), req.params.id);
+    }
+
+    // Salary cap-specific settings
+    if (league.format_type === 'salary_cap') {
+      if (weekly_salary_cap !== undefined) {
+        const cap = Math.max(10000, Math.min(500000, parseInt(weekly_salary_cap) || 50000));
+        db.prepare('UPDATE golf_leagues SET weekly_salary_cap = ?, pool_salary_cap = ? WHERE id = ?').run(cap, cap, req.params.id);
+      }
+      if (starters_per_week !== undefined) {
+        const sp = Math.max(3, Math.min(20, parseInt(starters_per_week) || 6));
+        db.prepare('UPDATE golf_leagues SET starters_per_week = ?, roster_size = ? WHERE id = ?').run(sp, sp, req.params.id);
+      }
+      if (scoring_style !== undefined) {
+        const validStyles = ['tourneyrun', 'total_score', 'stroke_play'];
+        const ss = validStyles.includes(scoring_style) ? scoring_style : 'tourneyrun';
+        db.prepare('UPDATE golf_leagues SET scoring_style = ? WHERE id = ?').run(ss, req.params.id);
+      }
     }
 
     // Payment methods — saved independently, no payout validation needed

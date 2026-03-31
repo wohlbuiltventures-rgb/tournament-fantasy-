@@ -806,7 +806,7 @@ router.post('/admin/dev/sync-pool-tiers', superadmin, (req, res) => {
       : '';
     const args = req.body.league_id ? [req.body.league_id] : [];
     const leagues = db.prepare(
-      `SELECT * FROM golf_leagues WHERE format_type = 'pool' AND pool_tournament_id IS NOT NULL AND status != 'archived' ${filter}`
+      `SELECT * FROM golf_leagues WHERE format_type IN ('pool', 'salary_cap') AND pool_tournament_id IS NOT NULL AND status != 'archived' ${filter}`
     ).all(...args);
 
     if (!leagues.length) return res.status(404).json({ error: 'No matching pool leagues with tournament assigned' });
@@ -1021,7 +1021,7 @@ router.post('/admin/dev/sync-espn-field', superadmin, async (req, res) => {
 
     // ── Step 4: Rebuild pool_tier_players (now with updated odds) ─────────────
     const affectedLeagues = db.prepare(
-      "SELECT * FROM golf_leagues WHERE format_type = 'pool' AND pool_tournament_id = ? AND status != 'archived'"
+      "SELECT * FROM golf_leagues WHERE format_type IN ('pool', 'salary_cap') AND pool_tournament_id = ? AND status != 'archived'"
     ).all(tournament_id);
 
     const rebuildResults = [];
@@ -1500,6 +1500,25 @@ router.post('/admin/dev/sync-datagolf-odds-tiers', superadmin, async (req, res) 
     res.json({ ok: true, ...result });
   } catch (err) {
     console.error('[admin] sync-datagolf-odds-tiers error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /admin/dev/assign-salary-cap-salaries ────────────────────────────────
+// Manual trigger: assign odds-based salaries to pool_tier_players for all (or one)
+// salary_cap leagues that have a tournament linked.
+router.post('/admin/dev/assign-salary-cap-salaries', superadmin, (req, res) => {
+  try {
+    const { assignSalaryCapSalaries } = require('./golf-pool');
+    const filter = req.body.league_id ? 'AND id = ?' : '';
+    const args   = req.body.league_id ? [req.body.league_id] : [];
+    const leagues = db.prepare(
+      `SELECT id FROM golf_leagues WHERE format_type = 'salary_cap' AND pool_tournament_id IS NOT NULL AND status != 'archived' ${filter}`
+    ).all(...args);
+    const results = leagues.map(l => ({ league_id: l.id, ...assignSalaryCapSalaries(l.id) }));
+    res.json({ ok: true, results });
+  } catch (err) {
+    console.error('[admin] assign-salary-cap-salaries error:', err);
     res.status(500).json({ error: err.message });
   }
 });

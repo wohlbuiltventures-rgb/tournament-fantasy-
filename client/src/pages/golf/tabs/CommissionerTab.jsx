@@ -361,6 +361,11 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   const [upgrading, setUpgrading]   = useState(false);
   const [upgradeError, setUpgradeError] = useState('');
 
+  // Salary cap settings
+  const [scCap,          setScCap]          = useState(String(league?.weekly_salary_cap ?? 50000));
+  const [scStarters,     setScStarters]     = useState(String(league?.starters_per_week ?? league?.roster_size ?? 6));
+  const [scScoringStyle, setScScoringStyle] = useState(league?.scoring_style ?? 'tourneyrun');
+
   // Pool settings
   const [buyIn,   setBuyIn]   = useState(String(league?.buy_in_amount  ?? 0));
   const [payout1, setPayout1] = useState(String(league?.payout_first   ?? 70));
@@ -540,14 +545,22 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
     try {
       // Merge updated picks counts back into tier config JSON
       const updatedTiers = tierPicksCfg.map(t => ({ ...t }));
+      const isSalaryCap = league?.format_type === 'salary_cap';
       await api.patch(`/golf/leagues/${leagueId}/settings`, {
         buy_in_amount: parseFloat(buyIn) || 0,
         payout_1st: parseFloat(payout1) || 0,
         payout_2nd: parseFloat(payout2) || 0,
         payout_3rd: parseFloat(payout3) || 0,
-        picks_per_team: Math.max(1, parseInt(picksPerTeam) || 8),
-        pool_drop_count: Math.max(0, parseInt(dropCount) || 0),
-        pool_tiers: updatedTiers.length ? updatedTiers : undefined,
+        ...(!isSalaryCap && {
+          picks_per_team: Math.max(1, parseInt(picksPerTeam) || 8),
+          pool_drop_count: Math.max(0, parseInt(dropCount) || 0),
+          pool_tiers: updatedTiers.length ? updatedTiers : undefined,
+        }),
+        ...(isSalaryCap && {
+          weekly_salary_cap: Math.max(10000, Math.min(500000, parseInt(scCap) || 50000)),
+          starters_per_week: Math.max(3, Math.min(20, parseInt(scStarters) || 6)),
+          scoring_style: scScoringStyle,
+        }),
       });
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 3000);
@@ -892,6 +905,123 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                 </button>
                 {settingsSaved  && <span style={{ color: '#4ade80', fontSize: 13 }}>✓ Saved</span>}
                 {settingsError  && <span style={{ color: '#f87171', fontSize: 13 }}>{settingsError}</span>}
+              </div>
+            </div>
+          )}
+
+          {/* ── Edit Salary Cap Settings ── */}
+          {league?.format_type === 'salary_cap' && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+              <h4 className="text-white text-sm font-bold mb-3">💰 Edit Salary Cap Settings</h4>
+              <div className="space-y-4">
+
+                {/* Weekly cap */}
+                <div>
+                  <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">
+                    Weekly Salary Cap ($)
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                    {[25000, 50000, 75000, 100000].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setScCap(String(n))}
+                        style={{
+                          padding: '5px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                          border: `1.5px solid ${scCap === String(n) ? '#22c55e' : 'rgba(255,255,255,0.1)'}`,
+                          background: scCap === String(n) ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.03)',
+                          color: scCap === String(n) ? '#22c55e' : '#9ca3af',
+                          cursor: 'pointer',
+                        }}
+                      >${(n / 1000).toFixed(0)}k</button>
+                    ))}
+                    <input
+                      type="number" min="10000" max="500000" step="1000"
+                      placeholder="Custom"
+                      value={[25000, 50000, 75000, 100000].includes(parseInt(scCap)) ? '' : scCap}
+                      onChange={e => { if (e.target.value) setScCap(e.target.value); }}
+                      className="input text-sm text-center"
+                      style={{ width: 90 }}
+                    />
+                  </div>
+                </div>
+
+                {/* Players per team */}
+                <div>
+                  <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">
+                    Players Per Team
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {[4, 5, 6, 7, 8].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setScStarters(String(n))}
+                        style={{
+                          padding: '5px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                          border: `1.5px solid ${scStarters === String(n) ? '#22c55e' : 'rgba(255,255,255,0.1)'}`,
+                          background: scStarters === String(n) ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.03)',
+                          color: scStarters === String(n) ? '#22c55e' : '#9ca3af',
+                          cursor: 'pointer',
+                        }}
+                      >{n}</button>
+                    ))}
+                    <input
+                      type="number" min="3" max="20" step="1"
+                      placeholder="Custom"
+                      value={[4,5,6,7,8].includes(parseInt(scStarters)) ? '' : scStarters}
+                      onChange={e => { if (e.target.value) setScStarters(e.target.value); }}
+                      className="input text-sm text-center"
+                      style={{ width: 72 }}
+                    />
+                  </div>
+                </div>
+
+                {/* Scoring style */}
+                <div>
+                  <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">
+                    Scoring Style
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {[
+                      { value: 'tourneyrun', label: 'TourneyRun' },
+                      { value: 'stroke_play', label: 'Stroke Play' },
+                      { value: 'total_score', label: 'Total Score' },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setScScoringStyle(opt.value)}
+                        style={{
+                          padding: '5px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                          border: `1.5px solid ${scScoringStyle === opt.value ? '#22c55e' : 'rgba(255,255,255,0.1)'}`,
+                          background: scScoringStyle === opt.value ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.03)',
+                          color: scScoringStyle === opt.value ? '#22c55e' : '#9ca3af',
+                          cursor: 'pointer',
+                        }}
+                      >{opt.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Buy-in */}
+                <div>
+                  <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">Buy-in per player ($)</label>
+                  <input type="number" min="0" step="0.01" value={buyIn} onChange={e => setBuyIn(e.target.value)} className="input w-32 text-sm" />
+                </div>
+
+              </div>
+
+              <div className="flex items-center gap-3 mt-4">
+                <button
+                  disabled={settingsSaving}
+                  onClick={saveSettings}
+                  className="text-sm bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  {settingsSaving ? 'Saving…' : 'Save settings'}
+                </button>
+                {settingsSaved && <span style={{ color: '#4ade80', fontSize: 13 }}>✓ Saved</span>}
+                {settingsError && <span style={{ color: '#f87171', fontSize: 13 }}>{settingsError}</span>}
               </div>
             </div>
           )}

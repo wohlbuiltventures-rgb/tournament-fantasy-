@@ -114,7 +114,7 @@ function LeaguesTab() {
   }
   function formatLabel(f) {
     if (f === 'pool')        return 'Pool';
-    if (f === 'dk')          return 'Salary Cap';
+    if (f === 'salary_cap')  return 'Salary Cap';
     if (f === 'tourneyrun')  return 'TourneyRun';
     if (f === 'office_pool') return 'Office Pool';
     if (f === 'pickem')      return 'Pick\'em';
@@ -122,7 +122,7 @@ function LeaguesTab() {
   }
   function formatColor(f) {
     if (f === 'pool') return 'green';
-    if (f === 'dk')   return 'purple';
+    if (f === 'salary_cap') return 'purple';
     return 'blue';
   }
 

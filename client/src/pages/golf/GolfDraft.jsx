@@ -42,9 +42,9 @@ export default function GolfDraft() {
     try {
       const r = await api.get(`/golf/leagues/${id}/draft`);
       setState(r.data);
-      // DK mode has no draft — redirect to lineup tab
-      if (r.data?.league?.format_type === 'dk') {
-        navigate(`/golf/league/${id}?tab=lineup`, { replace: true });
+      // Salary cap mode has no draft — redirect to picks tab
+      if (r.data?.league?.format_type === 'salary_cap') {
+        navigate(`/golf/league/${id}?tab=picks`, { replace: true });
       }
       // Auction draft type — redirect to auction page
       if (r.data?.league?.draft_type === 'auction') {

@@ -26,10 +26,10 @@ export default function OverviewTab({ league, members, user, isComm, navigate, p
       { label: 'Members',         value: `${members.length}/${league.max_teams}` },
       { label: 'Picks Per Team',  value: String(league.picks_per_team || 8) },
     ];
-    if (league.format_type === 'dk') return [
+    if (league.format_type === 'salary_cap') return [
       { label: 'Members',         value: `${members.length}/${league.max_teams}` },
       { label: 'Weekly Cap',      value: `$${(league.weekly_salary_cap || 50000).toLocaleString()}` },
-      { label: 'Starters / Wk',   value: String(league.starters_per_week || 6) },
+      { label: 'Starters / Wk',   value: String(league.starters_per_week || league.roster_size || 6) },
     ];
     // tourneyrun default
     return [
@@ -228,8 +228,8 @@ export default function OverviewTab({ league, members, user, isComm, navigate, p
       )}
 
 
-      {/* DK mode: no draft, direct to lineup */}
-      {league.format_type === 'dk' && (
+      {/* Salary cap mode: no draft, direct to picks */}
+      {league.format_type === 'salary_cap' && (
         <div className="bg-purple-500/8 border border-purple-500/20 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <Zap className="w-4 h-4 text-purple-400" />
@@ -243,7 +243,7 @@ export default function OverviewTab({ league, members, user, isComm, navigate, p
             color="purple"
             size="lg"
             fullWidth
-            onClick={() => navigate(`/golf/league/${league.id}?tab=lineup`)}
+            onClick={() => navigate(`/golf/league/${league.id}?tab=picks`)}
           >
             Set This Week's Lineup →
           </Button>

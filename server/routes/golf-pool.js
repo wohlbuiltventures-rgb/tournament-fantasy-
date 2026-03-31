@@ -58,34 +58,76 @@ function golfPoolTierSizes(total, tierCount) {
   return Array.from({ length: tierCount }, (_, i) => base + (i < rem ? 1 : 0));
 }
 
-function calculatePlayerSalary({ world_ranking, odds_decimal, recent_form = [], course_history = null }) {
-  const r = world_ranking || 9999;
-  let base;
-  if      (r <= 5)   base = 11500;
-  else if (r <= 10)  base = 10500;
-  else if (r <= 20)  base = 9500;
-  else if (r <= 35)  base = 8500;
-  else if (r <= 60)  base = 7500;
-  else if (r <= 100) base = 6500;
-  else               base = 5500;
+// Salary derived from American betting odds, scaled to the league's weekly cap.
+// Base scale assumes $50,000 cap; other caps scale proportionally.
+function calculatePlayerSalary({ world_ranking, odds_decimal, recent_form = [], course_history = null, weekly_salary_cap = 50000 }) {
+  return calculatePlayerSalaryFromOdds(null, weekly_salary_cap, { world_ranking, odds_decimal });
+}
 
-  let adj = 0;
-  const validFinishes = (recent_form || []).filter(f => f != null && f > 0);
-  if (validFinishes.length > 0) {
-    const avg = validFinishes.reduce((s, f) => s + f, 0) / validFinishes.length;
-    if (avg < 10)      adj += 500;
-    else if (avg < 25) adj += 250;
-    else if (avg > 50) adj -= 250;
-  }
-  if (course_history && course_history > 0) {
-    if      (course_history <= 5)  adj += 500;
-    else if (course_history <= 10) adj += 250;
-  }
-  const dec = odds_decimal || 999;
-  if      (dec < 10)  adj += 500;
-  else if (dec > 100) adj -= 500;
+function calculatePlayerSalaryFromOdds(americanOdds, weeklySalaryCap = 50000, fallback = {}) {
+  const cap = weeklySalaryCap || 50000;
+  const scale = cap / 50000;
 
-  return Math.max(4500, Math.min(12500, Math.round((base + adj) / 100) * 100));
+  let baseSalary;
+  if (americanOdds === null || americanOdds === undefined) {
+    // Fall back to world ranking if no odds provided
+    const r = fallback.world_ranking || 9999;
+    if      (r <= 10)  baseSalary = 9500;
+    else if (r <= 30)  baseSalary = 8000;
+    else if (r <= 75)  baseSalary = 6500;
+    else               baseSalary = 5000;
+  } else if (americanOdds < 2000) {
+    const t = (americanOdds - 100) / 1900;
+    baseSalary = Math.round(10000 - t * 1000);
+  } else if (americanOdds < 4000) {
+    const t = (americanOdds - 2000) / 2000;
+    baseSalary = Math.round(8500 - t * 1000);
+  } else if (americanOdds < 8000) {
+    const t = (americanOdds - 4000) / 4000;
+    baseSalary = Math.round(7000 - t * 1000);
+  } else {
+    const t = Math.min(1, (americanOdds - 8000) / 12000);
+    baseSalary = Math.round(5500 - t * 1000);
+  }
+
+  const scaled = Math.round((baseSalary * scale) / 100) * 100;
+  return Math.max(Math.round(4500 * scale / 100) * 100, scaled);
+}
+
+// Assign salaries to all pool_tier_players rows for a given salary_cap league.
+function assignSalaryCapSalaries(leagueId) {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(leagueId);
+    if (!league || league.format_type !== 'salary_cap') return { updated: 0 };
+    const cap = league.weekly_salary_cap || 50000;
+    const tid = league.pool_tournament_id;
+    if (!tid) return { updated: 0 };
+
+    const players = db.prepare(
+      'SELECT ptp.id, ptp.player_id, ptp.odds_decimal, gp.world_ranking FROM pool_tier_players ptp LEFT JOIN golf_players gp ON gp.id = ptp.player_id WHERE ptp.league_id = ? AND ptp.tournament_id = ?'
+    ).all(leagueId, tid);
+
+    const upd = db.prepare('UPDATE pool_tier_players SET salary = ? WHERE id = ?');
+    let updated = 0;
+    db.transaction(() => {
+      for (const row of players) {
+        // Convert decimal odds to American for the salary function
+        let american = null;
+        if (row.odds_decimal && row.odds_decimal > 1) {
+          american = row.odds_decimal >= 2
+            ? Math.round((row.odds_decimal - 1) * 100)
+            : Math.round(-100 / (row.odds_decimal - 1));
+        }
+        const salary = calculatePlayerSalaryFromOdds(american, cap, { world_ranking: row.world_ranking });
+        upd.run(salary, row.id);
+        updated++;
+      }
+    })();
+    return { updated };
+  } catch (err) {
+    console.error('[golf-pool] assignSalaryCapSalaries error:', err);
+    return { updated: 0, error: err.message };
+  }
 }
 
 function assignPlayerToTier(odds_decimal, tiersConfig) {
@@ -152,7 +194,7 @@ router.post('/leagues/:id/assign-tiers', authMiddleware, (req, res) => {
     const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
     if (!league) return res.status(404).json({ error: 'League not found' });
     if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
-    if (league.format_type !== 'pool') return res.status(400).json({ error: 'Pool leagues only' });
+    if (!['pool', 'salary_cap'].includes(league.format_type)) return res.status(400).json({ error: 'Pool or salary cap leagues only' });
 
     const { tournament_id } = req.body;
     if (!tournament_id) return res.status(400).json({ error: 'tournament_id required' });
@@ -161,6 +203,11 @@ router.post('/leagues/:id/assign-tiers', authMiddleware, (req, res) => {
 
     let tiersConfig = [];
     try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
+
+    // Salary cap leagues have a single flat tier seeded at creation
+    if (!tiersConfig.length && league.format_type === 'salary_cap') {
+      tiersConfig = [{ tier: 1, odds_min: '', odds_max: '', picks: league.starters_per_week || league.roster_size || 6 }];
+    }
     if (!tiersConfig.length) return res.status(400).json({ error: 'No tier config. Configure tiers on league creation.' });
 
     // Save tournament selection on league and reset all per-tournament state so each
@@ -187,7 +234,7 @@ router.post('/leagues/:id/assign-tiers', authMiddleware, (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `);
 
-    const isSalaryCap = league.pick_sheet_format === 'salary_cap';
+    const isSalaryCap = league.format_type === 'salary_cap';
     const tierMap = {};
 
     const players = db.prepare('SELECT * FROM golf_players WHERE is_active = 1 ORDER BY world_ranking ASC').all();
@@ -222,6 +269,11 @@ router.post('/leagues/:id/assign-tiers', authMiddleware, (req, res) => {
       tier: t.tier, odds_min: t.odds_min, odds_max: t.odds_max, picks: t.picks,
       players: (tierMap[t.tier] || []).sort((a, b) => a.world_ranking - b.world_ranking),
     }));
+
+    // For salary_cap leagues, assign salaries from odds now that players are seeded
+    if (league.format_type === 'salary_cap') {
+      assignSalaryCapSalaries(league.id);
+    }
 
     res.json({ ok: true, tournament_id, tiers });
   } catch (err) {
@@ -395,27 +447,34 @@ router.post('/leagues/:id/picks', authMiddleware, (req, res) => {
       return res.status(403).json({ error: 'Picks are locked — tee time has passed.' });
     }
 
-    // Validate picks vs tier config
-    let tiersConfig = [];
-    try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
+    // Validate picks vs tier config (pool only — salary_cap uses budget check instead)
+    if (league.format_type !== 'salary_cap') {
+      let tiersConfig = [];
+      try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
 
-    if (tiersConfig.length > 0) {
-      for (const t of tiersConfig) {
-        const tierPicks = picks.filter(p => p.tier_number === t.tier);
-        if (tierPicks.length !== t.picks) {
-          return res.status(400).json({ error: `Tier ${t.tier} requires exactly ${t.picks} pick(s), got ${tierPicks.length}.` });
+      if (tiersConfig.length > 0) {
+        for (const t of tiersConfig) {
+          const tierPicks = picks.filter(p => p.tier_number === t.tier);
+          if (tierPicks.length !== t.picks) {
+            return res.status(400).json({ error: `Tier ${t.tier} requires exactly ${t.picks} pick(s), got ${tierPicks.length}.` });
+          }
         }
       }
     }
 
-    // Validate salary cap if applicable
-    if (league.pick_sheet_format === 'salary_cap' && league.pool_salary_cap) {
+    // Validate salary cap for salary_cap format
+    if (league.format_type === 'salary_cap') {
+      const cap = league.weekly_salary_cap || 50000;
+      const startersCount = league.starters_per_week || league.roster_size || 6;
+      if (picks.length !== startersCount) {
+        return res.status(400).json({ error: `Must pick exactly ${startersCount} players, got ${picks.length}.` });
+      }
       const totalSalary = picks.reduce((s, p) => {
         const row = db.prepare('SELECT salary FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND player_id = ?').get(req.params.id, tid, p.player_id);
         return s + (row?.salary || 0);
       }, 0);
-      if (totalSalary > league.pool_salary_cap) {
-        return res.status(400).json({ error: `Picks exceed salary cap ($${league.pool_salary_cap.toLocaleString()}).` });
+      if (totalSalary > cap) {
+        return res.status(400).json({ error: `Picks exceed salary cap ($${cap.toLocaleString()}).` });
       }
     }
 
@@ -1067,3 +1126,4 @@ router.post('/admin/set-drop-count', authMiddleware, (req, res) => {
 });
 
 module.exports = router;
+module.exports.assignSalaryCapSalaries = assignSalaryCapSalaries;

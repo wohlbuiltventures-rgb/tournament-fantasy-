@@ -18,23 +18,29 @@ import ScheduleTab from './tabs/ScheduleTab';
 import CommissionerTab from './tabs/CommissionerTab';
 import PGALiveTab from './tabs/PGALiveTab';
 import OwnershipTab from './tabs/OwnershipTab';
+import SalaryCapPicksTab from './tabs/SalaryCapPicksTab';
 
 function getTabs(league, isComm, hideOverview = false) {
   const isPool = league?.format_type === 'pool';
+  const isSalaryCap = league?.format_type === 'salary_cap';
   const base = [];
   if (!hideOverview) base.push({ key: 'overview', label: 'Overview' });
-  base.push({ key: 'roster', label: isPool ? 'My Picks' : 'Roster' });
-  if (!isPool) {
+  if (isSalaryCap) {
+    base.push({ key: 'picks', label: 'My Picks' });
+  } else {
+    base.push({ key: 'roster', label: isPool ? 'My Picks' : 'Roster' });
+  }
+  if (!isPool && !isSalaryCap) {
     base.push({ key: 'lineup', label: 'My Lineup' });
   }
-  if (!isPool) {
+  if (!isPool && !isSalaryCap) {
     base.push({ key: 'freeagency', label: 'Free Agency' });
   }
   if (isPool) {
     base.push({ key: 'owned', label: '% Owned' });
   }
   base.push({ key: 'standings', label: 'Standings' });
-  if (isPool && league?.pool_tournament_id) {
+  if ((isPool || isSalaryCap) && league?.pool_tournament_id) {
     base.push({ key: 'pga-live', label: 'PGA Scoreboard' });
   }
   if (isComm) {
@@ -85,15 +91,15 @@ export default function GolfLeague() {
   }, [id]);
 
   useEffect(() => {
-    if (!league || league.format_type !== 'pool' || !league.pool_tournament_id) return;
+    if (!league || !['pool', 'salary_cap'].includes(league.format_type) || !league.pool_tournament_id) return;
     api.get(`/golf/leagues/${id}/my-roster`)
       .then(r => setPicksStatus({ submitted: r.data.submitted, picks_locked: r.data.picks_locked }))
       .catch(() => {});
   }, [id, league?.format_type, league?.pool_tournament_id]); // eslint-disable-line
 
-  // Live standings push for pool leagues
+  // Live standings push for pool / salary_cap leagues
   useEffect(() => {
-    if (!league || league.format_type !== 'pool' || !user) return;
+    if (!league || !['pool', 'salary_cap'].includes(league.format_type) || !user) return;
     const token = localStorage.getItem('token');
     if (!token) return;
     connectSocket(token);
@@ -163,7 +169,7 @@ export default function GolfLeague() {
   // Hide Overview tab once picks are submitted and tournament has started.
   // picksStatus loads async — stays false until resolved (no flash risk).
   const shouldHideOverview =
-    league.format_type === 'pool' &&
+    ['pool', 'salary_cap'].includes(league.format_type) &&
     !!picksStatus?.submitted &&
     (league.pool_tournament_status === 'active' ||
      league.pool_tournament_status === 'completed' ||
@@ -259,6 +265,9 @@ export default function GolfLeague() {
       )}
       {effectiveTab === 'roster' && (
         <RosterTab leagueId={id} league={league} />
+      )}
+      {effectiveTab === 'picks' && league.format_type === 'salary_cap' && (
+        <SalaryCapPicksTab leagueId={id} league={league} />
       )}
       {effectiveTab === 'freeagency' && league.format_type === 'tourneyrun' && (
         <FreeAgencyTab leagueId={id} league={league} />

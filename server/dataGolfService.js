@@ -362,7 +362,7 @@ function _applyFieldToTournament(tourn, field) {
   // ── Rebuild pool_tier_players for affected leagues ────────────────────────
   const { _oddsToDecimal, _rankToOdds } = _getTierHelpers();
   const affectedLeagues = db.prepare(
-    "SELECT * FROM golf_leagues WHERE format_type = 'pool' AND pool_tournament_id = ? AND status != 'archived'"
+    "SELECT * FROM golf_leagues WHERE format_type IN ('pool', 'salary_cap') AND pool_tournament_id = ? AND status != 'archived'"
   ).all(tourn.id);
 
   const leagueResults = [];
@@ -418,6 +418,16 @@ function _applyFieldToTournament(tourn, field) {
 
   if (wdCount > 0) console.log(`[datagolf] ${tourn.name}: ${wdCount} WD(s) detected and marked`);
   console.log(`[datagolf] ${tourn.name}: ${inserted} field players (${created} new), ${leagueResults.length} leagues rebuilt`);
+
+  // Update salaries for any salary_cap leagues after odds sync
+  try {
+    const { assignSalaryCapSalaries } = require('./routes/golf-pool');
+    const scLeagues = db.prepare(
+      "SELECT id FROM golf_leagues WHERE format_type = 'salary_cap' AND pool_tournament_id = ? AND status != 'archived'"
+    ).all(tourn.id);
+    for (const l of scLeagues) assignSalaryCapSalaries(l.id);
+    if (scLeagues.length) console.log(`[datagolf] assigned salaries to ${scLeagues.length} salary_cap league(s)`);
+  } catch (e) { console.error('[datagolf] salary assignment error:', e); }
 
   return {
     tournament: tourn.name,
@@ -718,7 +728,7 @@ async function syncDgOddsTiers(tournamentId) {
   `).all(tournamentId);
 
   const leagues = db.prepare(
-    "SELECT id FROM golf_leagues WHERE format_type = 'pool' AND pool_tournament_id = ? AND status != 'archived'"
+    "SELECT id FROM golf_leagues WHERE format_type IN ('pool', 'salary_cap') AND pool_tournament_id = ? AND status != 'archived'"
   ).all(tournamentId);
 
   let updated = 0, noOdds = 0, noMatch = 0;

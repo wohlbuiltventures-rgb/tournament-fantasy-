@@ -241,8 +241,15 @@ const _golfColMigrations = [
   // DataGolf integration
   `ALTER TABLE golf_players ADD COLUMN datagolf_id INTEGER`,
   `ALTER TABLE golf_tournaments ADD COLUMN datagolf_event_id INTEGER`,
+  // Salary cap starters count
+  `ALTER TABLE golf_leagues ADD COLUMN starters_per_week INTEGER DEFAULT 6`,
 ];
 for (const sql of _golfColMigrations) { try { db.exec(sql); } catch (_) {} }
+
+// Rename legacy 'dk' format to 'salary_cap'
+try {
+  db.exec(`UPDATE golf_leagues SET format_type = 'salary_cap' WHERE format_type = 'dk'`);
+} catch (_) {}
 
 // ── player_master — persistent country lookup that survives tournament resets ──
 // This table is the source of truth for player → country mapping.

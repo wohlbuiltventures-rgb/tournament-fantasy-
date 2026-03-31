@@ -69,8 +69,8 @@ export default function RosterTab({ leagueId, league }) {
 
   if (loading) return <div className="py-10 text-center text-gray-500">Loading roster...</div>;
 
-  // DK mode — no persistent roster
-  if (fmt === 'dk') {
+  // Salary cap mode — no persistent roster
+  if (fmt === 'salary_cap') {
     return (
       <div className="py-10 text-center">
         <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-3">

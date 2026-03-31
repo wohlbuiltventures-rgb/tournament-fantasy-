@@ -21,7 +21,7 @@ const FORMATS = [
     activeBg: 'bg-green-500/5',
   },
   {
-    key: 'dk',
+    key: 'salary_cap',
     Icon: DollarSign,
     iconBg: 'bg-blue-500/10',
     iconColor: 'text-blue-400',
@@ -87,7 +87,7 @@ const SCORING_STYLES = [
 
 // ── Shared UI components ──────────────────────────────────────────────────────
 
-function PillSelector({ options, value, onChange }) {
+function PillSelector({ options, value, onChange, extra }) {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map(opt => (
@@ -104,6 +104,7 @@ function PillSelector({ options, value, onChange }) {
           {opt.label}
         </button>
       ))}
+      {extra}
     </div>
   );
 }
@@ -483,7 +484,7 @@ export default function CreateGolfLeague() {
 
   const initialFormat = (() => {
     const f = searchParams.get('format');
-    return ['pool', 'dk', 'tourneyrun'].includes(f) ? f : 'tourneyrun';
+    return ['pool', 'salary_cap', 'tourneyrun'].includes(f) ? f : 'tourneyrun';
   })();
 
   const [format, setFormat] = useState(initialFormat);
@@ -677,7 +678,7 @@ export default function CreateGolfLeague() {
               <input
                 type="text"
                 className="input text-base"
-                placeholder={format === 'dk' ? 'Salary Cap Golf 2026' : format === 'pool' ? 'Golf Pool 2026' : 'Golf Degens 2026'}
+                placeholder={format === 'salary_cap' ? 'Salary Cap Golf 2026' : format === 'pool' ? 'Golf Pool 2026' : 'Golf Degens 2026'}
                 value={form.name}
                 onChange={e => set('name', e.target.value)}
                 required
@@ -990,7 +991,7 @@ export default function CreateGolfLeague() {
         )}
 
         {/* ── 3. League Settings — SALARY CAP ── */}
-        {format === 'dk' && (
+        {format === 'salary_cap' && (
           <div className="animate-format">
           <Card>
             <CardHeader icon={Settings} title="⚙️ Salary Cap Settings" />
@@ -1014,11 +1015,17 @@ export default function CreateGolfLeague() {
 
               {/* Picks Per Tournament */}
               <div>
-                <label className="label mb-2.5">Picks Per Tournament</label>
+                <label className="label mb-2.5">Players Per Team</label>
                 <PillSelector
-                  options={[6, 8, 10].map(n => ({ value: n, label: String(n) }))}
+                  options={[4, 5, 6, 7, 8].map(n => ({ value: n, label: String(n) }))}
                   value={form.starters_count}
-                  onChange={v => set('starters_count', v)}
+                  onChange={v => { set('starters_count', v); set('_startersCustom', false); }}
+                  extra={
+                    form._startersCustom
+                      ? <input type="number" min="3" max="20" className="input w-20 text-sm text-center" value={form.starters_count}
+                          onChange={e => set('starters_count', Math.max(3, Math.min(20, parseInt(e.target.value) || 6)))} />
+                      : <button type="button" className="px-3.5 py-1.5 rounded-lg text-sm font-semibold border transition-all bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300" onClick={() => set('_startersCustom', true)}>Custom</button>
+                  }
                 />
                 <p className="text-gray-600 text-xs mt-2">How many golfers each manager picks per tournament.</p>
               </div>
@@ -1033,8 +1040,18 @@ export default function CreateGolfLeague() {
                     { value: 75000,  label: '$75k'  },
                     { value: 100000, label: '$100k' },
                   ]}
-                  value={form.weekly_salary_cap}
-                  onChange={v => set('weekly_salary_cap', v)}
+                  value={form._capCustom ? null : form.weekly_salary_cap}
+                  onChange={v => { set('weekly_salary_cap', v); set('_capCustom', false); }}
+                  extra={
+                    form._capCustom
+                      ? <div className="flex items-center gap-1">
+                          <span className="text-gray-400 text-sm">$</span>
+                          <input type="number" min="10000" max="500000" step="1000" className="input w-28 text-sm text-center"
+                            value={form.weekly_salary_cap}
+                            onChange={e => set('weekly_salary_cap', Math.max(10000, Math.min(500000, parseInt(e.target.value) || 50000)))} />
+                        </div>
+                      : <button type="button" className="px-3.5 py-1.5 rounded-lg text-sm font-semibold border transition-all bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300" onClick={() => set('_capCustom', true)}>Custom</button>
+                  }
                 />
                 <p className="text-gray-600 text-xs mt-2">
                   Cap resets every tournament. Pick {form.starters_count} golfers within the cap.
@@ -1232,7 +1249,7 @@ export default function CreateGolfLeague() {
             <p className="text-gray-500 text-xs mt-3">Finish bonuses: Win +30, Top 5 +15, Top 10 +8, Top 25 +3</p>
           </div>
         )}
-        {format === 'dk' && (
+        {format === 'salary_cap' && (
           <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 sm:p-5">
             <div className="flex items-center gap-2 mb-2">
               <Zap className="w-4 h-4 text-blue-400" />
