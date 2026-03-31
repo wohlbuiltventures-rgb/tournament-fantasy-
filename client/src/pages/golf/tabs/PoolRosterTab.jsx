@@ -442,7 +442,9 @@ export default function PoolRosterTab({ leagueId, league }) {
   const tiers        = data?.tiers || [];
   const lockTime     = data?.lock_time;
   const tourn        = data?.tournament;
-  const tournStatus  = league.pool_tournament_status || tourn?.status;
+  // Prefer the fresh tournament status from the API response; fall back to the cached league prop.
+  // tourn?.status is fetched fresh on each my-roster load; league.pool_tournament_status may lag.
+  const tournStatus  = tourn?.status || league.pool_tournament_status;
   const dropCount    = data?.drop_count ?? league.pool_drop_count ?? 2;
   const teamScore    = data?.team_score;
   const picksPerTeam  = data?.picks_per_team || league.picks_per_team || 8;

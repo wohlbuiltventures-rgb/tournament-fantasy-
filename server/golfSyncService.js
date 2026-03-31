@@ -890,6 +890,9 @@ async function syncEspnFieldForTournament(tournamentId) {
     try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
     if (!tiersConfig.length) { console.log(`[field-sync] League ${league.name}: no tier config, skipping`); continue; }
 
+    // NOTE: is_withdrawn is intentionally NOT in the INSERT column list here.
+    // Deleting and re-inserting resets is_withdrawn to 0 (the column default).
+    // syncTournamentField() is the SOLE owner of is_withdrawn — DO NOT set it here.
     const insTP = db.prepare(`INSERT OR REPLACE INTO pool_tier_players (id, league_id, tournament_id, player_id, player_name, tier_number, odds_display, odds_decimal, world_ranking, salary, manually_overridden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`);
     db.prepare('DELETE FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND manually_overridden = 0').run(league.id, tournamentId);
 

@@ -386,6 +386,10 @@ function _applyFieldToTournament(tourn, field) {
       ORDER BY COALESCE(tf.odds_decimal, gp.odds_decimal, 999) ASC
     `).all(tourn.id);
 
+    // NOTE: is_withdrawn is intentionally NOT in the INSERT column list here.
+    // Deleting and re-inserting resets is_withdrawn to 0 (the column default).
+    // syncTournamentField() in golfSyncService.js is the SOLE owner of is_withdrawn.
+    // DO NOT set is_withdrawn here.
     const insTP = db.prepare(`
       INSERT OR REPLACE INTO pool_tier_players
         (id, league_id, tournament_id, player_id, player_name, tier_number,
