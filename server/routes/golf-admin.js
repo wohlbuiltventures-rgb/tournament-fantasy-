@@ -1656,39 +1656,42 @@ router.post('/admin/dev/mass-email', superadmin, async (req, res) => {
 
     console.log(`[admin] Mass email: sending to ${recipients.length} recipients (audience: ${audience})`);
 
-    // Build per-recipient emails and chunk into batches of 100 (Resend limit)
-    const { emailShell, emailHeader, emailFooter } = {}; // use sendSuperAdminBlast directly
-    let sentCount = 0;
-    const CHUNK = 100;
-
-    // Build all email payloads
-    const { Resend } = require('resend');
-    // We call sendSuperAdminBlast one at a time in bulk via batch
-    // Build the payload array ourselves for batching efficiency
-    function buildEmailHtml(firstName, bodyText) {
-      const displayName = firstName
-        ? firstName.charAt(0).toUpperCase() + firstName.slice(1)
-        : 'there';
-      const personalizedBody = bodyText.replace(/\[First Name\]/gi, displayName);
-      // Convert plain text to HTML
-      const linked = personalizedBody.replace(
-        /(https?:\/\/[^\s<>"]+)/g,
-        '<a href="$1" style="color:#22c55e;text-decoration:none;word-break:break-all;">$1</a>'
-      );
-      const paras = linked.split(/\n{2,}/).map(p =>
-        `<p style="font-size:15px;color:#d1d5db;line-height:1.75;margin-top:0;margin-right:0;margin-bottom:18px;margin-left:0;">${p.replace(/\n/g, '<br>')}</p>`
-      ).join('');
-      return paras;
-    }
-
     const mailerModule = require('../mailer');
-    for (let i = 0; i < recipients.length; i += CHUNK) {
-      const chunk = recipients.slice(i, i + CHUNK);
-      await Promise.all(chunk.map(r => {
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Send in batches of 10, 1 second pause between batches.
+    // Within each batch send sequentially with 300ms delay to stay under
+    // Resend's 5 req/s limit (3 req/s = safe margin).
+    const BATCH_SIZE = 10;
+    const DELAY_BETWEEN_EMAILS_MS = 300;
+    const DELAY_BETWEEN_BATCHES_MS = 1000;
+
+    let sentCount = 0;
+    const failed = [];
+
+    for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+      const batch = recipients.slice(i, i + BATCH_SIZE);
+
+      for (const r of batch) {
         const firstName = r.username ? r.username.split(/[\s_]/)[0] : r.username;
-        return mailerModule.sendSuperAdminBlast(r.email, firstName, subject, body_text);
-      }));
-      sentCount += chunk.length;
+        try {
+          await mailerModule.sendSuperAdminBlast(r.email, firstName, subject, body_text);
+          sentCount++;
+        } catch (emailErr) {
+          console.error(`[admin] Mass email FAILED for ${r.email}:`, emailErr.message);
+          failed.push({ email: r.email, error: emailErr.message });
+        }
+        // Throttle: 300ms between each individual send
+        await sleep(DELAY_BETWEEN_EMAILS_MS);
+      }
+
+      // Progress log after each batch
+      console.log(`[admin] Mass email progress: Sent ${sentCount}/${recipients.length}${failed.length ? `, ${failed.length} failed` : ''}`);
+
+      // Pause 1 second between batches (skip after the last batch)
+      if (i + BATCH_SIZE < recipients.length) {
+        await sleep(DELAY_BETWEEN_BATCHES_MS);
+      }
     }
 
     // Log the send
@@ -1697,8 +1700,14 @@ router.post('/admin/dev/mass-email', superadmin, async (req, res) => {
       'INSERT INTO mass_email_log (id, sent_by, audience, subject, body_preview, recipient_count) VALUES (?, ?, ?, ?, ?, ?)'
     ).run(logId, req.user.id, audience, subject, body_text.slice(0, 300), sentCount);
 
-    console.log(`[admin] Mass email sent: ${sentCount} emails, log_id=${logId}`);
-    res.json({ ok: true, sent: sentCount, log_id: logId });
+    console.log(`[admin] Mass email complete: ${sentCount} sent, ${failed.length} failed. log_id=${logId}`);
+    res.json({
+      ok: true,
+      sent: sentCount,
+      failed: failed.length,
+      failed_addresses: failed.map(f => f.email),
+      log_id: logId,
+    });
   } catch (err) {
     console.error('[admin] mass-email error:', err);
     res.status(500).json({ error: err.message });
