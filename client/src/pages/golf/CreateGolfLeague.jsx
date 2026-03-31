@@ -507,7 +507,7 @@ export default function CreateGolfLeague() {
 
   // Auto-validate promo code if pre-filled from URL param
   useEffect(() => {
-    if (promoCode && format === 'pool') validatePromo(promoCode);
+    if (promoCode) validatePromo(promoCode);
   }, []); // eslint-disable-line
 
   // Auto-balance tier suggestions when tournament is selected
@@ -1269,8 +1269,19 @@ export default function CreateGolfLeague() {
         )}
 
         {/* ── Pricing summary line ── */}
-        {selectedFmt?.key === 'pool' && (() => {
-          const tier = POOL_TIERS.find(t => t.maxTeams === form.max_teams && t.tier === form.pool_tier) || POOL_TIERS[0];
+        {(() => {
+          const period = format === 'tourneyrun' ? '/season' : '/tournament';
+          let price, promoPrice, priceLabel;
+          if (format === 'pool') {
+            const tier = POOL_TIERS.find(t => t.maxTeams === form.max_teams && t.tier === form.pool_tier) || POOL_TIERS[0];
+            price = tier.price;
+            promoPrice = tier.promoPrice;
+            priceLabel = tier.priceLabel;
+          } else {
+            price = 12.99;
+            promoPrice = 9.99;
+            priceLabel = `$12.99${period}`;
+          }
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(0,232,122,0.05)', border: '1px solid rgba(0,232,122,0.18)', borderRadius: 8, padding: '11px 14px' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="20 6 9 17 4 12"/></svg>
@@ -1279,11 +1290,11 @@ export default function CreateGolfLeague() {
                   Platform fee:{' '}
                   {isMastersPromoActive() ? (
                     <>
-                      <span style={{ textDecoration: 'line-through', color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>${tier.price.toFixed(2)}</span>
-                      {' '}${tier.promoPrice.toFixed(2)}/tournament
+                      <span style={{ textDecoration: 'line-through', color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>${price.toFixed(2)}</span>
+                      {' '}${promoPrice.toFixed(2)}{period}
                       <span style={{ color: '#fb923c', fontWeight: 600, fontSize: 12, marginLeft: 6 }}>Masters Launch Pricing · ends April 10</span>
                     </>
-                  ) : tier.priceLabel}
+                  ) : priceLabel}
                 </span>
                 {' · '}Zero prize pool fees{' · '}Your group keeps every dollar
               </span>
@@ -1291,9 +1302,8 @@ export default function CreateGolfLeague() {
           );
         })()}
 
-        {/* ── Promo code (Pool only) ── */}
-        {format === 'pool' && (
-          <div>
+        {/* ── Promo / Ambassador Code ── */}
+        <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
               Promo / Ambassador Code <span style={{ color: '#374151', fontWeight: 400 }}>(optional)</span>
             </label>
@@ -1329,8 +1339,7 @@ export default function CreateGolfLeague() {
             {promoStatus?.valid === false && (
               <div style={{ marginTop: 7, color: '#f87171', fontSize: 13 }}>✕ {promoStatus.error}</div>
             )}
-          </div>
-        )}
+        </div>
 
         <button
           type="submit"
@@ -1340,7 +1349,7 @@ export default function CreateGolfLeague() {
           onMouseLeave={e => { if (!loading) { e.currentTarget.style.background = '#22c55e'; e.currentTarget.style.transform = 'scale(1)'; } }}
         >
           {loading ? 'Creating League...' : (
-            { pool: 'Launch Office Pool →', dk: 'Launch Salary Cap League →', tourneyrun: 'Launch Fantasy League →' }[selectedFmt?.key] ?? `Create ${selectedFmt?.title} League →`
+            { pool: 'Launch Office Pool →', salary_cap: 'Launch Salary Cap League →', tourneyrun: 'Launch Fantasy League →' }[selectedFmt?.key] ?? `Create ${selectedFmt?.title} League →`
           )}
         </button>
       </form>
