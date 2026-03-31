@@ -39,4 +39,4 @@ function startPoolLockScheduler() {
   console.log('[golf-pool-lock] Lock scheduler started (5-minute interval)');
 }
 
-module.exports = { startPoolLockScheduler };
+module.exports = { startPoolLockScheduler, computeLockTime };

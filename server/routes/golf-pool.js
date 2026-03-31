@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const authMiddleware = require('../middleware/auth');
 const db = require('../db');
 const { applyDropScoring, computeDropIds } = require('../pool-utils');
+const { computeLockTime } = require('../golfPoolLockService');
 
 const router = express.Router();
 
@@ -328,12 +329,6 @@ router.post('/leagues/:id/tier-players/:playerId/move', authMiddleware, (req, re
   }
 });
 
-// ── Lock-time helper (Thursday 12:00 UTC of tournament week) ─────────────────
-
-function computeLockTime(startDate) {
-  return new Date(startDate + 'T12:00:00.000Z').toISOString();
-}
-
 // ── GET /leagues/:id/picks/my ─────────────────────────────────────────────────
 
 router.get('/leagues/:id/picks/my', authMiddleware, (req, res) => {
@@ -357,7 +352,7 @@ router.get('/leagues/:id/picks/my', authMiddleware, (req, res) => {
     const totalTarget = tiersConfig.reduce((s, t) => s + (parseInt(t.picks) || 0), 0);
 
     const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tid);
-    const lockTime = (tourn && league.picks_lock_time) ? league.picks_lock_time : (tourn ? computeLockTime(tourn.start_date) : null);
+    const lockTime = (tourn && league.picks_lock_time) ? league.picks_lock_time : (tourn ? computeLockTime(tourn.start_date).toISOString() : null);
 
     res.json({
       picks,
@@ -394,7 +389,7 @@ router.post('/leagues/:id/picks', authMiddleware, (req, res) => {
     if (!tourn) return res.status(404).json({ error: 'Tournament not found' });
 
     // Check lock time
-    const lockTime = league.picks_lock_time || computeLockTime(tourn.start_date);
+    const lockTime = league.picks_lock_time || computeLockTime(tourn.start_date).toISOString();
     if (new Date() >= new Date(lockTime)) {
       db.prepare('UPDATE golf_leagues SET picks_locked = 1 WHERE id = ?').run(req.params.id);
       return res.status(403).json({ error: 'Picks are locked — tee time has passed.' });
@@ -523,7 +518,7 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
     if (picks.length) console.log('[my-roster] pick[0] country:', picks[0].country, '| player:', picks[0].player_name);
 
     const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tid);
-    const lockTime = league.picks_lock_time || (tourn ? computeLockTime(tourn.start_date) : null);
+    const lockTime = league.picks_lock_time || (tourn ? computeLockTime(tourn.start_date).toISOString() : null);
 
     // Build tiers with available players so the UI can render the pick sheet
     let tiersConfig = [];
