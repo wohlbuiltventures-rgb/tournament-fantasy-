@@ -13,11 +13,6 @@ function flipName(name) {
   return name;
 }
 
-const FORMAT_META = {
-  pool:        { label: 'Pool',          color: 'blue'  },
-  dk:          { label: 'Daily Fantasy', color: 'purple' },
-  tourneyrun:  { label: 'TourneyRun',    color: 'green' },
-};
 
 const TIER_NAMES = { 1: 'Tier 1 · Elite', 2: 'Tier 2 · Premium', 3: 'Tier 3 · Mid-Field', 4: 'Tier 4 · Longshots' };
 
