@@ -109,7 +109,7 @@ ${emailFooter('tourneyrun.app &middot; Security notice &middot; Do not share thi
 
 // ── Welcome (new account) ─────────────────────────────────────────────────────
 async function sendWelcome(toEmail, username) {
-  const baseUrl = (process.env.CLIENT_URL || 'https://tourneyrun.app').replace(/\/$/, '');
+  const baseUrl = 'https://www.tourneyrun.app';
 
   await sendEmail({
     to: toEmail,
@@ -144,7 +144,7 @@ ${emailFooter('tourneyrun.app &middot; Skill-based fantasy &middot; Payments pow
 // standings: array of { username, team_name, total_points, aliveCount, totalPlayers }
 // sorted descending by total_points
 async function sendLeagueStandingsEmail(toEmail, { username, leagueName, roundName, standings, leagueId }) {
-  const baseUrl   = (process.env.CLIENT_URL || 'https://tourneyrun.app').replace(/\/$/, '');
+  const baseUrl   = 'https://www.tourneyrun.app';
   const leagueUrl = `${baseUrl}/basketball/leaderboard/${leagueId}`;
 
   const rows = standings.map((s, i) => {
@@ -190,7 +190,7 @@ ${emailFooter()}
 
 // ── Golf: payment confirmation ────────────────────────────────────────────────
 async function sendGolfPaymentConfirmation(toEmail, username, type, meta) {
-  const baseUrl = (process.env.CLIENT_URL || 'https://tourneyrun.app').replace(/\/$/, '');
+  const baseUrl = 'https://www.tourneyrun.app';
 
   const subjects = {
     golf_season_pass: '⛳ Your 2026 Golf Season Pass is active',
@@ -228,7 +228,7 @@ ${emailFooter('tourneyrun.app &middot; Skill-based golf fantasy &middot; Payment
 
 // ── Golf: Commissioner Pro unlocked ──────────────────────────────────────────
 async function sendCommProUnlocked(toEmail, username, leagueName) {
-  const baseUrl = (process.env.CLIENT_URL || 'https://tourneyrun.app').replace(/\/$/, '');
+  const baseUrl = 'https://www.tourneyrun.app';
 
   await sendEmail({
     from: FROM_GOLF,
@@ -277,7 +277,7 @@ ${emailFooter('tourneyrun.app &middot; Golf Pool Fantasy')}
 // params: username, leagueName, leagueId, tournamentName, tournamentDates?,
 //         picksDue?, golferCount?, tierCount?, prizeTotal?, prizePercent1st?
 async function sendGolfLeagueWelcome(toEmail, { username, leagueName, leagueId, tournamentName, tournamentDates, picksDue, golferCount, tierCount, prizeTotal, prizePercent1st }) {
-  const baseUrl   = (process.env.CLIENT_URL || 'https://tourneyrun.app').replace(/\/$/, '');
+  const baseUrl   = 'https://www.tourneyrun.app';
   const leagueUrl = `${baseUrl}/golf/league/${leagueId}`;
 
   const tournamentValue = tournamentDates
@@ -320,7 +320,7 @@ ${emailFooter()}
 // ── Golf: commissioner mass blast ─────────────────────────────────────────────
 // params: leagueName, leagueId, message (plain text — newlines become <br>)
 async function sendGolfMassBlast(toEmail, { leagueName, leagueId, message }) {
-  const baseUrl   = (process.env.CLIENT_URL || 'https://tourneyrun.app').replace(/\/$/, '');
+  const baseUrl   = 'https://www.tourneyrun.app';
   const leagueUrl = `${baseUrl}/golf/league/${leagueId}`;
 
   await sendEmail({
@@ -347,7 +347,7 @@ ${emailFooter()}
 //         myRank?, totalPlayers?, myScore? (integer, par-relative),
 //         leaderName?, leaderScore?
 async function sendGolfRoundComplete(toEmail, { username, leagueName, leagueId, roundNumber, myRank, totalPlayers, myScore, leaderName, leaderScore }) {
-  const baseUrl   = (process.env.CLIENT_URL || 'https://tourneyrun.app').replace(/\/$/, '');
+  const baseUrl   = 'https://www.tourneyrun.app';
   const leagueUrl = `${baseUrl}/golf/league/${leagueId}?tab=standings`;
 
   function fmtScore(s) {
@@ -378,7 +378,7 @@ ${emailFooter()}
 // ── Golf league invite ────────────────────────────────────────────────────────
 // Sent when a commissioner imports members — invitee may not have an account yet.
 async function sendGolfInviteEmail(toEmail, { leagueName, commissionerName, inviteToken, tournamentName }) {
-  const baseUrl = (process.env.CLIENT_URL || 'https://tourneyrun.app').replace(/\/$/, '');
+  const baseUrl = 'https://www.tourneyrun.app';
   const signupUrl = `${baseUrl}/signup?token=${inviteToken}`;
 
   await sendEmail({

@@ -458,15 +458,22 @@ async function maybeEmailRoundStandings() {
             totalPlayers: s.totalPlayers,
           }));
 
+          // Throttle: send sequentially at ~3/sec to stay under Resend's 5 req/s limit
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
           for (const member of members) {
             if (!member.email) continue;
-            sendLeagueStandingsEmail(member.email, {
-              username:   member.username,
-              leagueName: league.name,
-              roundName,
-              standings:  standingsList,
-              leagueId:   league.id,
-            }).catch(err => console.error(`[email] Standings email failed for ${member.email}:`, err.message));
+            try {
+              await sendLeagueStandingsEmail(member.email, {
+                username:   member.username,
+                leagueName: league.name,
+                roundName,
+                standings:  standingsList,
+                leagueId:   league.id,
+              });
+            } catch (err) {
+              console.error(`[email] Standings email failed for ${member.email}:`, err.message);
+            }
+            await sleep(350);
           }
         } catch (err) {
           console.error(`[email] Standings email error for league ${league.id}:`, err.message);

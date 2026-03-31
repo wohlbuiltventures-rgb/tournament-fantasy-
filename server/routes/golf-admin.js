@@ -201,13 +201,17 @@ router.post('/admin/leagues/:id/email', superadmin, async (req, res) => {
       WHERE glm.golf_league_id = ?
     `).all(req.params.id);
     const { sendGolfPaymentConfirmation } = require('../mailer');
-    // Send standings update email to each member
-    await Promise.all(members.map(m =>
-      sendGolfPaymentConfirmation(m.email, m.username, 'standings_update', {
-        league_name: league.name,
-      }).catch(() => {})
-    ));
-    res.json({ success: true, sent: members.length });
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    // Throttle: ~3/sec sequential to stay under Resend's 5 req/s limit
+    let sent = 0;
+    for (const m of members) {
+      try {
+        await sendGolfPaymentConfirmation(m.email, m.username, 'standings_update', { league_name: league.name });
+        sent++;
+      } catch {}
+      await sleep(350);
+    }
+    res.json({ success: true, sent });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
