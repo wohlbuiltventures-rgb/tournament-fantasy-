@@ -562,7 +562,7 @@ export default function PoolRosterTab({ leagueId, league }) {
                     <div key={playerId} style={{ border: `1.5px solid ${tc.accent}`, background: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, animation: 'fadeSlideUp 0.2s ease both' }}>
                       <span style={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}>{toFlag(pData?.country)}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName}</div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{flipName(pName)}</div>
                         {pData?.odds_display && <div style={{ fontSize: 12, color: tc.label, marginTop: 2 }}>{fmtOdds(pData.odds_display)}</div>}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -642,18 +642,8 @@ export default function PoolRosterTab({ leagueId, league }) {
         const visiblePicks = picks.filter(p => {
           const hasRoundScore = p.round1 != null || p.round2 != null || p.round3 != null || p.round4 != null;
           const isNotInField = p.made_cut === 0 && !hasRoundScore && p.finish_position == null;
-          if (isNotInField) console.log('[PoolRoster] hiding not-in-field player:', p.player_name, { made_cut: p.made_cut, is_withdrawn: p.is_withdrawn, hasRoundScore, finish_position: p.finish_position });
           return !isNotInField;
         });
-        console.log('[PoolRoster] picks total:', picks.length, '| visible after filter:', visiblePicks.length);
-        // Per-tier debug logging
-        const tierCounts = {};
-        for (const p of picks) { tierCounts[p.tier_number] = (tierCounts[p.tier_number] || 0) + 1; }
-        const visibleTierCounts = {};
-        for (const p of visiblePicks) { visibleTierCounts[p.tier_number] = (visibleTierCounts[p.tier_number] || 0) + 1; }
-        for (const t of Object.keys(tierCounts)) {
-          console.log(`[PoolRoster] Tier ${t}: total=${tierCounts[t]}, visible=${visibleTierCounts[t] || 0}, hidden=${tierCounts[t] - (visibleTierCounts[t] || 0)}`);
-        }
         const byTier = {};
         for (const p of visiblePicks) {
           if (!byTier[p.tier_number]) byTier[p.tier_number] = [];
@@ -776,7 +766,7 @@ export default function PoolRosterTab({ leagueId, league }) {
                         <div style={{ width: 16, height: 16, borderRadius: '50%', background: tc.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <Check style={{ width: 10, height: 10, color: '#fff' }} />
                         </div>
-                        {names[pid] || pid}
+                        {flipName(names[pid]) || pid}
                       </div>
                     ))}
                   </div>

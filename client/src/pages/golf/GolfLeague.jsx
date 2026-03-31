@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Flag, Trophy, ArrowLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -56,42 +56,6 @@ export default function GolfLeague() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [picksStatus, setPicksStatus] = useState(null);
-
-  // ── Render-reason diagnostic (remove after root cause identified) ────────────
-  const _renderN = useRef(0);
-  const _prev    = useRef(null);
-  _renderN.current++;
-  {
-    const snap = {
-      id,
-      tab,
-      searchStr:      searchParams.toString(),
-      loading,
-      loadError,
-      userId:         user?.id,
-      leagueId:       league?.id,
-      membersLen:     members.length,
-      picksSubmitted: picksStatus?.submitted,
-      picksLocked:    picksStatus?.picks_locked,
-      // Object-identity flags: true = same content, new reference = spurious re-render
-      userNewRef:     _prev.current ? user    !== _prev.current.userObj    : false,
-      leagueNewRef:   _prev.current ? league  !== _prev.current.leagueObj  : false,
-      membersNewRef:  _prev.current ? members !== _prev.current.membersObj : false,
-    };
-    if (_prev.current) {
-      const changed = Object.fromEntries(
-        Object.entries(snap)
-          .filter(([k, v]) => v !== _prev.current.snap[k])
-          .map(([k, v]) => [k, { was: _prev.current.snap[k], now: v }])
-      );
-      if (Object.keys(changed).length)
-        console.log(`GolfLeague render reason #${_renderN.current}:`, JSON.stringify(changed));
-    } else {
-      console.log('GolfLeague render #1 (initial mount)');
-    }
-    _prev.current = { snap, userObj: user, leagueObj: league, membersObj: members };
-  }
-  // ─────────────────────────────────────────────────────────────────────────────
 
   useDocTitle(
     league ? `${league.name} | Golf` : 'Golf League | TourneyRun',
@@ -244,13 +208,16 @@ export default function GolfLeague() {
             ? (() => {
                 const ts = league.pool_tournament_status;
                 const ctaClass = "inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-white font-bold px-5 py-2.5 rounded-full transition-all shadow-lg shadow-green-500/20 text-sm shrink-0";
-                if (!league.picks_locked)
-                  return <Link to={`/golf/league/${id}/picks`} className={ctaClass}>Make My Picks <ChevronRight className="w-4 h-4" /></Link>;
+                // Check tournament status FIRST so Live/Complete always shows the right CTA
                 if (ts === 'completed')
                   return <Link to={`/golf/league/${id}?tab=standings`} className={ctaClass}>Final Results <ChevronRight className="w-4 h-4" /></Link>;
                 if (ts === 'active')
                   return <Link to={`/golf/league/${id}?tab=standings`} className={ctaClass}>Pool Standings <ChevronRight className="w-4 h-4" /></Link>;
-                return <Link to={`/golf/league/${id}?tab=standings`} className={ctaClass}>View Standings <ChevronRight className="w-4 h-4" /></Link>;
+                if (league.picks_locked || picksStatus?.picks_locked)
+                  return <Link to={`/golf/league/${id}?tab=roster`} className={ctaClass}>View My Picks <ChevronRight className="w-4 h-4" /></Link>;
+                if (picksStatus?.submitted)
+                  return <Link to={`/golf/league/${id}?tab=roster`} className={ctaClass}>✓ View/Edit Picks <ChevronRight className="w-4 h-4" /></Link>;
+                return <Link to={`/golf/league/${id}/picks`} className={ctaClass}>Make My Picks <ChevronRight className="w-4 h-4" /></Link>;
               })()
             : (league.draft_status !== 'completed' && (
                 <Link
