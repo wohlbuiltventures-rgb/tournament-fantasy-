@@ -397,14 +397,7 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
 
         {hasPrize && <PrizeCard prizeTotal={prizeTotal} buyIn={league?.buy_in_amount || 0} memberCount={standings.length} p1={p1} p2={p2} p3={p3} />}
 
-        {!picksRevealed && (
-          <div style={{ background: 'rgba(107,114,128,0.08)', border: '1px solid rgba(107,114,128,0.2)', borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 13 }}>🔒</span>
-            <span style={{ color: '#6b7280', fontSize: 12 }}>Other teams&apos; picks are hidden — check back once the tournament is live. You can expand your own row to see your picks.</span>
-          </div>
-        )}
-
-        {isTotalStrokes && dropCount > 0 && (
+{isTotalStrokes && dropCount > 0 && (
           <div style={{ background: 'rgba(107,114,128,0.08)', border: '1px solid rgba(107,114,128,0.2)', borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ color: '#6b7280', fontSize: 12 }}>
               Top {countingPicks} scores will count — worst {dropCount} will be auto-dropped.
