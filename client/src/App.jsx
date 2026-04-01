@@ -3,6 +3,8 @@ import { Component, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
+import BallLoader from './components/BallLoader';
+import GolfLoader from './components/golf/GolfLoader';
 import BossMode from './components/BossMode';
 import FloatingChat from './components/FloatingChat';
 import SindariusWidget from './components/SindariusWidget';
@@ -35,12 +37,12 @@ import HubLanding from './pages/HubLanding';
 // unauthenticated users to the shared /login page.
 function GolfLoginRedirect() {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <GolfLoader fullScreen />;
   return <Navigate to={user ? '/golf/dashboard' : '/login'} replace />;
 }
 function BasketballLoginRedirect() {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <BallLoader fullScreen />;
   return <Navigate to={user ? '/basketball/dashboard' : '/login'} replace />;
 }
 
