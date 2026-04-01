@@ -144,6 +144,7 @@ export default function App() {
             <Route path="/basketball/faq" element={<FAQ />} />
             <Route path="/basketball/games" element={<ProtectedRoute><Games /></ProtectedRoute>} />
             <Route path="/basketball/admin" element={<ProtectedRoute><SuperAdmin /></ProtectedRoute>} />
+            <Route path="/basketball/home" element={<Navigate to="/basketball/dashboard" replace />} />
 
             {/* ── Basketball legacy redirects (backward compat for old bookmarks / internal nav) ── */}
             <Route path="/dashboard" element={<Navigate to="/basketball/dashboard" replace />} />
