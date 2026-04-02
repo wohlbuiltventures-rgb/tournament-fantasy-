@@ -1524,47 +1524,66 @@ router.post('/admin/dev/assign-salary-cap-salaries', superadmin, (req, res) => {
 });
 
 // ── GET /admin/dev/standings-join-diag?league_id=&tournament_id= ─────────────
-// Diagnoses TBD scores in standings: traces pool_picks→golf_players→golf_scores join.
+// Diagnoses TBD scores in standings: traces pool_picks→golf_scores player_id join.
 router.get('/admin/dev/standings-join-diag', superadmin, (req, res) => {
   const { league_id, tournament_id } = req.query;
   if (!league_id || !tournament_id) return res.status(400).json({ error: 'league_id and tournament_id required' });
 
-  // 1. Raw golf_scores rows for this tournament
-  const scoreRows = db.prepare(`
-    SELECT gp.name, gs.player_id, gs.round1, gs.finish_position, gs.fantasy_points
+  // 1. Tournament record + score count
+  const tourn = db.prepare('SELECT id, name, status, espn_event_id FROM golf_tournaments WHERE id = ?').get(tournament_id);
+  const scoreCount = db.prepare('SELECT COUNT(*) as c FROM golf_scores WHERE tournament_id = ?').get(tournament_id);
+  const scoreSample = db.prepare(`
+    SELECT gp.name as player_name, gs.player_id, gs.round1, gs.finish_position
     FROM golf_scores gs JOIN golf_players gp ON gp.id = gs.player_id
-    WHERE gs.tournament_id = ? AND gs.round1 IS NOT NULL
-    ORDER BY gs.finish_position ASC LIMIT 5
+    WHERE gs.tournament_id = ? ORDER BY gs.finish_position ASC LIMIT 5
   `).all(tournament_id);
 
-  // 2. Raw pool_picks player names for this league
-  const pickNames = db.prepare(`
-    SELECT player_id, player_name FROM pool_picks
-    WHERE league_id = ? AND tournament_id = ? LIMIT 10
+  // 2. pool_picks player_ids for this league (first 8)
+  const picks = db.prepare(`
+    SELECT pp.player_id as pp_player_id, pp.player_name,
+           gp.name as gp_name, gp.id as gp_id
+    FROM pool_picks pp
+    LEFT JOIN golf_players gp ON gp.id = pp.player_id
+    WHERE pp.league_id = ? AND pp.tournament_id = ? LIMIT 8
   `).all(league_id, tournament_id);
 
-  // 3. Full join trace: picks → golf_players → golf_scores
-  const joinTrace = db.prepare(`
-    SELECT
-      pp.player_name        AS pick_name,
-      gp.name               AS gp_name,
-      gp.id                 AS gp_id,
-      gs.round1,
-      gs.fantasy_points,
-      CASE WHEN gs.player_id IS NULL THEN 'NO golf_scores row for player_id'
-           ELSE 'OK' END AS status
+  // 3. Direct player_id join — the key test
+  const joinResult = db.prepare(`
+    SELECT pp.player_name, pp.player_id as pp_pid,
+           gs.player_id as gs_pid, gs.round1, gs.finish_position,
+           CASE WHEN gs.player_id IS NULL THEN 'NO_MATCH' ELSE 'MATCHED' END as status
     FROM pool_picks pp
     LEFT JOIN golf_scores gs ON gs.player_id = pp.player_id AND gs.tournament_id = ?
     WHERE pp.league_id = ? AND pp.tournament_id = ?
   `).all(tournament_id, league_id, tournament_id);
 
-  // 4. Tournament record
-  const tourn = db.prepare('SELECT id, name, status, espn_event_id FROM golf_tournaments WHERE id = ?').get(tournament_id);
+  // 4. UUID mismatch check: pick player_id exists in golf_players?
+  //    If not, the pick references a stale/deleted player record.
+  const stalePicks = db.prepare(`
+    SELECT pp.player_name, pp.player_id
+    FROM pool_picks pp
+    LEFT JOIN golf_players gp ON gp.id = pp.player_id
+    WHERE pp.league_id = ? AND pp.tournament_id = ? AND gp.id IS NULL
+  `).all(league_id, tournament_id);
 
-  // 5. golf_scores total count for this tournament
-  const scoreCount = db.prepare('SELECT COUNT(*) as c FROM golf_scores WHERE tournament_id = ?').get(tournament_id);
+  // 5. Does golf_players contain Fleetwood? Check by name.
+  const fleetwoodInGP = db.prepare("SELECT id, name FROM golf_players WHERE name LIKE '%Fleetwood%' OR name LIKE '%fleetwood%'").all();
+  const fleetwoodInGS = db.prepare(`
+    SELECT gs.player_id, gs.round1 FROM golf_scores gs
+    JOIN golf_players gp ON gp.id = gs.player_id
+    WHERE gs.tournament_id = ? AND gp.name LIKE '%Fleetwood%'
+  `).all(tournament_id);
+  const fleetwoodInPP = db.prepare("SELECT player_id, player_name FROM pool_picks WHERE player_name LIKE '%Fleetwood%' OR player_name LIKE '%fleetwood%'").all();
 
-  res.json({ tournament: tourn, score_count: scoreCount.c, sample_scores: scoreRows, pick_names: pickNames, join_trace: joinTrace });
+  res.json({
+    tournament: tourn,
+    score_count: scoreCount.c,
+    score_sample: scoreSample,
+    picks_sample: picks,
+    join_result: joinResult,
+    stale_picks: stalePicks,
+    fleetwood: { in_golf_players: fleetwoodInGP, in_golf_scores: fleetwoodInGS, in_pool_picks: fleetwoodInPP },
+  });
 });
 
 // ── GET /admin/dev/datagolf-odds-test ─────────────────────────────────────────
