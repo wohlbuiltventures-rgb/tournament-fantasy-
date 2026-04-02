@@ -1586,6 +1586,56 @@ router.get('/admin/dev/standings-join-diag', superadmin, (req, res) => {
   });
 });
 
+// ── POST /admin/dev/fix-pool-picks-player-ids ────────────────────────────────
+// Re-links pool_picks.player_id to current golf_players.id via name match.
+// Fixes UUID mismatch when golf_players is rebuilt after picks are submitted.
+router.post('/admin/dev/fix-pool-picks-player-ids', superadmin, (req, res) => {
+  try {
+    const before = db.prepare('SELECT COUNT(*) as c FROM pool_picks').get().c;
+    db.prepare(`
+      UPDATE pool_picks
+      SET player_id = (
+        SELECT gp.id FROM golf_players gp
+        WHERE LOWER(
+          CASE WHEN INSTR(pool_picks.player_name, ', ') > 0
+          THEN TRIM(SUBSTR(pool_picks.player_name, INSTR(pool_picks.player_name, ', ') + 2))
+               || ' ' ||
+               TRIM(SUBSTR(pool_picks.player_name, 1, INSTR(pool_picks.player_name, ', ') - 1))
+          ELSE pool_picks.player_name
+          END
+        ) = LOWER(gp.name)
+        LIMIT 1
+      )
+      WHERE EXISTS (
+        SELECT 1 FROM golf_players gp
+        WHERE LOWER(
+          CASE WHEN INSTR(pool_picks.player_name, ', ') > 0
+          THEN TRIM(SUBSTR(pool_picks.player_name, INSTR(pool_picks.player_name, ', ') + 2))
+               || ' ' ||
+               TRIM(SUBSTR(pool_picks.player_name, 1, INSTR(pool_picks.player_name, ', ') - 1))
+          ELSE pool_picks.player_name
+          END
+        ) = LOWER(gp.name)
+        AND gp.id != pool_picks.player_id
+      )
+    `).run();
+    const fixed = db.prepare('SELECT changes() as c').get().c;
+
+    // Verify: how many picks now have a matching golf_scores row for active tournament?
+    const verified = db.prepare(`
+      SELECT COUNT(*) as c FROM pool_picks pp
+      JOIN golf_scores gs ON gs.player_id = pp.player_id
+      JOIN golf_tournaments gt ON gt.id = gs.tournament_id AND gt.status = 'active'
+    `).get().c;
+
+    console.log(`[admin] fix-pool-picks-player-ids: ${fixed} updated, ${verified} now joined to golf_scores`);
+    res.json({ ok: true, total_picks: before, fixed, now_matched_to_scores: verified });
+  } catch (e) {
+    console.error('[admin] fix-pool-picks-player-ids error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── GET /admin/dev/datagolf-odds-test ─────────────────────────────────────────
 // Diagnostic: calls DataGolf outrights endpoint live, returns first 5 players
 // + specific search for Fleetwood/Morikawa/Spieth/Henley/Matsuyama.

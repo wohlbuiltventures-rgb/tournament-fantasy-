@@ -261,6 +261,43 @@ try {
   `);
 } catch (_) {}
 
+// ── Fix stale pool_picks.player_id after golf_players rebuild ─────────────────
+// When golf_players is rebuilt (new UUIDs), pool_picks retains the old UUIDs.
+// This migration re-links picks to current golf_players.id via name matching.
+// pool_picks.player_name is "Last, First"; golf_players.name is "First Last".
+// Idempotent — only updates rows where the ID actually differs from the match.
+try {
+  db.exec(`
+    UPDATE pool_picks
+    SET player_id = (
+      SELECT gp.id FROM golf_players gp
+      WHERE LOWER(
+        CASE WHEN INSTR(pool_picks.player_name, ', ') > 0
+        THEN TRIM(SUBSTR(pool_picks.player_name, INSTR(pool_picks.player_name, ', ') + 2))
+             || ' ' ||
+             TRIM(SUBSTR(pool_picks.player_name, 1, INSTR(pool_picks.player_name, ', ') - 1))
+        ELSE pool_picks.player_name
+        END
+      ) = LOWER(gp.name)
+      LIMIT 1
+    )
+    WHERE EXISTS (
+      SELECT 1 FROM golf_players gp
+      WHERE LOWER(
+        CASE WHEN INSTR(pool_picks.player_name, ', ') > 0
+        THEN TRIM(SUBSTR(pool_picks.player_name, INSTR(pool_picks.player_name, ', ') + 2))
+             || ' ' ||
+             TRIM(SUBSTR(pool_picks.player_name, 1, INSTR(pool_picks.player_name, ', ') - 1))
+        ELSE pool_picks.player_name
+        END
+      ) = LOWER(gp.name)
+      AND gp.id != pool_picks.player_id
+    )
+  `);
+  const changed = db.prepare('SELECT changes() as c').get();
+  if (changed.c > 0) console.log(`[golf-db] Fixed ${changed.c} stale pool_picks player_id(s)`);
+} catch (e) { console.warn('[golf-db] pool_picks player_id fix skipped:', e.message); }
+
 // ── player_master — persistent country lookup that survives tournament resets ──
 // This table is the source of truth for player → country mapping.
 // It is populated once and updated additively; it never gets wiped when
