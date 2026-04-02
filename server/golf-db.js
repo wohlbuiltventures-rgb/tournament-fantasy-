@@ -645,21 +645,63 @@ try {
     console.log('[golf-db] Reseeded', GOLF_PLAYERS.length, 'golf players (5-tier system)');
 
     // After a rebuild, re-anchor pool_picks player_id to new golf_players IDs by name.
-    // Without this, any existing pool_picks would have stale IDs that don't match the
-    // newly-reseeded golf_players rows, causing the standings JOIN to return null scores.
+    // pool_picks.player_name is stored as "Last, First" (DataGolf format); golf_players.name
+    // is "First Last". Flip before comparing so every pick is re-anchored correctly.
     try {
       const updPicks = db.prepare(`
         UPDATE pool_picks
-        SET player_id = (SELECT id FROM golf_players WHERE name = pool_picks.player_name LIMIT 1)
-        WHERE player_name IN (SELECT name FROM golf_players)
+        SET player_id = (
+          SELECT id FROM golf_players
+          WHERE LOWER(name) = LOWER(
+            CASE WHEN INSTR(pool_picks.player_name, ', ') > 0
+            THEN TRIM(SUBSTR(pool_picks.player_name, INSTR(pool_picks.player_name, ', ') + 2))
+                 || ' ' ||
+                 TRIM(SUBSTR(pool_picks.player_name, 1, INSTR(pool_picks.player_name, ', ') - 1))
+            ELSE pool_picks.player_name
+            END
+          )
+          LIMIT 1
+        )
+        WHERE EXISTS (
+          SELECT 1 FROM golf_players
+          WHERE LOWER(name) = LOWER(
+            CASE WHEN INSTR(pool_picks.player_name, ', ') > 0
+            THEN TRIM(SUBSTR(pool_picks.player_name, INSTR(pool_picks.player_name, ', ') + 2))
+                 || ' ' ||
+                 TRIM(SUBSTR(pool_picks.player_name, 1, INSTR(pool_picks.player_name, ', ') - 1))
+            ELSE pool_picks.player_name
+            END
+          )
+        )
       `);
       const { changes } = updPicks.run();
       if (changes > 0) console.log(`[golf-db] Re-anchored ${changes} pool_picks to new player IDs`);
 
       const updTierPicks = db.prepare(`
         UPDATE pool_tier_players
-        SET player_id = (SELECT id FROM golf_players WHERE name = pool_tier_players.player_name LIMIT 1)
-        WHERE player_name IN (SELECT name FROM golf_players)
+        SET player_id = (
+          SELECT id FROM golf_players
+          WHERE LOWER(name) = LOWER(
+            CASE WHEN INSTR(pool_tier_players.player_name, ', ') > 0
+            THEN TRIM(SUBSTR(pool_tier_players.player_name, INSTR(pool_tier_players.player_name, ', ') + 2))
+                 || ' ' ||
+                 TRIM(SUBSTR(pool_tier_players.player_name, 1, INSTR(pool_tier_players.player_name, ', ') - 1))
+            ELSE pool_tier_players.player_name
+            END
+          )
+          LIMIT 1
+        )
+        WHERE EXISTS (
+          SELECT 1 FROM golf_players
+          WHERE LOWER(name) = LOWER(
+            CASE WHEN INSTR(pool_tier_players.player_name, ', ') > 0
+            THEN TRIM(SUBSTR(pool_tier_players.player_name, INSTR(pool_tier_players.player_name, ', ') + 2))
+                 || ' ' ||
+                 TRIM(SUBSTR(pool_tier_players.player_name, 1, INSTR(pool_tier_players.player_name, ', ') - 1))
+            ELSE pool_tier_players.player_name
+            END
+          )
+        )
       `);
       const tierChanges = updTierPicks.run().changes;
       if (tierChanges > 0) console.log(`[golf-db] Re-anchored ${tierChanges} pool_tier_players to new player IDs`);
