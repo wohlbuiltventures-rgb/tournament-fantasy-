@@ -1028,8 +1028,7 @@ router.post('/leagues/:id/apply-drops', authMiddleware, (req, res) => {
       SELECT pp.id, pp.player_id, pp.player_name, pp.tier_number,
              gs.round1, gs.round2, gs.made_cut
       FROM pool_picks pp
-      LEFT JOIN golf_players gp ON gp.name = pp.player_name
-      LEFT JOIN golf_scores gs ON gs.player_id = gp.id AND gs.tournament_id = ?
+      LEFT JOIN golf_scores gs ON gs.player_id = pp.player_id AND gs.tournament_id = ?
       WHERE pp.league_id = ? AND pp.tournament_id = ? AND pp.user_id = ?
         AND (pp.is_withdrawn IS NULL OR pp.is_withdrawn = 0)
     `);

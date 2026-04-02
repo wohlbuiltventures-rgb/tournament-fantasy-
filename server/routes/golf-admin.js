@@ -1551,12 +1551,10 @@ router.get('/admin/dev/standings-join-diag', superadmin, (req, res) => {
       gp.id                 AS gp_id,
       gs.round1,
       gs.fantasy_points,
-      CASE WHEN gp.id IS NULL THEN 'NO golf_players match'
-           WHEN gs.player_id IS NULL THEN 'golf_players found but NO golf_scores row'
+      CASE WHEN gs.player_id IS NULL THEN 'NO golf_scores row for player_id'
            ELSE 'OK' END AS status
     FROM pool_picks pp
-    LEFT JOIN golf_players gp ON gp.name = pp.player_name
-    LEFT JOIN golf_scores gs ON gs.player_id = gp.id AND gs.tournament_id = ?
+    LEFT JOIN golf_scores gs ON gs.player_id = pp.player_id AND gs.tournament_id = ?
     WHERE pp.league_id = ? AND pp.tournament_id = ?
   `).all(tournament_id, league_id, tournament_id);
 
