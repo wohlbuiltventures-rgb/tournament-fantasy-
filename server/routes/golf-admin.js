@@ -1523,6 +1523,52 @@ router.post('/admin/dev/assign-salary-cap-salaries', superadmin, (req, res) => {
   }
 });
 
+// ── GET /admin/dev/standings-join-diag?league_id=&tournament_id= ─────────────
+// Diagnoses TBD scores in standings: traces pool_picks→golf_players→golf_scores join.
+router.get('/admin/dev/standings-join-diag', superadmin, (req, res) => {
+  const { league_id, tournament_id } = req.query;
+  if (!league_id || !tournament_id) return res.status(400).json({ error: 'league_id and tournament_id required' });
+
+  // 1. Raw golf_scores rows for this tournament
+  const scoreRows = db.prepare(`
+    SELECT gp.name, gs.player_id, gs.round1, gs.finish_position, gs.fantasy_points
+    FROM golf_scores gs JOIN golf_players gp ON gp.id = gs.player_id
+    WHERE gs.tournament_id = ? AND gs.round1 IS NOT NULL
+    ORDER BY gs.finish_position ASC LIMIT 5
+  `).all(tournament_id);
+
+  // 2. Raw pool_picks player names for this league
+  const pickNames = db.prepare(`
+    SELECT player_id, player_name FROM pool_picks
+    WHERE league_id = ? AND tournament_id = ? LIMIT 10
+  `).all(league_id, tournament_id);
+
+  // 3. Full join trace: picks → golf_players → golf_scores
+  const joinTrace = db.prepare(`
+    SELECT
+      pp.player_name        AS pick_name,
+      gp.name               AS gp_name,
+      gp.id                 AS gp_id,
+      gs.round1,
+      gs.fantasy_points,
+      CASE WHEN gp.id IS NULL THEN 'NO golf_players match'
+           WHEN gs.player_id IS NULL THEN 'golf_players found but NO golf_scores row'
+           ELSE 'OK' END AS status
+    FROM pool_picks pp
+    LEFT JOIN golf_players gp ON gp.name = pp.player_name
+    LEFT JOIN golf_scores gs ON gs.player_id = gp.id AND gs.tournament_id = ?
+    WHERE pp.league_id = ? AND pp.tournament_id = ?
+  `).all(tournament_id, league_id, tournament_id);
+
+  // 4. Tournament record
+  const tourn = db.prepare('SELECT id, name, status, espn_event_id FROM golf_tournaments WHERE id = ?').get(tournament_id);
+
+  // 5. golf_scores total count for this tournament
+  const scoreCount = db.prepare('SELECT COUNT(*) as c FROM golf_scores WHERE tournament_id = ?').get(tournament_id);
+
+  res.json({ tournament: tourn, score_count: scoreCount.c, sample_scores: scoreRows, pick_names: pickNames, join_trace: joinTrace });
+});
+
 // ── GET /admin/dev/datagolf-odds-test ─────────────────────────────────────────
 // Diagnostic: calls DataGolf outrights endpoint live, returns first 5 players
 // + specific search for Fleetwood/Morikawa/Spieth/Henley/Matsuyama.
