@@ -1636,6 +1636,88 @@ router.post('/admin/dev/fix-pool-picks-player-ids', superadmin, (req, res) => {
   }
 });
 
+// ── POST /admin/dev/fix-pool-picks-unicode ────────────────────────────────────
+// JS-side fix: re-links pool_picks.player_id for NO_MATCH picks using the same
+// normalizePlayerName() algorithm used by the sync. Handles diacritics (å, ö, etc.)
+// that SQLite LOWER() cannot match. Pass ?tournament_id= to scope to one tournament.
+router.post('/admin/dev/fix-pool-picks-unicode', superadmin, (req, res) => {
+  const { normalizePlayerName } = require('../utils/playerNameNorm');
+  const { tournament_id } = req.query;
+
+  // Helper: convert "Lastname, Firstname" → "Firstname Lastname"
+  function toFirstLast(name) {
+    if (!name) return name;
+    const commaIdx = name.indexOf(', ');
+    if (commaIdx === -1) return name;
+    return `${name.slice(commaIdx + 2)} ${name.slice(0, commaIdx)}`;
+  }
+
+  // Get all NO_MATCH picks (pool_picks where no golf_scores row exists for the player_id)
+  const noMatchQuery = tournament_id
+    ? db.prepare(`
+        SELECT DISTINCT pp.player_id, pp.player_name, pp.tournament_id
+        FROM pool_picks pp
+        LEFT JOIN golf_scores gs ON gs.player_id = pp.player_id AND gs.tournament_id = pp.tournament_id
+        WHERE pp.tournament_id = ? AND gs.player_id IS NULL
+      `).all(tournament_id)
+    : db.prepare(`
+        SELECT DISTINCT pp.player_id, pp.player_name, pp.tournament_id
+        FROM pool_picks pp
+        LEFT JOIN golf_scores gs ON gs.player_id = pp.player_id AND gs.tournament_id = pp.tournament_id
+        JOIN golf_tournaments gt ON gt.id = pp.tournament_id AND gt.status IN ('active', 'completed')
+        WHERE gs.player_id IS NULL
+      `).all();
+
+  // Get all golf_scores players for relevant tournaments (for matching)
+  const gsPlayers = tournament_id
+    ? db.prepare(`
+        SELECT gs.player_id, gs.tournament_id, gp.name
+        FROM golf_scores gs JOIN golf_players gp ON gp.id = gs.player_id
+        WHERE gs.tournament_id = ?
+      `).all(tournament_id)
+    : db.prepare(`
+        SELECT gs.player_id, gs.tournament_id, gp.name
+        FROM golf_scores gs JOIN golf_players gp ON gp.id = gs.player_id
+        JOIN golf_tournaments gt ON gt.id = gs.tournament_id AND gt.status IN ('active', 'completed')
+      `).all();
+
+  // Build lookup: tournament_id → Map(normalizedName → player_id)
+  const gsByTournament = {};
+  for (const row of gsPlayers) {
+    if (!gsByTournament[row.tournament_id]) gsByTournament[row.tournament_id] = new Map();
+    const norm = normalizePlayerName(toFirstLast(row.name));
+    gsByTournament[row.tournament_id].set(norm, row.player_id);
+  }
+
+  const results = [];
+  const updateStmt = db.prepare('UPDATE pool_picks SET player_id = ? WHERE player_id = ? AND tournament_id = ?');
+
+  for (const pick of noMatchQuery) {
+    const gsMap = gsByTournament[pick.tournament_id];
+    if (!gsMap) { results.push({ player_name: pick.player_name, status: 'no_scores_for_tournament' }); continue; }
+
+    const searchName = toFirstLast(pick.player_name);
+    const normSearch = normalizePlayerName(searchName);
+    const newId = gsMap.get(normSearch);
+
+    if (!newId) {
+      results.push({ player_name: pick.player_name, normalized: normSearch, status: 'no_match_in_scores' });
+      continue;
+    }
+    if (newId === pick.player_id) {
+      results.push({ player_name: pick.player_name, status: 'already_correct' });
+      continue;
+    }
+
+    const info = updateStmt.run(newId, pick.player_id, pick.tournament_id);
+    results.push({ player_name: pick.player_name, old_id: pick.player_id, new_id: newId, updated: info.changes, status: 'fixed' });
+  }
+
+  const fixed = results.filter(r => r.status === 'fixed').reduce((sum, r) => sum + (r.updated || 0), 0);
+  console.log(`[admin] fix-pool-picks-unicode: ${fixed} picks updated for ${results.length} distinct players`);
+  res.json({ ok: true, fixed, details: results });
+});
+
 // ── GET /admin/dev/datagolf-odds-test ─────────────────────────────────────────
 // Diagnostic: calls DataGolf outrights endpoint live, returns first 5 players
 // + specific search for Fleetwood/Morikawa/Spieth/Henley/Matsuyama.
