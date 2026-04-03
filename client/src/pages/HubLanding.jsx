@@ -513,7 +513,7 @@ export default function HubLanding() {
               </p>
 
               {/* CTAs */}
-              <div className="hub-a3" style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <div className="hub-a3" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <Link to={user ? '/golf/dashboard' : '/golf'}
                   className="hub-btn-hover"
                   style={{
@@ -524,7 +524,21 @@ export default function HubLanding() {
                     boxShadow: '0 0 36px rgba(0,204,106,0.4)',
                   }}
                 >
-                  ⛳ {user ? 'My Golf Leagues' : 'Start a Golf League'}
+                  ⛳ {user ? 'My Golf Leagues' : 'Run a Pool'}
+                </Link>
+                <Link to="/golf/join"
+                  className="hub-btn-hover"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    background: 'rgba(0,204,106,0.07)',
+                    border: '1.5px solid rgba(0,204,106,0.35)',
+                    color: '#22c55e', fontWeight: 700, fontSize: 15,
+                    padding: '15px 30px', borderRadius: 16, textDecoration: 'none',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,204,106,0.13)'; e.currentTarget.style.borderColor = 'rgba(0,204,106,0.55)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,204,106,0.07)'; e.currentTarget.style.borderColor = 'rgba(0,204,106,0.35)'; }}
+                >
+                  🔗 Join a Pool
                 </Link>
                 <Link to={user ? '/basketball/dashboard' : '/basketball'}
                   className="hub-btn-hover"
