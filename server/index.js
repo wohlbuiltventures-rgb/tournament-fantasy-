@@ -52,6 +52,15 @@ app.set('io', io);
 // Register the raw body parser BEFORE the global express.json() middleware,
 // and ONLY for webhook paths.
 // ---------------------------------------------------------------------------
+// Redirect naked domain → www (must be first, before any route or static middleware)
+app.use((req, res, next) => {
+  const host = req.headers.host || '';
+  if (host === 'tourneyrun.app') {
+    return res.redirect(301, `https://www.tourneyrun.app${req.originalUrl}`);
+  }
+  next();
+});
+
 app.use('/api/payments/webhook',      express.raw({ type: 'application/json' }));
 app.use('/api/golf/webhooks/stripe',  express.raw({ type: 'application/json' })); // URL kept for Square compatibility
 
@@ -91,15 +100,6 @@ app.use('/uploads', express.static(uploadsDir));
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-// Redirect naked domain → www
-app.use((req, res, next) => {
-  const host = req.headers.host || '';
-  if (host === 'tourneyrun.app') {
-    return res.redirect(301, `https://www.tourneyrun.app${req.url}`);
-  }
-  next();
-});
 
 // Serve built React client in production
 const clientDist = path.join(__dirname, '../client/dist');
