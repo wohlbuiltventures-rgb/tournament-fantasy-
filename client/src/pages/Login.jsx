@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useDocTitle } from '../hooks/useDocTitle';
@@ -7,7 +7,7 @@ import api from '../api';
 
 export default function Login() {
   useDocTitle('Sign In | TourneyRun');
-  const { login } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sdSession = searchParams.get('smartdraft_session');
@@ -21,19 +21,28 @@ export default function Login() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  // Navigate AFTER React commits the auth state update — keeps Login visible
+  // until the route actually changes (no null flash from <Navigate> returning null).
+  // Also handles already-logged-in users who land on /login.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    const dest = sdSession
+      ? '/basketball/create-league?smartdraft=1'
+      : thenUrl || '/';
+    navigate(dest, { replace: true });
+  }, [user, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
       await login(form.email, form.password);
+      // Fire smartdraft credit claim if needed.
+      // Navigation is handled by the useEffect above — it fires after React
+      // commits setUser(), guaranteeing ProtectedRoute sees the user.
       if (sdSession) {
         try { await api.post('/payments/claim-credit', { session_id: sdSession }); } catch {}
-        navigate('/basketball/create-league?smartdraft=1');
-      } else if (thenUrl) {
-        navigate(thenUrl);
-      } else {
-        navigate('/basketball/dashboard');
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');

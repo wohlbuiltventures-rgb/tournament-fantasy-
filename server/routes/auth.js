@@ -98,18 +98,20 @@ router.post('/login', async (req, res) => {
     }
 
     // Accept email or username in the email field.
-    // Select only the fields needed for auth — never pull password_hash into
-    // a variable that could accidentally be serialised into a response.
+    // LOWER() on both sides handles case-insensitive email lookup (e.g. User@Example.com
+    // matches user@example.com). SQLite = is case-sensitive for TEXT by default.
     const user = db.prepare(
-      'SELECT id, email, username, role, password_hash FROM users WHERE email = ? OR username = ?'
+      'SELECT id, email, username, role, password_hash FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)'
     ).get(email, email);
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      console.error(`[login] no user found for identifier: "${email}"`);
+      return res.status(401).json({ error: 'Email or password is incorrect. Please try again.' });
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      console.error(`[login] bcrypt mismatch for user: "${user.email}"`);
+      return res.status(401).json({ error: 'Email or password is incorrect. Please try again.' });
     }
 
     const token = signToken(user);
