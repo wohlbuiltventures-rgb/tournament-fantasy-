@@ -26,6 +26,10 @@ export default function Login() {
   // Also handles already-logged-in users who land on /login.
   useEffect(() => {
     if (authLoading || !user) return;
+    if (user.force_password_reset) {
+      navigate('/account/set-password', { replace: true });
+      return;
+    }
     const dest = sdSession
       ? '/basketball/create-league?smartdraft=1'
       : thenUrl || '/';

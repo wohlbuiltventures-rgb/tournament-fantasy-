@@ -73,6 +73,7 @@ import RefRedirect from './pages/RefRedirect';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Profile from './pages/Profile';
+import ForcePasswordReset from './pages/ForcePasswordReset';
 import StrategyHub from './pages/StrategyHub';
 import FAQ from './pages/FAQ';
 import SuperAdmin from './pages/SuperAdmin';
@@ -138,11 +139,15 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/signup" element={<InviteSignup />} />
+            {/* Force-reset: shown when superadmin sets a temp password */}
+            <Route path="/account/set-password" element={<ForcePasswordReset />} />
 
             {/* ── Shared ── */}
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            {/* Canonical profile route — old paths redirect here */}
+            <Route path="/account/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/profile" element={<Navigate to="/account/profile" replace />} />
 
             {/* ── Basketball (primary routes at /basketball/*) ── */}
             <Route path="/basketball" element={<Landing />} />
@@ -198,7 +203,7 @@ export default function App() {
               <Route path="/golf/league/:id/picks/submitted" element={<ProtectedRoute><GolfPoolPicksSubmitted /></ProtectedRoute>} />
               <Route path="/golf/strategy" element={<GolfStrategy />} />
               <Route path="/golf/news" element={<GolfNews />} />
-              <Route path="/golf/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/golf/profile" element={<Navigate to="/account/profile" replace />} />
               <Route path="/golf/faq" element={<GolfFaq />} />
               <Route path="/golf/payment/success" element={<GolfPaymentSuccess />} />
               <Route path="/golf/admin" element={<ProtectedRoute><GolfSuperAdmin /></ProtectedRoute>} />

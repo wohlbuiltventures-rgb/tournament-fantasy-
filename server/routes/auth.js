@@ -101,7 +101,7 @@ router.post('/login', async (req, res) => {
     // LOWER() on both sides handles case-insensitive email lookup (e.g. User@Example.com
     // matches user@example.com). SQLite = is case-sensitive for TEXT by default.
     const user = db.prepare(
-      'SELECT id, email, username, role, password_hash FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)'
+      'SELECT id, email, username, role, password_hash, force_password_reset FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)'
     ).get(email, email);
     if (!user) {
       console.error(`[login] no user found for identifier: "${email}"`);
@@ -115,9 +115,28 @@ router.post('/login', async (req, res) => {
     }
 
     const token = signToken(user);
-    res.json({ token, user: { id: user.id, email: user.email, username: user.username, role: user.role || 'user' } });
+    res.json({ token, user: { id: user.id, email: user.email, username: user.username, role: user.role || 'user', force_password_reset: user.force_password_reset === 1 } });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/auth/force-reset-password
+// Used when a superadmin has set a temp password and the user must change it on first login.
+// Requires a valid Bearer token (user already authenticated with the temp password).
+router.post('/force-reset-password', authMiddleware, async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    const hash = await bcrypt.hash(newPassword, 10);
+    db.prepare('UPDATE users SET password_hash = ?, force_password_reset = 0 WHERE id = ?').run(hash, req.user.id);
+    console.log(`[force-reset-password] user ${req.user.id} set new password`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[force-reset-password]', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

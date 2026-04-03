@@ -254,7 +254,7 @@ router.post('/admin/users/:id/reset-password', superadmin, async (req, res) => {
   try {
     const tempPw = Math.random().toString(36).slice(2, 10);
     const hash = await bcrypt.hash(tempPw, 10);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.params.id);
+    db.prepare('UPDATE users SET password_hash = ?, force_password_reset = 1 WHERE id = ?').run(hash, req.params.id);
     res.json({ success: true, tempPassword: tempPw });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

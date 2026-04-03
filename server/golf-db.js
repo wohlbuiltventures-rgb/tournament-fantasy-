@@ -797,9 +797,10 @@ try {
 } catch (e) { console.log('[golf-db] startup task skipped:', e.message); }
 
 // ── Golf user profile fields ───────────────────────────────────────────────────
-try { db.exec("ALTER TABLE users ADD COLUMN gender TEXT DEFAULT NULL"); }         catch (e) {}
-try { db.exec("ALTER TABLE users ADD COLUMN dob TEXT DEFAULT NULL"); }            catch (e) {}
-try { db.exec("ALTER TABLE users ADD COLUMN dob_verified INTEGER DEFAULT 0"); }   catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN gender TEXT DEFAULT NULL"); }                       catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN dob TEXT DEFAULT NULL"); }                          catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN dob_verified INTEGER DEFAULT 0"); }                 catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN force_password_reset INTEGER DEFAULT 0"); }         catch (e) {}
 
 try {
   db.exec(`

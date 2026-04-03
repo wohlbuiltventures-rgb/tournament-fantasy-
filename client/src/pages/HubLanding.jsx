@@ -171,6 +171,18 @@ function MyLeaguesDropdown() {
             </Link>
           ))}
           <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
+          <Link
+            to="/account/profile" onClick={() => setOpen(false)}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', color: '#9ca3af', fontSize: 13, textDecoration: 'none', fontWeight: 500, borderRadius: 6 }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#fff'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9ca3af'; }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+            </svg>
+            Profile
+          </Link>
+          <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }} />
           <button
             onClick={handleSignOut}
             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', color: '#6b7280', fontSize: 13, fontWeight: 500, borderRadius: 6, background: 'transparent', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}

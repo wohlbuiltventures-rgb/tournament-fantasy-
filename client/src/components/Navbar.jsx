@@ -352,7 +352,7 @@ export default function Navbar({ variant }) {
               {isGolf && <GolfBellMenu {...golfNotif} />}
               <div style={{ width: '0.5px', height: 18, background: theme.divider, flexShrink: 0 }} />
               <Link
-                to={isGolf ? '/golf/profile' : '/profile'}
+                to="/account/profile"
                 title={user.display_name || user.username}
                 style={{
                   width: 30, height: 30, borderRadius: '50%',
@@ -439,7 +439,7 @@ export default function Navbar({ variant }) {
           {user ? (
             <>
               <Link
-                to={isGolf ? '/golf/profile' : '/profile'}
+                to="/account/profile"
                 onClick={() => setMenuOpen(false)}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, color: '#d1d5db', textDecoration: 'none', fontSize: 14 }}
               >
