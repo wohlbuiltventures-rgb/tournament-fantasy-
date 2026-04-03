@@ -228,6 +228,12 @@ export default function GolfLanding() {
                 >
                   <Plus className="w-5 h-5" /> Create League
                 </Link>
+                <Link
+                  to="/golf/join"
+                  className="inline-flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 font-bold px-10 py-4 rounded-full transition-all text-base"
+                >
+                  Join a League
+                </Link>
               </>
             ) : (
               <>
