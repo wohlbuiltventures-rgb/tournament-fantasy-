@@ -232,6 +232,8 @@ export default function Navbar({ variant }) {
   const isHub       = path === '/';
   const isAuthPage  = path === '/login' || path === '/register' ||
                       path === '/forgot-password' || path === '/reset-password';
+  // /account/* uses its own hub-style nav embedded in the page
+  const isAccountPage = path.startsWith('/account');
 
   // ── Live games polling (basketball only, when logged in, not on golf routes) ─
   useEffect(() => {
@@ -248,7 +250,7 @@ export default function Navbar({ variant }) {
     return () => { cancelled = true; clearInterval(id); };
   }, [user, isGolf, isGolfRoute]);
 
-  if (!isGolf && (isGolfRoute || isHub || isAuthPage)) return null;
+  if (!isGolf && (isGolfRoute || isHub || isAuthPage || isAccountPage)) return null;
 
   // ── Shared handlers / helpers ─────────────────────────────────────────────
 
