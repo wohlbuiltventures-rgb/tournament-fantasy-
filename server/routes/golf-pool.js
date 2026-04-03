@@ -432,10 +432,26 @@ router.post('/leagues/:id/picks', authMiddleware, (req, res) => {
 
     if (league.picks_locked) return res.status(403).json({ error: 'Picks are locked for this tournament.' });
 
-    const { tournament_id, picks } = req.body;
+    const { tournament_id, picks, tiebreaker_score, entry_number = 1, entry_team_name } = req.body;
     const tid = tournament_id || league.pool_tournament_id;
     if (!tid) return res.status(400).json({ error: 'tournament_id required' });
     if (!Array.isArray(picks) || picks.length === 0) return res.status(400).json({ error: 'picks array required' });
+
+    // Validate tiebreaker for pool format
+    if (league.format_type !== 'salary_cap') {
+      if (tiebreaker_score === undefined || tiebreaker_score === null || tiebreaker_score === '') {
+        return res.status(400).json({ error: 'Tiebreaker score is required — predict the winning score (vs par).' });
+      }
+    }
+    const tiebreakerScore = tiebreaker_score !== undefined && tiebreaker_score !== '' ? parseInt(tiebreaker_score) : null;
+
+    // Validate multi-entry
+    const entryNumber = Math.max(1, parseInt(entry_number) || 1);
+    const maxEntries = league.pool_max_entries || 1;
+    if (entryNumber > maxEntries) {
+      return res.status(400).json({ error: `Maximum ${maxEntries} entr${maxEntries === 1 ? 'y' : 'ies'} allowed per player.` });
+    }
+    const entryTeamName = (entry_team_name || '').trim() || null;
 
     const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tid);
     if (!tourn) return res.status(404).json({ error: 'Tournament not found' });
@@ -478,17 +494,17 @@ router.post('/leagues/:id/picks', authMiddleware, (req, res) => {
       }
     }
 
-    // Upsert picks (replace if already submitted)
+    // Upsert picks — entry-specific delete so other entries are not affected
     db.transaction(() => {
-      db.prepare('DELETE FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ?').run(req.params.id, tid, req.user.id);
+      db.prepare('DELETE FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ? AND COALESCE(entry_number, 1) = ?').run(req.params.id, tid, req.user.id, entryNumber);
       const ins = db.prepare(`
-        INSERT INTO pool_picks (id, league_id, tournament_id, user_id, player_id, player_name, tier_number, salary_used)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO pool_picks (id, league_id, tournament_id, user_id, player_id, player_name, tier_number, salary_used, tiebreaker_score, entry_number, entry_team_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const p of picks) {
         const player = db.prepare('SELECT * FROM golf_players WHERE id = ?').get(p.player_id);
         const tierRow = db.prepare('SELECT salary FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND player_id = ?').get(req.params.id, tid, p.player_id);
-        ins.run(uuidv4(), req.params.id, tid, req.user.id, p.player_id, player?.name || p.player_name || '', p.tier_number || null, tierRow?.salary || 0);
+        ins.run(uuidv4(), req.params.id, tid, req.user.id, p.player_id, player?.name || p.player_name || '', p.tier_number || null, tierRow?.salary || 0, tiebreakerScore, entryNumber, entryTeamName);
       }
       // Persist lock_time on league so pick sheet can show consistent countdown
       if (!league.picks_lock_time) {
@@ -554,11 +570,19 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
     const tid = req.query.tournament_id || league.pool_tournament_id;
     if (!tid) return res.json({ picks: [], submitted: false, picks_locked: !!league.picks_locked });
 
+    // Determine which entry to show (defaults to entry 1; pass ?entry_number=N to view another)
+    const viewEntryNumber = parseInt(req.query.entry_number) || 1;
+
+    // All entries submitted by this user (for multi-entry "Add Another" button)
+    const submittedEntries = db.prepare(
+      'SELECT DISTINCT COALESCE(entry_number, 1) as entry_number FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ?'
+    ).all(req.params.id, tid, req.user.id).map(r => r.entry_number);
+
     // picks JOIN pool_tier_players (odds, world_ranking) JOIN golf_players (country) LEFT JOIN golf_scores
     const picks = db.prepare(`
       SELECT
         pp.id, pp.tier_number, pp.player_id, pp.player_name, pp.salary_used,
-        pp.is_dropped,
+        pp.is_dropped, pp.tiebreaker_score,
         ptp.odds_display, ptp.world_ranking,
         COALESCE(pp.country, gp.country) AS country,
         COALESCE(pp.is_withdrawn, ptp.is_withdrawn, 0) AS is_withdrawn,
@@ -571,8 +595,9 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
       LEFT JOIN golf_players gp ON gp.id = pp.player_id
       LEFT JOIN golf_scores gs ON gs.player_id = pp.player_id AND gs.tournament_id = pp.tournament_id
       WHERE pp.league_id = ? AND pp.tournament_id = ? AND pp.user_id = ?
+        AND COALESCE(pp.entry_number, 1) = ?
       ORDER BY pp.tier_number ASC, COALESCE(gs.fantasy_points, 0) DESC
-    `).all(req.params.id, tid, req.user.id);
+    `).all(req.params.id, tid, req.user.id, viewEntryNumber);
 
     if (picks.length) console.log('[my-roster] pick[0] country:', picks[0].country, '| player:', picks[0].player_name);
 
@@ -629,19 +654,24 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
       droppedCount   = dropResult.dropped_count;
     }
 
+    const tiebreakerScore = picks.length > 0 ? (picks[0].tiebreaker_score ?? null) : null;
+
     res.json({
       picks: enrichedPicks,
       submitted: picks.length > 0,
+      submitted_entries: submittedEntries,
       picks_locked: !!league.picks_locked,
       lock_time: lockTime,
       tournament: tourn,
       tiers,
-      drop_count:     dropCount,
-      drops_applied:  dropsApplied,
-      picks_per_team: league.picks_per_team || 8,
-      team_score:     teamScore,
-      counting_count: countingCount,
-      dropped_count:  droppedCount,
+      drop_count:      dropCount,
+      drops_applied:   dropsApplied,
+      picks_per_team:  league.picks_per_team || 8,
+      team_score:      teamScore,
+      counting_count:  countingCount,
+      dropped_count:   droppedCount,
+      tiebreaker_score: tiebreakerScore,
+      pool_max_entries: league.pool_max_entries || 1,
     });
   } catch (err) {
     console.error('[golf-pool] my-roster error:', err);
@@ -708,6 +738,42 @@ router.get('/tournaments/:id/suggested-tiers', authMiddleware, (req, res) => {
     res.json({ tiers, field_size: total, source: fieldCount > 0 ? 'tournament_field' : 'world_rankings' });
   } catch (err) {
     console.error('[golf-pool] suggested-tiers error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── GET /tournaments/:id/field-players ───────────────────────────────────────
+// Returns all players in the tournament field (or active players as fallback),
+// sorted by odds ascending (favorites first). Used by the CreateLeague tier
+// config editor for live player count and sample name previews.
+
+router.get('/tournaments/:id/field-players', authMiddleware, (req, res) => {
+  try {
+    const fieldCount = db.prepare('SELECT COUNT(*) as cnt FROM golf_tournament_fields WHERE tournament_id = ?')
+      .get(req.params.id).cnt;
+    const rawPlayers = fieldCount > 0
+      ? db.prepare(`
+          SELECT gp.id, gp.name, gp.world_ranking,
+                 COALESCE(tf.odds_display, gp.odds_display) as odds_display,
+                 COALESCE(tf.odds_decimal, gp.odds_decimal) as odds_decimal
+          FROM golf_players gp
+          INNER JOIN golf_tournament_fields tf ON tf.player_id = gp.id AND tf.tournament_id = ?
+        `).all(req.params.id)
+      : db.prepare('SELECT id, name, world_ranking, odds_display, odds_decimal FROM golf_players WHERE is_active = 1').all();
+
+    const players = rawPlayers.map(p => {
+      const gen = (!p.odds_display || !p.odds_decimal) ? rankToOdds(p.world_ranking) : null;
+      return {
+        id: p.id,
+        name: p.name,
+        odds_display: p.odds_display || gen?.odds_display || '',
+        odds_decimal: typeof p.odds_decimal === 'number' ? p.odds_decimal : (gen?.odds_decimal || 999),
+      };
+    }).sort((a, b) => (a.odds_decimal || 999) - (b.odds_decimal || 999));
+
+    res.json({ players, field_size: players.length });
+  } catch (err) {
+    console.error('[golf-pool] field-players error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1084,19 +1150,32 @@ router.post('/leagues/:id/apply-drops', authMiddleware, (req, res) => {
 });
 
 // ── POST /leagues/:id/members/:userId/paid ────────────────────────────────────
-// Commissioner toggles paid status for a member.
+// Commissioner toggles paid status for a member (or specific entry when entry_number > 1).
 router.post('/leagues/:id/members/:userId/paid', authMiddleware, (req, res) => {
   try {
     const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
     if (!league) return res.status(404).json({ error: 'League not found' });
     if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
-    const { is_paid } = req.body;
+    const { is_paid, entry_number = 1 } = req.body;
     if (is_paid === undefined) return res.status(400).json({ error: 'is_paid required' });
-    const result = db.prepare(
-      'UPDATE golf_league_members SET is_paid = ? WHERE golf_league_id = ? AND user_id = ?'
-    ).run(is_paid ? 1 : 0, req.params.id, req.params.userId);
-    if (result.changes === 0) return res.status(404).json({ error: 'Member not found' });
-    res.json({ ok: true, is_paid: is_paid ? 1 : 0 });
+    const entryNum = parseInt(entry_number) || 1;
+    if (entryNum <= 1) {
+      // Entry 1: update golf_league_members (backward-compatible)
+      const result = db.prepare(
+        'UPDATE golf_league_members SET is_paid = ? WHERE golf_league_id = ? AND user_id = ?'
+      ).run(is_paid ? 1 : 0, req.params.id, req.params.userId);
+      if (result.changes === 0) return res.status(404).json({ error: 'Member not found' });
+    } else {
+      // Entry 2+: upsert into pool_entry_paid
+      const tid = league.pool_tournament_id;
+      db.prepare(`
+        INSERT INTO pool_entry_paid (id, league_id, tournament_id, user_id, entry_number, is_paid)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(league_id, tournament_id, user_id, entry_number)
+        DO UPDATE SET is_paid = excluded.is_paid
+      `).run(uuidv4(), req.params.id, tid || '', req.params.userId, entryNum, is_paid ? 1 : 0);
+    }
+    res.json({ ok: true, is_paid: is_paid ? 1 : 0, entry_number: entryNum });
   } catch (err) {
     console.error('[golf-pool] set-paid error:', err);
     res.status(500).json({ error: 'Server error' });

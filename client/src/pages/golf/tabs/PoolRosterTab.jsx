@@ -409,6 +409,10 @@ export default function PoolRosterTab({ leagueId, league }) {
   const [submitting, setSubmitting]   = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [localSubmitted, setLocalSubmitted] = useState(null);
+  // Feature: tiebreaker + multi-entry
+  const [tiebreakerScore, setTiebreakerScore] = useState('');
+  const [currentEntryNumber, setCurrentEntryNumber] = useState(1);
+  const [entryTeamName, setEntryTeamName] = useState(''); // only used for entries 2+
 
   async function load() {
     try {
@@ -458,7 +462,11 @@ export default function PoolRosterTab({ leagueId, league }) {
 
   const totalTarget = picksPerTeam;
   const totalDone   = Object.values(selected).flat().length;
-  const canSubmit   = tiers.length > 0 && tiers.every(t => (selected[t.tier] || []).length === (t.picks || 0));
+  const allPicksMade = tiers.length > 0 && tiers.every(t => (selected[t.tier] || []).length === (t.picks || 0));
+  const canSubmit   = allPicksMade && tiebreakerScore !== '';
+  const maxEntries  = data?.pool_max_entries || league.pool_max_entries || 1;
+  // Count entries already submitted (picks.length > 0 means entry 1 submitted; check entry_numbers from data)
+  const submittedEntryNumbers = data?.submitted_entries || (data?.submitted ? [1] : []);
 
   function handlePick(tierNum, playerId, playerName) {
     const limit = tiers.find(t => t.tier === tierNum)?.picks || 1;
@@ -498,8 +506,14 @@ export default function PoolRosterTab({ leagueId, league }) {
       await api.post(`/golf/leagues/${leagueId}/picks`, {
         tournament_id: league.pool_tournament_id,
         picks: picksList,
+        tiebreaker_score: parseInt(tiebreakerScore),
+        entry_number: currentEntryNumber,
+        entry_team_name: currentEntryNumber > 1 ? entryTeamName : undefined,
       });
       setShowConfirm(false);
+      setCurrentEntryNumber(1);
+      setEntryTeamName('');
+      setTiebreakerScore('');
       await load();
     } catch (err) {
       setSubmitError(err.response?.data?.error || 'Submission failed. Try again.');
@@ -602,6 +616,34 @@ export default function PoolRosterTab({ leagueId, league }) {
             );
           })}
 
+          {/* Tiebreaker input — shown once all picks are made */}
+          {tiers.length > 0 && allPicksMade && (
+            <div style={{ marginTop: 24, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 14, padding: '16px 18px' }}>
+              <label style={{ display: 'block', color: '#a5b4fc', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                🏆 Tiebreaker — Predict the winning score (vs par)
+              </label>
+              <p style={{ color: '#6b7280', fontSize: 12, marginBottom: 10 }}>
+                If two teams tie, whoever is closest to the actual winning score wins the tiebreaker.
+              </p>
+              <input
+                type="number"
+                value={tiebreakerScore}
+                onChange={e => setTiebreakerScore(e.target.value)}
+                placeholder="e.g. -18"
+                style={{
+                  width: 110, background: '#111827', border: `1.5px solid ${tiebreakerScore !== '' ? '#6366f1' : 'rgba(255,255,255,0.12)'}`,
+                  borderRadius: 10, padding: '10px 14px', color: '#f1f5f9', fontSize: 16, fontWeight: 700,
+                  outline: 'none', transition: 'border-color 0.15s', fontVariantNumeric: 'tabular-nums',
+                }}
+                onFocus={e => { e.target.style.borderColor = '#6366f1'; }}
+                onBlur={e => { e.target.style.borderColor = tiebreakerScore !== '' ? '#6366f1' : 'rgba(255,255,255,0.12)'; }}
+              />
+              {tiebreakerScore === '' && (
+                <p style={{ color: '#f87171', fontSize: 11, marginTop: 6 }}>Required before submitting</p>
+              )}
+            </div>
+          )}
+
           {/* Sticky submit bar */}
           {tiers.length > 0 && (
             <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(10,14,26,0.97)', borderTop: '1px solid rgba(255,255,255,0.07)', padding: '12px 16px 18px', zIndex: 50 }}>
@@ -620,7 +662,11 @@ export default function PoolRosterTab({ leagueId, league }) {
                   onClick={() => canSubmit && setShowConfirm(true)}
                   disabled={!canSubmit}
                 >
-                  {canSubmit ? 'Submit Picks →' : `${totalTarget - totalDone} more pick${totalTarget - totalDone !== 1 ? 's' : ''} needed`}
+                  {!allPicksMade
+                    ? `${totalTarget - totalDone} more pick${totalTarget - totalDone !== 1 ? 's' : ''} needed`
+                    : tiebreakerScore === ''
+                      ? 'Enter tiebreaker score above ↑'
+                      : 'Submit Picks →'}
                 </Button>
               </div>
             </div>
@@ -733,6 +779,47 @@ export default function PoolRosterTab({ leagueId, league }) {
                 </div>
               </div>
             )}
+
+            {/* ── Add Another Entry (multi-entry) ── */}
+            {maxEntries > 1 && !picksLocked && tournStatus !== 'active' && tournStatus !== 'completed' && (
+              <div style={{ marginTop: 24, padding: '16px 0', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                {submittedEntryNumbers.length < maxEntries ? (
+                  <button
+                    onClick={() => {
+                      const nextEntry = (data?.submitted_entries?.length || 1) + 1;
+                      setCurrentEntryNumber(nextEntry);
+                      setSelected({});
+                      setNames({});
+                      setTiebreakerScore('');
+                      setEntryTeamName('');
+                      setLocalSubmitted(false);
+                    }}
+                    style={{ width: '100%', background: 'rgba(34,197,94,0.07)', border: '1.5px dashed rgba(34,197,94,0.3)', borderRadius: 14, padding: '14px 0', color: '#22c55e', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                  >
+                    <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add Another Entry ({submittedEntryNumbers.length}/{maxEntries} used)
+                  </button>
+                ) : (
+                  <p style={{ color: '#4b5563', fontSize: 12, textAlign: 'center' }}>Maximum {maxEntries} entries reached</p>
+                )}
+              </div>
+            )}
+
+            {/* Entry team name input for entries 2+ */}
+            {currentEntryNumber > 1 && !submitted && (
+              <div style={{ marginTop: 16, background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 12, padding: '14px 16px' }}>
+                <label style={{ display: 'block', color: '#86efac', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  Entry #{currentEntryNumber} — Team Name
+                </label>
+                <input
+                  type="text"
+                  value={entryTeamName}
+                  onChange={e => setEntryTeamName(e.target.value)}
+                  placeholder="e.g. 'The Backup Plan'"
+                  maxLength={40}
+                  style={{ width: '100%', background: '#111827', border: '1.5px solid rgba(34,197,94,0.3)', borderRadius: 10, padding: '10px 14px', color: '#f1f5f9', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+            )}
           </>
         );
       })()}
@@ -775,6 +862,18 @@ export default function PoolRosterTab({ leagueId, league }) {
                 );
               })}
             </div>
+            {/* Tiebreaker summary */}
+            <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ color: '#a5b4fc', fontSize: 12, fontWeight: 600 }}>🏆 Tiebreaker</span>
+              <span style={{ color: '#f1f5f9', fontSize: 16, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                {parseInt(tiebreakerScore) > 0 ? '+' : ''}{tiebreakerScore}
+              </span>
+            </div>
+            {currentEntryNumber > 1 && entryTeamName && (
+              <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '8px 14px', marginBottom: 14 }}>
+                <span style={{ color: '#86efac', fontSize: 12 }}>Entry #{currentEntryNumber}: <strong>{entryTeamName}</strong></span>
+              </div>
+            )}
             {submitError && <p style={{ color: '#f87171', fontSize: 12, marginBottom: 12 }}>{submitError}</p>}
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setShowConfirm(false)} disabled={submitting} style={{ flex: 1, background: '#1f2937', border: 'none', color: '#9ca3af', padding: '12px 0', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Go Back</button>

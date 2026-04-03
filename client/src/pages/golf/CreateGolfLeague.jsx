@@ -285,7 +285,18 @@ function PickSheetFormatSelector({ value, onChange }) {
 
 // ── Tier config editor ────────────────────────────────────────────────────────
 
-function TierConfigEditor({ tiers, onChange }) {
+// Parse "18:1" odds format → decimal (e.g. 19.0) for range comparisons
+function oddsToDecimal(str) {
+  if (!str) return null;
+  const parts = String(str).replace(/\+/g, '').split(':');
+  if (parts.length === 2) {
+    const n = parseFloat(parts[0]), d = parseFloat(parts[1]);
+    if (!isNaN(n) && !isNaN(d) && d > 0) return n / d + 1;
+  }
+  return null;
+}
+
+function TierConfigEditor({ tiers, onChange, fieldPlayers }) {
   const totalPicks = tiers.reduce((s, t) => s + (parseInt(t.picks) || 0), 0);
 
   function updateTier(i, field, val) {
@@ -300,6 +311,26 @@ function TierConfigEditor({ tiers, onChange }) {
     onChange(tiers.filter((_, j) => j !== i).map((t, j) => ({ ...t, tier: j + 1 })));
   }
 
+  // Compute live tier stats from fieldPlayers whenever tiers or players change
+  const tierStats = (fieldPlayers && fieldPlayers.length > 0)
+    ? tiers.map((t, i) => {
+        const minDec = oddsToDecimal(t.odds_min);
+        const maxDec = oddsToDecimal(t.odds_max);
+        const isLastTier = i === tiers.length - 1;
+        const inTier = fieldPlayers.filter(p => {
+          const dec = p.odds_decimal || 999;
+          if (minDec !== null && dec < minDec) return false;
+          if (!isLastTier && maxDec !== null && dec > maxDec) return false;
+          return true;
+        });
+        const top3 = inTier.slice(0, 3).map(p => p.name.split(' ').pop()); // last name only
+        return { count: inTier.length, top3 };
+      })
+    : tiers.map(t => ({
+        count: t.approxPlayers ?? null,
+        top3: t.sample ?? [],
+      }));
+
   return (
     <div>
       <style>{`
@@ -308,59 +339,66 @@ function TierConfigEditor({ tiers, onChange }) {
         }
       `}</style>
       <div className="space-y-2">
-        {tiers.map((t, i) => (
-          <div key={i}>
-            <div className="flex items-center gap-2 bg-gray-800/40 rounded-xl px-3 py-2.5">
-              <span className="text-gray-500 text-xs font-bold w-10 shrink-0">T{t.tier}</span>
-              <input
-                type="text"
-                className="input py-1 text-xs w-20 shrink-0 tier-odds-input"
-                placeholder="1:1"
-                value={t.odds_min}
-                onChange={e => updateTier(i, 'odds_min', e.target.value)}
-              />
-              <span className="text-gray-600 text-xs shrink-0">–</span>
-              <input
-                type="text"
-                className="input py-1 text-xs w-24 shrink-0 tier-odds-input"
-                placeholder="250:1+"
-                value={t.odds_max}
-                onChange={e => updateTier(i, 'odds_max', e.target.value)}
-              />
-              {t.approxPlayers != null ? (
-                <span className="text-gray-600 text-xs shrink-0 hidden sm:inline">~{t.approxPlayers} players</span>
-              ) : (
-                <span className="text-gray-600 text-xs shrink-0 hidden sm:inline">Rest of field</span>
-              )}
-              <span className="text-gray-500 text-xs shrink-0 ml-auto">Picks</span>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => updateTier(i, 'picks', Math.max(1, (parseInt(t.picks) || 1) - 1))}
-                  className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-bold flex items-center justify-center transition-colors"
-                >−</button>
-                <span className="w-6 text-center text-sm font-bold text-white">{t.picks}</span>
-                <button
-                  type="button"
-                  onClick={() => updateTier(i, 'picks', Math.min(10, (parseInt(t.picks) || 1) + 1))}
-                  className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-bold flex items-center justify-center transition-colors"
-                >+</button>
+        {tiers.map((t, i) => {
+          const stats = tierStats[i];
+          return (
+            <div key={i}>
+              <div className="flex items-center gap-2 bg-gray-800/40 rounded-xl px-3 py-2.5">
+                <span className="text-gray-500 text-xs font-bold w-10 shrink-0">T{t.tier}</span>
+                <input
+                  type="text"
+                  className="input py-1 text-xs w-20 shrink-0 tier-odds-input"
+                  placeholder="1:1"
+                  value={t.odds_min}
+                  onChange={e => updateTier(i, 'odds_min', e.target.value)}
+                />
+                <span className="text-gray-600 text-xs shrink-0">–</span>
+                <input
+                  type="text"
+                  className="input py-1 text-xs w-24 shrink-0 tier-odds-input"
+                  placeholder="250:1+"
+                  value={t.odds_max}
+                  onChange={e => updateTier(i, 'odds_max', e.target.value)}
+                />
+                <span className="text-gray-500 text-xs shrink-0 ml-auto">Picks</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => updateTier(i, 'picks', Math.max(1, (parseInt(t.picks) || 1) - 1))}
+                    className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-bold flex items-center justify-center transition-colors"
+                  >−</button>
+                  <span className="w-6 text-center text-sm font-bold text-white">{t.picks}</span>
+                  <button
+                    type="button"
+                    onClick={() => updateTier(i, 'picks', Math.min(10, (parseInt(t.picks) || 1) + 1))}
+                    className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-bold flex items-center justify-center transition-colors"
+                  >+</button>
+                </div>
+                {tiers.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeTier(i)}
+                    className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-red-400 text-lg leading-none transition-colors shrink-0"
+                  >×</button>
+                )}
               </div>
-              {tiers.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeTier(i)}
-                  className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-red-400 text-lg leading-none transition-colors shrink-0"
-                >×</button>
-              )}
+              {/* Tier stats bar */}
+              <div className="flex items-center gap-3 px-3 mt-1 mb-0.5">
+                {stats.count != null && (
+                  <span className="text-gray-500 text-[11px]">~{stats.count} players</span>
+                )}
+                {stats.top3 && stats.top3.length > 0 && (
+                  <span className="text-gray-600 text-[11px] truncate">
+                    {stats.top3.join(', ')}{stats.count > 3 ? '…' : ''}
+                  </span>
+                )}
+                {i === 0 && (!stats.top3 || stats.top3.length === 0) && (
+                  <span className="text-gray-600 text-[11px] italic">Scheffler, McIlroy, Rory…</span>
+                )}
+              </div>
             </div>
-            {i === 0 && (
-              <p className="text-gray-600 text-xs mt-1 ml-3 italic">
-                Elite tier — Scheffler, McIlroy and similar favorites land here automatically
-              </p>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="flex items-center justify-between mt-3">
         <button
@@ -496,6 +534,7 @@ export default function CreateGolfLeague() {
   const [promoStatus, setPromoStatus] = useState(null); // null | { valid, label, discountType, discountValue } | { error }
   const [promoChecking, setPromoChecking] = useState(false);
   const [tiersAutoBalanced, setTiersAutoBalanced] = useState(false);
+  const [fieldPlayers, setFieldPlayers] = useState([]); // sorted field for tier odds preview
 
   useEffect(() => {
     api.get('/golf/tournaments').then(res => {
@@ -525,11 +564,16 @@ export default function CreateGolfLeague() {
           odds_max:      t.odds_max,
           picks:         form.pool_tiers[i]?.picks ?? 1,
           approxPlayers: t.approxPlayers,
+          sample:        t.sample || [],
         }));
         set('pool_tiers', suggested);
         setTiersAutoBalanced(true);
       })
       .catch(() => setTiersAutoBalanced(false));
+    // Also fetch sorted field for live odds preview in TierConfigEditor
+    api.get(`/golf/tournaments/${form.pool_tournament_id}/field-players`)
+      .then(res => setFieldPlayers(res.data.players || []))
+      .catch(() => setFieldPlayers([]));
   }, [form.pool_tournament_id]); // eslint-disable-line
 
   async function validatePromo(code) {
@@ -809,6 +853,7 @@ export default function CreateGolfLeague() {
                 <TierConfigEditor
                   tiers={form.pool_tiers}
                   onChange={v => { set('pool_tiers', v); setTiersAutoBalanced(false); }}
+                  fieldPlayers={fieldPlayers}
                 />
               </div>
 

@@ -482,20 +482,53 @@ router.get('/leagues/:id/standings', authMiddleware, async (req, res) => {
         WHERE glm.golf_league_id = ? ORDER BY glm.joined_at ASC
       `).all(req.params.id);
 
-      const standings = members.map(m => {
-        // Join via player_name → golf_players.id → golf_scores to survive
-        // any golf_players ID rebuild that would leave stale IDs in pool_picks.
+      // Build entry list: entry 1 per member, plus extra entries (2+) from pool_picks
+      const extraEntries = tid ? db.prepare(`
+        SELECT DISTINCT pp.user_id, COALESCE(pp.entry_number, 1) as entry_number, pp.entry_team_name
+        FROM pool_picks pp
+        WHERE pp.league_id = ? AND pp.tournament_id = ? AND COALESCE(pp.entry_number, 1) > 1
+      `).all(req.params.id, tid) : [];
+
+      const allEntries = [
+        ...members.map(m => ({ user_id: m.user_id, username: m.username, team_name: m.team_name, avatar_url: m.avatar_url, entry_number: 1 })),
+        ...extraEntries.map(e => {
+          const u = db.prepare('SELECT username, avatar_url FROM users WHERE id = ?').get(e.user_id);
+          return { user_id: e.user_id, username: u?.username || '', team_name: e.entry_team_name || `Entry ${e.entry_number}`, avatar_url: u?.avatar_url || null, entry_number: e.entry_number };
+        }),
+      ];
+
+      // Winning score for completed tournaments (for tiebreaker comparison)
+      let winning_score = null;
+      if (tourn?.status === 'completed' && tid) {
+        const winner = db.prepare(`
+          SELECT player_total, round1, round2, round3, round4
+          FROM golf_scores WHERE tournament_id = ? AND finish_position = 1 LIMIT 1
+        `).get(tid);
+        if (winner) {
+          winning_score = winner.player_total != null
+            ? winner.player_total
+            : [winner.round1, winner.round2, winner.round3, winner.round4]
+                .filter(r => r != null).reduce((s, r) => s + r, 0);
+        }
+      }
+
+      const standings = allEntries.map(m => {
+        // Filter picks by entry_number so multi-entry teams score independently.
         const picks = tid ? db.prepare(`
           SELECT pp.player_id, pp.player_name, pp.tier_number, pp.country,
-                 pp.is_dropped,
+                 pp.is_dropped, pp.tiebreaker_score,
                  gs.fantasy_points, gs.round1, gs.round2, gs.round3, gs.round4,
                  gs.finish_position, gs.made_cut
           FROM pool_picks pp
           LEFT JOIN golf_scores gs ON gs.player_id = pp.player_id AND gs.tournament_id = ?
           WHERE pp.league_id = ? AND pp.tournament_id = ? AND pp.user_id = ?
+            AND COALESCE(pp.entry_number, 1) = ?
             AND (pp.is_withdrawn IS NULL OR pp.is_withdrawn = 0)
           ORDER BY pp.tier_number ASC
-        `).all(tid, req.params.id, tid, m.user_id) : [];
+        `).all(tid, req.params.id, tid, m.user_id, m.entry_number) : [];
+
+        // Tiebreaker — read from first pick row (same value across all rows for this entry)
+        const tiebreaker_score = picks.length > 0 ? (picks[0].tiebreaker_score ?? null) : null;
 
         // All three names mean the same thing: sum of to-par round scores, lowest wins.
         //   'stroke_play'  — current UI creation name
@@ -564,9 +597,10 @@ router.get('/leagues/:id/standings', authMiddleware, async (req, res) => {
         const picksRevealed = !!league.picks_locked || tourn?.status === 'active' || tourn?.status === 'completed';
 
         return {
-          user_id: m.user_id, username: m.username, team_name: m.team_name,
+          user_id: m.user_id, entry_number: m.entry_number, username: m.username, team_name: m.team_name,
           avatar_url: m.avatar_url,
           season_points: total_points,
+          tiebreaker_score,
           submitted: picks.length > 0,
           scoring_style: league.scoring_style || 'fantasy_points',
           picks: picksRevealed || m.user_id === req.user.id ? enrichedPicks : [],
@@ -602,6 +636,7 @@ router.get('/leagues/:id/standings', authMiddleware, async (req, res) => {
         active_tournament_id: tid,
         tournament: tourn,
         has_scores: hasScores,
+        winning_score,
       });
     }
 
@@ -1290,7 +1325,7 @@ router.patch('/leagues/:id/settings', authMiddleware, (req, res) => {
     if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Not commissioner' });
 
     const { buy_in_amount, payout_1st, payout_2nd, payout_3rd, venmo, zelle, paypal, pool_drop_count, pool_tiers, picks_per_team,
-            weekly_salary_cap, starters_per_week, scoring_style } = req.body;
+            pool_max_entries, weekly_salary_cap, starters_per_week, scoring_style } = req.body;
 
     // Payout settings — only if provided
     if (payout_1st !== undefined) {
@@ -1313,6 +1348,10 @@ router.patch('/leagues/:id/settings', authMiddleware, (req, res) => {
     if (pool_drop_count !== undefined) {
       const dc = Math.max(0, parseInt(pool_drop_count) || 0);
       db.prepare('UPDATE golf_leagues SET pool_drop_count = ? WHERE id = ?').run(dc, req.params.id);
+    }
+    if (pool_max_entries !== undefined) {
+      const me = Math.max(1, Math.min(3, parseInt(pool_max_entries) || 1));
+      db.prepare('UPDATE golf_leagues SET pool_max_entries = ? WHERE id = ?').run(me, req.params.id);
     }
     if (pool_tiers !== undefined && Array.isArray(pool_tiers)) {
       // Only update the picks count per tier; preserve odds_min/odds_max/approxPlayers from existing config

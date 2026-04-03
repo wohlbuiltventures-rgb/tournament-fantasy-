@@ -316,6 +316,24 @@ try {
   if (changed.c > 0) console.log(`[golf-db] Fixed ${changed.c} stale pool_picks player_id(s)`);
 } catch (e) { console.warn('[golf-db] pool_picks player_id fix skipped:', e.message); }
 
+// ── Feature columns: tiebreaker + multi-entry ─────────────────────────────────
+try { db.exec('ALTER TABLE pool_picks ADD COLUMN tiebreaker_score INTEGER DEFAULT NULL'); } catch (_) {}
+try { db.exec('ALTER TABLE pool_picks ADD COLUMN entry_number INTEGER DEFAULT 1'); } catch (_) {}
+try { db.exec('ALTER TABLE pool_picks ADD COLUMN entry_team_name TEXT DEFAULT NULL'); } catch (_) {}
+try { db.exec('ALTER TABLE golf_leagues ADD COLUMN pool_max_entries INTEGER DEFAULT 1'); } catch (_) {}
+// Per-entry payment tracking (used when pool_max_entries > 1)
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS pool_entry_paid (
+    id TEXT PRIMARY KEY,
+    league_id TEXT NOT NULL,
+    tournament_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    entry_number INTEGER NOT NULL DEFAULT 1,
+    is_paid INTEGER DEFAULT 0,
+    UNIQUE(league_id, tournament_id, user_id, entry_number)
+  )`);
+} catch (_) {}
+
 // ── player_master — persistent country lookup that survives tournament resets ──
 // This table is the source of truth for player → country mapping.
 // It is populated once and updated additively; it never gets wiped when

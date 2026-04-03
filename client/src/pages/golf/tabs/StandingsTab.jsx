@@ -93,9 +93,11 @@ const LeaderboardRow = memo(function LeaderboardRow({
   s, rankInfo, expandContent, canExpand,
   currentUserId, expanded, setExpanded, rowRefs,
   hasPrize, prizeTotal, p1, p2, p3, isTotalStrokes, hasScores,
+  winningScore,
 }) {
   const isMe   = s.user_id === currentUserId;
-  const isOpen = expanded === s.user_id;
+  const rowKey = `${s.user_id}_${s.entry_number || 1}`;
+  const isOpen = expanded === rowKey;
   const pts    = s.season_points ?? 0;
   const myPrize = hasPrize ? prizeForRank(rankInfo.rank, prizeTotal, p1, p2, p3) : null;
   // isTotalStrokes is already the full isStrokeBased() check — pass the right convention
@@ -103,15 +105,15 @@ const LeaderboardRow = memo(function LeaderboardRow({
   const isBot  = /^bot[\s_]?\d/i.test(s.username || '');
 
   return (
-    <div ref={el => { rowRefs.current[s.user_id] = el; }} style={{ borderLeft: `3px solid ${isMe ? '#22c55e' : 'transparent'}`, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+    <div ref={el => { rowRefs.current[rowKey] = el; }} style={{ borderLeft: `3px solid ${isMe ? '#22c55e' : 'transparent'}`, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
       <button
         onClick={e => {
           if (!canExpand) return;
           e.preventDefault();
           e.stopPropagation();
-          setExpanded(isOpen ? null : s.user_id);
+          setExpanded(isOpen ? null : rowKey);
           setTimeout(() => {
-            rowRefs.current[s.user_id]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            rowRefs.current[rowKey]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }, 10);
         }}
         style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px 11px 11px', background: isMe ? 'rgba(0,232,122,0.04)' : 'transparent', border: 'none', cursor: canExpand ? 'pointer' : 'default', textAlign: 'left' }}
@@ -149,6 +151,18 @@ const LeaderboardRow = memo(function LeaderboardRow({
               : '—'}
           </div>
           <div style={{ color: '#4b5563', fontSize: 10 }}>{isTotalStrokes ? '' : 'pts'}</div>
+          {/* Tiebreaker — show when tied and score exists */}
+          {rankInfo.tied && s.tiebreaker_score != null && (
+            <div style={{ fontSize: 9, color: '#6366f1', fontWeight: 700, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+              TB {s.tiebreaker_score > 0 ? '+' : ''}{s.tiebreaker_score}
+            </div>
+          )}
+          {/* Tiebreaker result for completed tournaments */}
+          {winningScore != null && s.tiebreaker_score != null && (
+            <div style={{ fontSize: 9, color: Math.abs(s.tiebreaker_score - winningScore) === 0 ? '#22c55e' : '#4b5563', fontWeight: 600, marginTop: 1 }}>
+              {Math.abs(s.tiebreaker_score - winningScore) === 0 ? '🎯' : `±${Math.abs(s.tiebreaker_score - winningScore)}`}
+            </div>
+          )}
         </div>
         {canExpand && (
           <svg style={{ width: 12, height: 12, color: '#4b5563', flexShrink: 0, transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -195,8 +209,8 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
 
   useEffect(() => {
     if (data && currentUserId) {
-      const myRow = (data.standings || []).find(s => s.user_id === currentUserId);
-      if (myRow) setExpanded(currentUserId);
+      const myRow = (data.standings || []).find(s => s.user_id === currentUserId && (s.entry_number || 1) === 1);
+      if (myRow) setExpanded(`${currentUserId}_1`);
     }
   }, [data, currentUserId]); // eslint-disable-line
 
@@ -213,10 +227,11 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
 
   if (loading) return <div className="py-10 text-center text-gray-500 text-sm">Loading standings…</div>;
 
-  const isPool     = data?.format === 'pool';
-  const tournament = data?.tournament;
-  const isLive     = tournament?.status === 'active';
-  const hasScores  = data?.has_scores;
+  const isPool      = data?.format === 'pool';
+  const tournament  = data?.tournament;
+  const isLive      = tournament?.status === 'active';
+  const hasScores   = data?.has_scores;
+  const winningScore = data?.winning_score ?? null;
 
   const p1         = league?.payout_first  ?? 70;
   const p2         = league?.payout_second ?? 20;
@@ -367,6 +382,11 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
                     Round {currentRound} of 4{isLive ? ' · In Progress' : tournament.status === 'completed' ? ' · Final' : ''}
                   </div>
                 )}
+                {tournament.status === 'completed' && winningScore != null && (
+                  <div style={{ color: '#f59e0b', fontSize: 11, fontWeight: 700, marginTop: 4 }}>
+                    Winner: {winningScore === 0 ? 'E' : (winningScore > 0 ? '+' : '') + winningScore}
+                  </div>
+                )}
               </div>
               <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                 {isLive ? (
@@ -415,14 +435,14 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
 
           {standings.map((s, i) => (
             <LeaderboardRow
-              key={s.user_id}
+              key={`${s.user_id}_${s.entry_number || 1}`}
               s={s} i={i}
               rankInfo={ranks[i]}
               canExpand={!!s.submitted && (s.picks?.length > 0) && (picksRevealed || s.user_id === currentUserId)}
               expandContent={s.picks?.length > 0 && (picksRevealed || s.user_id === currentUserId) ? <PoolExpandContent picks={s.picks} dropsLocked={dropsApplied} /> : null}
               currentUserId={currentUserId} expanded={expanded} setExpanded={setExpanded} rowRefs={rowRefs}
               hasPrize={hasPrize} prizeTotal={prizeTotal} p1={p1} p2={p2} p3={p3}
-              isTotalStrokes={isTotalStrokes} hasScores={hasScores}
+              isTotalStrokes={isTotalStrokes} hasScores={hasScores} winningScore={winningScore}
             />
           ))}
         </div>

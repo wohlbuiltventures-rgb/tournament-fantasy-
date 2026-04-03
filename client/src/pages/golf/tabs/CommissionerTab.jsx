@@ -373,6 +373,7 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   const [payout3, setPayout3] = useState(String(league?.payout_third   ?? 10));
   const [picksPerTeam, setPicksPerTeam] = useState(String(league?.picks_per_team ?? 8));
   const [dropCount, setDropCount] = useState(String(league?.pool_drop_count ?? 2));
+  const [maxEntries, setMaxEntries] = useState(String(league?.pool_max_entries ?? 1));
   const [tierPicksCfg, setTierPicksCfg] = useState(() => {
     try { return JSON.parse(league?.pool_tiers || '[]'); } catch { return []; }
   });
@@ -554,6 +555,7 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
         ...(!isSalaryCap && {
           picks_per_team: Math.max(1, parseInt(picksPerTeam) || 8),
           pool_drop_count: Math.max(0, parseInt(dropCount) || 0),
+          pool_max_entries: Math.max(1, Math.min(3, parseInt(maxEntries) || 1)),
           pool_tiers: updatedTiers.length ? updatedTiers : undefined,
         }),
         ...(isSalaryCap && {
@@ -745,21 +747,26 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                     <div className="text-white text-sm font-semibold">{m.team_name}</div>
                     <div className="text-gray-500 text-xs">{m.username}</div>
                   </div>
-                  <button
-                    onClick={() => togglePaid(m.user_id)}
-                    title={paidMap[m.user_id] ? 'Mark as unpaid' : 'Mark as paid'}
-                    style={{
-                      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                      background: paidMap[m.user_id] ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.04)',
-                      border: `1.5px solid ${paidMap[m.user_id] ? '#22c55e' : '#374151'}`,
-                      color: paidMap[m.user_id] ? '#22c55e' : '#4b5563',
-                      cursor: 'pointer', fontSize: 15, fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {paidMap[m.user_id] ? '✓' : '○'}
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                    <button
+                      onClick={() => togglePaid(m.user_id)}
+                      title={paidMap[m.user_id] ? 'Mark as unpaid' : 'Mark as paid'}
+                      style={{
+                        width: 30, height: 30, borderRadius: '50%',
+                        background: paidMap[m.user_id] ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.04)',
+                        border: `1.5px solid ${paidMap[m.user_id] ? '#22c55e' : '#374151'}`,
+                        color: paidMap[m.user_id] ? '#22c55e' : '#4b5563',
+                        cursor: 'pointer', fontSize: 15, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {paidMap[m.user_id] ? '✓' : '○'}
+                    </button>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', color: paidMap[m.user_id] ? '#22c55e' : '#4b5563', textTransform: 'uppercase' }}>
+                      {paidMap[m.user_id] ? 'Paid' : 'Unpaid'}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -890,6 +897,31 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                     />
                     <span style={{ color: '#4b5563', fontSize: 12 }}>
                       {parseInt(dropCount) === 0 ? 'No drops — all picks count' : `Worst ${dropCount} pick${parseInt(dropCount) !== 1 ? 's' : ''} dropped after Round 2`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Max entries per player */}
+                <div>
+                  <label className="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">
+                    Max entries per player
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {[1, 2, 3].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setMaxEntries(String(n))}
+                        style={{
+                          padding: '5px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                          border: `1.5px solid ${maxEntries === String(n) ? '#22c55e' : 'rgba(255,255,255,0.1)'}`,
+                          background: maxEntries === String(n) ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.03)',
+                          color: maxEntries === String(n) ? '#22c55e' : '#6b7280',
+                        }}
+                      >{n}</button>
+                    ))}
+                    <span style={{ color: '#4b5563', fontSize: 12 }}>
+                      {parseInt(maxEntries) === 1 ? 'One entry per player' : `Up to ${maxEntries} entries per player`}
                     </span>
                   </div>
                 </div>
