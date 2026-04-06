@@ -685,10 +685,9 @@ router.get('/leagues/:id/pga-live', authMiddleware, async (req, res) => {
       `).all(req.params.id, req.user.id).map(r => r.player_name);
     }
 
-    // Pre-tournament: skip ESPN fetch only for tournaments that haven't started yet.
-    // Once the start date has arrived, always try to fetch live data from ESPN even if
-    // our DB status hasn't been updated by the sync job yet.
-    const _tournStarted = tourn && new Date() >= new Date(tourn.start_date);
+    // Pre-tournament: skip ESPN fetch until the actual Thursday tee time (noon UTC = 8am ET).
+    // Using midnight UTC would be 8pm ET the night before — 12 hours too early.
+    const _tournStarted = tourn && new Date() >= new Date(tourn.start_date + 'T12:00:00Z');
     if (tourn && tourn.status === 'scheduled' && !_tournStarted) {
       return res.json({ competitors: [], tournament: tourn, my_pick_names: myPickNames, isScheduled: true });
     }
@@ -719,6 +718,15 @@ router.get('/leagues/:id/pga-live', authMiddleware, async (req, res) => {
     } catch (fetchErr) {
       console.error('[pga-live] ESPN fetch error:', fetchErr.message);
       return res.json({ competitors: [], tournament: tourn, my_pick_names: myPickNames, fetch_error: true });
+    }
+
+    // Guard: ESPN scoreboard returns the current/most-recent event when the
+    // requested event hasn't started yet. Reject mismatched event data so we
+    // don't show Valero scores on the Masters scoreboard.
+    const returnedEventId = espnData?.events?.[0]?.id;
+    if (returnedEventId && String(returnedEventId) !== String(eventId)) {
+      console.log(`[pga-live] ESPN returned event ${returnedEventId} instead of ${eventId} — tournament not started`);
+      return res.json({ competitors: [], tournament: tourn, my_pick_names: myPickNames, isScheduled: true });
     }
 
     const rawComps = espnData?.events?.[0]?.competitions?.[0]?.competitors || [];
