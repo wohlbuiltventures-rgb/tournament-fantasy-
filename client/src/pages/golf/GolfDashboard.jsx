@@ -373,11 +373,20 @@ export default function GolfDashboard() {
     }).catch(() => {}).finally(() => setTournamentsLoaded(true));
   }, []);
 
-  if (notifLoading || !tournamentsLoaded) return <GolfLoader />;
+  if (notifLoading || !tournamentsLoaded) return <GolfLoader fullScreen />;
 
-  const isActiveLeague = l =>
-    ACTIVE_STATUSES.has(l.status) &&
-    !(l.format_type === 'pool' && l.pool_tournament_status === 'completed');
+  const isActiveLeague = l => {
+    // Pool leagues tied to completed tournaments go to "past"
+    if (l.format_type === 'pool' && l.pool_tournament_status === 'completed') return false;
+    // Already-active statuses (lobby, draft, active, etc.)
+    if (ACTIVE_STATUSES.has(l.status)) return true;
+    // Include pending_payment pool leagues whose tournament starts within 7 days
+    if (l.status === 'pending_payment' && l.pool_tournament_start) {
+      const startsIn = (new Date(l.pool_tournament_start + 'T12:00:00') - new Date()) / 86400000;
+      if (startsIn <= 7 && startsIn >= -1) return true;
+    }
+    return false;
+  };
   const activeLeagues = leagues.filter(isActiveLeague);
   const pastLeagues   = leagues.filter(l => !isActiveLeague(l));
 

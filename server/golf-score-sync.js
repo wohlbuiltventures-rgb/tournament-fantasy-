@@ -16,6 +16,8 @@ const { normalizePlayerName, matchPlayerName } = require('./utils/playerNameNorm
 
 const ESPN_LEADERBOARD = id =>
   `https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard?event=${id}`;
+const ESPN_SCOREBOARD = id =>
+  `https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=${id}`;
 
 // norm() — thin alias over the shared utility (kept for internal use below)
 const norm = normalizePlayerName;
@@ -100,17 +102,35 @@ async function syncTournament(tournamentId) {
     return { skipped: true, reason: 'no_espn_event_id', tournament: tourn.name };
   }
 
-  const url = ESPN_LEADERBOARD(eventId);
   console.log(`[golf-sync] Fetching "${tourn.name}" (ESPN event ${eventId})`);
 
   let data;
+  let useScoreboard = false;
   try {
+    const url = ESPN_LEADERBOARD(eventId);
     const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error(`ESPN returned HTTP ${res.status} for event ${eventId}`);
-    data = await res.json();
+    if (res.ok) {
+      data = await res.json();
+    } else {
+      // Leaderboard 404 — fall back to scoreboard endpoint
+      console.log(`[golf-sync] Leaderboard returned ${res.status}, falling back to scoreboard`);
+      const res2 = await fetch(ESPN_SCOREBOARD(eventId), { headers: { 'Accept': 'application/json' } });
+      if (!res2.ok) throw new Error(`ESPN scoreboard also returned HTTP ${res2.status} for event ${eventId}`);
+      data = await res2.json();
+      useScoreboard = true;
+    }
   } catch (err) {
     console.error(`[golf-sync] Fetch error: ${err.message}`);
     throw err;
+  }
+
+  // Guard: ESPN scoreboard may return a different event if the target hasn't started
+  if (useScoreboard) {
+    const returnedId = data?.events?.[0]?.id;
+    if (returnedId && String(returnedId) !== String(eventId)) {
+      console.log(`[golf-sync] ESPN returned event ${returnedId} instead of ${eventId} — tournament likely hasn't started`);
+      return { synced: 0, unmatched: 0, tournament: tourn.name, skipped: true, reason: 'event_not_started' };
+    }
   }
 
   // ESPN can return competitors at different paths depending on API version
@@ -133,24 +153,31 @@ async function syncTournament(tournamentId) {
   let synced = 0;
   let unmatched = 0;
 
-  db.transaction(() => {
-    for (const comp of competitors) {
-      const displayName =
-        comp.athlete?.displayName ||
-        comp.athlete?.fullName ||
-        comp.displayName || '';
-      if (!displayName) continue;
+  // First pass: parse all competitor data
+  const parsed = [];
+  for (const comp of competitors) {
+    const displayName =
+      comp.athlete?.displayName ||
+      comp.athlete?.fullName ||
+      comp.displayName || '';
+    if (!displayName) continue;
 
-      // Use shared matchPlayerName — handles diacritics, periods, fallbacks
-      const matched = matchPlayerName(displayName, allPlayers, tourn.name);
-      if (!matched) {
-        unmatched++;
-        continue;
-      }
-      const playerId = matched.id;
+    const matched = matchPlayerName(displayName, allPlayers, tourn.name);
+    if (!matched) {
+      unmatched++;
+      continue;
+    }
 
-      // Parse linescores (per-round scores)
-      const linescores = comp.linescores || comp.rounds || [];
+    const linescores = comp.linescores || comp.rounds || [];
+    let r1, r2, r3, r4;
+
+    if (useScoreboard) {
+      const getRaw = n => {
+        const ls = linescores.find(l => Number(l.period) === n);
+        return ls && ls.value != null && !isNaN(Number(ls.value)) ? Number(ls.value) : null;
+      };
+      r1 = getRaw(1); r2 = getRaw(2); r3 = getRaw(3); r4 = getRaw(4);
+    } else {
       const getR = n => {
         const ls = linescores.find(l => {
           const p = l.period?.number ?? l.period ?? l.roundNumber ?? l.number;
@@ -158,24 +185,47 @@ async function syncTournament(tournamentId) {
         });
         return ls ? parseRound(ls) : null;
       };
+      r1 = getR(1); r2 = getR(2); r3 = getR(3); r4 = getR(4);
+    }
 
-      const r1 = getR(1), r2 = getR(2), r3 = getR(3), r4 = getR(4);
+    // Cut status
+    const statusId = comp.status?.type?.id || comp.status?.id || '';
+    let madeCut;
+    if (statusId) {
+      madeCut = statusId !== 'C' && statusId !== 'STATUS_MISSED_CUT';
+    } else {
+      madeCut = linescores.length >= 4;
+    }
 
-      // Cut status — ESPN status type ids: 'C' = cut, 'MDF' = made cut/didn't finish
-      const statusId = comp.status?.type?.id || comp.status?.id || '';
-      const madeCut = statusId !== 'C' && statusId !== 'STATUS_MISSED_CUT';
+    // Finish position from leaderboard data
+    const posRaw =
+      comp.status?.position?.id ||
+      comp.position?.id ||
+      (typeof comp.sortOrder === 'number' ? String(comp.sortOrder) : null);
+    let finishPos = posRaw && /^\d+$/.test(String(posRaw).replace(/^T/, ''))
+      ? parseInt(String(posRaw).replace(/^T/, ''))
+      : null;
 
-      // Finish position — "1", "T2", "CUT" etc.
-      const posRaw =
-        comp.status?.position?.id ||
-        comp.position?.id ||
-        (typeof comp.sortOrder === 'number' ? String(comp.sortOrder) : null);
-      const finishPos = posRaw && /^\d+$/.test(String(posRaw).replace(/^T/, ''))
-        ? parseInt(String(posRaw).replace(/^T/, ''))
-        : null;
+    // Total strokes for position derivation
+    const total = [r1, r2, r3, r4].reduce((s, r) => r != null ? s + r : s, 0);
 
-      const pts = calcPts(r1, r2, r3, r4, madeCut, finishPos, isMajor, coursePar);
-      upsertScore.run(tourn.id, playerId, r1, r2, r3, r4, madeCut ? 1 : 0, finishPos, pts);
+    parsed.push({ playerId: matched.id, r1, r2, r3, r4, madeCut, finishPos, total });
+  }
+
+  // Derive finish positions from total strokes when not provided (scoreboard fallback)
+  if (useScoreboard) {
+    const made = parsed.filter(p => p.madeCut).sort((a, b) => a.total - b.total);
+    let pos = 1;
+    for (let i = 0; i < made.length; i++) {
+      if (i > 0 && made[i].total > made[i - 1].total) pos = i + 1;
+      made[i].finishPos = pos;
+    }
+  }
+
+  db.transaction(() => {
+    for (const p of parsed) {
+      const pts = calcPts(p.r1, p.r2, p.r3, p.r4, p.madeCut, p.finishPos, isMajor, coursePar);
+      upsertScore.run(tourn.id, p.playerId, p.r1, p.r2, p.r3, p.r4, p.madeCut ? 1 : 0, p.finishPos, pts);
       synced++;
     }
   })();
