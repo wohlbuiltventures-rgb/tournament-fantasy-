@@ -2016,4 +2016,114 @@ runOnce('seed-masters-2026-field-v2', () => {
   }
 });
 
+// ── Apply real FanDuel/BetMGM odds + 5-tier structure for Masters 2026 ───────
+runOnce('masters-2026-real-odds-and-tiers', () => {
+  try {
+    const masters = db.prepare(
+      "SELECT id FROM golf_tournaments WHERE name = 'Masters Tournament' AND season_year = 2026"
+    ).get();
+    if (!masters) return;
+
+    // Real odds from FanDuel/BetMGM as of April 6, 2026
+    const realOdds = {
+      'Scottie Scheffler': { d: '5:1', v: 6 }, 'Jon Rahm': { d: '9.5:1', v: 10.5 },
+      'Bryson DeChambeau': { d: '10:1', v: 11 }, 'Rory McIlroy': { d: '12:1', v: 13 },
+      'Ludvig Åberg': { d: '14:1', v: 15 }, 'Xander Schauffele': { d: '16:1', v: 17 },
+      'Tommy Fleetwood': { d: '20:1', v: 21 }, 'Matt Fitzpatrick': { d: '26:1', v: 27 },
+      'Justin Rose': { d: '28:1', v: 29 }, 'Collin Morikawa': { d: '30:1', v: 31 },
+      'Jordan Spieth': { d: '33:1', v: 34 }, 'Patrick Reed': { d: '35:1', v: 36 },
+      'Hideki Matsuyama': { d: '40:1', v: 41 }, 'Shane Lowry': { d: '40:1', v: 41 },
+      'Patrick Cantlay': { d: '40:1', v: 41 }, 'Viktor Hovland': { d: '45:1', v: 46 },
+      'Robert MacIntyre': { d: '45:1', v: 46 }, 'Russell Henley': { d: '50:1', v: 51 },
+      'Brooks Koepka': { d: '50:1', v: 51 }, 'Chris Gotterup': { d: '50:1', v: 51 },
+      'Sam Burns': { d: '55:1', v: 56 }, 'Ben Griffin': { d: '55:1', v: 56 },
+      'J.J. Spaun': { d: '60:1', v: 61 }, 'Sepp Straka': { d: '60:1', v: 61 },
+      'Sungjae Im': { d: '60:1', v: 61 }, 'Dustin Johnson': { d: '65:1', v: 66 },
+      'Justin Thomas': { d: '65:1', v: 66 }, 'Matt Wallace': { d: '65:1', v: 66 },
+      'Corey Conners': { d: '70:1', v: 71 }, 'Adam Scott': { d: '70:1', v: 71 },
+      'Jake Knapp': { d: '70:1', v: 71 }, 'Jacob Bridgeman': { d: '70:1', v: 71 },
+      'Min Woo Lee': { d: '80:1', v: 81 }, 'Si Woo Kim': { d: '80:1', v: 81 },
+      'Ryan Fox': { d: '80:1', v: 81 }, 'Kevin Yu': { d: '80:1', v: 81 },
+      'Ryo Hisatsune': { d: '80:1', v: 81 }, 'Michael Kim': { d: '90:1', v: 91 },
+      'Kristoffer Reitan': { d: '100:1', v: 101 },
+    };
+
+    // Tier boundaries: T1 <+2000, T2 +2000-+4999, T3 +5000-+7999, T4 +8000-+14999, T5 +15000+
+    // Salary: T1=900, T2=700, T3=500, T4=300, T5=150
+    function getTier(decimal) {
+      if (decimal <= 21)  return { tier: 1, salary: 900 };  // <+2000
+      if (decimal <= 51)  return { tier: 2, salary: 700 };  // +2000-+4999
+      if (decimal <= 81)  return { tier: 3, salary: 500 };  // +5000-+7999
+      if (decimal <= 151) return { tier: 4, salary: 300 };  // +8000-+14999
+      return { tier: 5, salary: 150 };                      // +15000+
+    }
+
+    const updP = db.prepare('UPDATE golf_players SET odds_display = ?, odds_decimal = ? WHERE name = ?');
+    const updF = db.prepare('UPDATE golf_tournament_fields SET odds_display = ?, odds_decimal = ? WHERE tournament_id = ? AND player_name = ?');
+
+    db.transaction(() => {
+      // Apply named player odds
+      for (const [name, o] of Object.entries(realOdds)) {
+        updP.run(o.d, o.v, name);
+        updF.run(o.d, o.v, masters.id, name);
+      }
+
+      // Remaining field players: assign based on ranking
+      const allField = db.prepare(
+        'SELECT player_name, player_id FROM golf_tournament_fields WHERE tournament_id = ?'
+      ).all(masters.id);
+      const namedSet = new Set(Object.keys(realOdds));
+      for (const f of allField) {
+        if (namedSet.has(f.player_name)) continue;
+        const gp = db.prepare('SELECT world_ranking FROM golf_players WHERE id = ?').get(f.player_id);
+        const rank = gp?.world_ranking || 200;
+        let val;
+        if (rank <= 50) val = 80;
+        else if (rank <= 80) val = 100;
+        else if (rank <= 120) val = 125;
+        else val = 150;
+        updP.run(val + ':1', val + 1, f.player_name);
+        updF.run(val + ':1', val + 1, masters.id, f.player_name);
+      }
+
+      // Build pool_tier_players for ALL Masters leagues
+      const leagues = db.prepare(
+        'SELECT id, pool_tiers FROM golf_leagues WHERE pool_tournament_id = ?'
+      ).all(masters.id);
+
+      for (const league of leagues) {
+        // Clear existing tier players and rebuild
+        db.prepare('DELETE FROM pool_tier_players WHERE league_id = ? AND tournament_id = ?')
+          .run(league.id, masters.id);
+
+        const fieldPlayers = db.prepare(`
+          SELECT tf.player_id, tf.player_name, tf.odds_display, tf.odds_decimal, tf.world_ranking
+          FROM golf_tournament_fields tf WHERE tf.tournament_id = ?
+          ORDER BY tf.odds_decimal ASC
+        `).all(masters.id);
+
+        const insTier = db.prepare(
+          'INSERT INTO pool_tier_players (id, league_id, tournament_id, player_id, player_name, tier_number, odds_display, odds_decimal, world_ranking, salary) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        for (const p of fieldPlayers) {
+          const { tier, salary } = getTier(p.odds_decimal || 999);
+          insTier.run(league.id, masters.id, p.player_id, p.player_name, tier, p.odds_display, p.odds_decimal, p.world_ranking, salary);
+        }
+        console.log(`[migration] masters-tiers: built ${fieldPlayers.length} tier players for league ${league.id}`);
+      }
+    })();
+
+    // Log tier distribution
+    const dist = db.prepare(`
+      SELECT tf.odds_decimal, tf.player_name FROM golf_tournament_fields tf
+      WHERE tf.tournament_id = ? ORDER BY tf.odds_decimal ASC
+    `).all(masters.id);
+    const tiers = [0, 0, 0, 0, 0];
+    dist.forEach(p => { const t = getTier(p.odds_decimal || 999); tiers[t.tier - 1]++; });
+    console.log(`[migration] masters-tiers: T1=${tiers[0]} T2=${tiers[1]} T3=${tiers[2]} T4=${tiers[3]} T5=${tiers[4]} (total=${dist.length})`);
+  } catch (e) {
+    console.error('[migration] masters-tiers error:', e.message);
+  }
+});
+
 module.exports = db;
