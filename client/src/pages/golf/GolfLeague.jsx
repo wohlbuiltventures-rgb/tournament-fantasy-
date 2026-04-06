@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Flag, Trophy, ArrowLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,6 +7,23 @@ import { useDocTitle } from '../../hooks/useDocTitle';
 import GolfLoader from '../../components/golf/GolfLoader';
 import socket, { connectSocket } from '../../socket';
 import { Badge } from '../../components/ui';
+
+// Catches render errors in tab content so the page shows an error message instead of blank
+class TabErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('[TabError]', error, info); }
+  componentDidUpdate(prevProps) { if (prevProps.tab !== this.props.tab) this.setState({ error: null }); }
+  render() {
+    if (this.state.error) return (
+      <div className="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center">
+        <p className="text-red-400 font-semibold mb-1">Something went wrong loading this tab</p>
+        <p className="text-gray-500 text-sm">{this.state.error?.message || 'Unknown error'}</p>
+      </div>
+    );
+    return this.props.children;
+  }
+}
 
 // Tab components
 import OverviewTab from './tabs/OverviewTab';
@@ -257,6 +274,7 @@ export default function GolfLeague() {
       </div>
 
       {/* ── Tab content ── */}
+      <TabErrorBoundary tab={effectiveTab}>
       {effectiveTab === 'overview' && (
         <OverviewTab league={league} members={members} user={user} isComm={isComm} navigate={navigate} picksStatus={picksStatus} />
       )}
@@ -287,6 +305,7 @@ export default function GolfLeague() {
       {effectiveTab === 'commissioner' && isComm && (
         <CommissionerTab leagueId={id} leagueName={league.name} members={members} league={league} />
       )}
+      </TabErrorBoundary>
     </div>
   );
 }

@@ -1872,4 +1872,33 @@ runOnce('fix-masters-2026-lock-times', () => {
   }
 });
 
+// ── Reset Masters 2026 to pre-tournament state ──────────────────────────────
+// The ESPN fallback bug previously flipped Masters to 'active' before it started.
+// Reset status so the LIVE badge and pre-tournament logic work correctly.
+runOnce('reset-masters-2026-status-and-scores', () => {
+  try {
+    const masters = db.prepare(
+      "SELECT id FROM golf_tournaments WHERE name = 'Masters Tournament' AND season_year = 2026"
+    ).get();
+    if (!masters) return;
+
+    // Only reset if tournament hasn't actually started (start_date in the future)
+    const now = new Date();
+    if (now < new Date('2026-04-09T12:00:00Z')) {
+      db.prepare("UPDATE golf_tournaments SET status = 'scheduled' WHERE id = ? AND status != 'completed'")
+        .run(masters.id);
+
+      // Delete any erroneous scores from ESPN returning wrong event
+      const deleted = db.prepare('DELETE FROM golf_scores WHERE tournament_id = ?').run(masters.id);
+      if (deleted.changes > 0) console.log(`[migration] reset-masters-status: deleted ${deleted.changes} erroneous score(s)`);
+
+      console.log('[migration] reset-masters-status: Masters reset to scheduled');
+    } else {
+      console.log('[migration] reset-masters-status: Masters has started, skipping');
+    }
+  } catch (e) {
+    console.error('[migration] reset-masters-status error:', e.message);
+  }
+});
+
 module.exports = db;

@@ -226,12 +226,15 @@ router.get('/leagues', authMiddleware, (req, res) => {
       ORDER BY gl.created_at DESC
     `).all(req.user.id);
 
-    // Recompute picks_locked from tournament start_date so stale DB values can't lie
+    // Recompute picks_locked and tournament status so stale DB values can't lie
     for (const l of leagues) {
       if (l.pool_tournament_start) {
         const correctLock = computeLockTime(l.pool_tournament_start).toISOString();
         l.picks_locked = new Date() >= new Date(correctLock) ? 1 : 0;
         l.picks_lock_time = correctLock;
+        if (l.pool_tournament_status === 'active' && new Date() < new Date(l.pool_tournament_start + 'T12:00:00Z')) {
+          l.pool_tournament_status = 'scheduled';
+        }
       }
     }
 
@@ -453,11 +456,15 @@ router.get('/leagues/:id', authMiddleware, (req, res) => {
     `).get(req.params.id);
     if (!league) return res.status(404).json({ error: 'League not found' });
 
-    // Recompute picks_locked from tournament start_date so stale DB values can't lie
+    // Recompute picks_locked and tournament status so stale DB values can't lie
     if (league.pool_tournament_start) {
       const correctLock = computeLockTime(league.pool_tournament_start).toISOString();
       league.picks_locked = new Date() >= new Date(correctLock) ? 1 : 0;
       league.picks_lock_time = correctLock;
+      // Don't show LIVE if the tournament hasn't actually started
+      if (league.pool_tournament_status === 'active' && new Date() < new Date(league.pool_tournament_start + 'T12:00:00Z')) {
+        league.pool_tournament_status = 'scheduled';
+      }
     }
 
     const members = db.prepare(`
@@ -611,9 +618,9 @@ router.get('/leagues/:id/standings', authMiddleware, async (req, res) => {
           }));
         }
 
-        // Picks are revealed once they're locked or the tournament is underway/complete.
-        // Before that, only the owner of a team can see their own picks.
-        const picksRevealed = !!league.picks_locked || tourn?.status === 'active' || tourn?.status === 'completed';
+        // Picks are revealed once locked (by time) or the tournament is underway/complete.
+        const _reallyLocked = tourn ? new Date() >= new Date(computeLockTime(tourn.start_date)) : !!league.picks_locked;
+        const picksRevealed = _reallyLocked || tourn?.status === 'active' || tourn?.status === 'completed';
 
         return {
           user_id: m.user_id, entry_number: m.entry_number, username: m.username, team_name: m.team_name,
@@ -626,8 +633,8 @@ router.get('/leagues/:id/standings', authMiddleware, async (req, res) => {
         };
       });
 
-      // Picks revealed once locked or tournament started (computed from first member; same for all).
-      const picksRevealed = !!league.picks_locked || tourn?.status === 'active' || tourn?.status === 'completed';
+      const _globalLocked = tourn ? new Date() >= new Date(computeLockTime(tourn.start_date)) : !!league.picks_locked;
+      const picksRevealed = _globalLocked || tourn?.status === 'active' || tourn?.status === 'completed';
 
       // Stroke-based scoring: sort ascending (lowest score wins).
       const scoringStyle = league.scoring_style || 'fantasy_points';
