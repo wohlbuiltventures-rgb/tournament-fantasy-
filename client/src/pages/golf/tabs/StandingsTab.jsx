@@ -232,7 +232,6 @@ export default function StandingsTab({ leagueId, league, currentUserId }) {
   const tournament  = data?.tournament;
   const isLive      = tournament?.status === 'active';
   const hasScores   = data?.has_scores;
-  const winningScore = data?.winning_score ?? null;
 
   const p1         = league?.payout_first  ?? 70;
   const p2         = league?.payout_second ?? 20;
