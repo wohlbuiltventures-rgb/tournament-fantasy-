@@ -33,7 +33,37 @@ function checkPoolLocks() {
   }
 }
 
+// One-time boot repair: recompute picks_lock_time for any pool league whose
+// tournament hasn't ended yet. Fixes stale values from a previous getDay() bug
+// that computed the wrong Thursday on non-UTC servers.
+function repairStaleLockTimes() {
+  try {
+    const leagues = db.prepare(`
+      SELECT gl.id, gl.name, gl.picks_lock_time, gt.start_date, gt.end_date
+      FROM golf_leagues gl
+      JOIN golf_tournaments gt ON gt.id = gl.pool_tournament_id
+      WHERE gl.format_type = 'pool'
+        AND gt.end_date >= date('now')
+        AND gl.picks_lock_time IS NOT NULL
+    `).all();
+
+    for (const league of leagues) {
+      const correct = computeLockTime(league.start_date).toISOString();
+      if (league.picks_lock_time !== correct) {
+        const wasLocked = new Date() >= new Date(league.picks_lock_time);
+        const shouldBeLocked = new Date() >= new Date(correct);
+        db.prepare('UPDATE golf_leagues SET picks_lock_time = ?, picks_locked = ? WHERE id = ?')
+          .run(correct, shouldBeLocked ? 1 : 0, league.id);
+        console.log(`[golf-pool-lock] Repaired lock time for "${league.name}": ${league.picks_lock_time} → ${correct} (locked: ${shouldBeLocked})`);
+      }
+    }
+  } catch (err) {
+    console.error('[golf-pool-lock] Lock time repair error:', err.message);
+  }
+}
+
 function startPoolLockScheduler() {
+  repairStaleLockTimes(); // fix any stale values from previous bug
   checkPoolLocks(); // run immediately on start
   setInterval(checkPoolLocks, 5 * 60 * 1000); // every 5 minutes
   console.log('[golf-pool-lock] Lock scheduler started (5-minute interval)');

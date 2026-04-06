@@ -77,7 +77,7 @@ export default function GolfPoolPicksSubmitted() {
   );
 
   const isSalaryCap = league.pick_sheet_format === 'salary_cap';
-  const started = tournament?.start_date ? new Date(tournament.start_date) <= Date.now() : false;
+  const started = tournament?.start_date ? new Date(tournament.start_date + 'T12:00:00Z') <= Date.now() : false;
 
   // Group picks by tier for tiered display
   const picksByTier = picks.reduce((acc, p) => {

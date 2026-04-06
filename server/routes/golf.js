@@ -80,10 +80,10 @@ function snakePicker(pick, numTeams, members) {
 }
 
 function lockTime(startDate) {
-  // Lineup locks Thursday 12:00 UTC (7am ET) of tournament week
+  // Lineup locks Thursday 12:00 UTC (8am ET) of tournament week
   const d = new Date(startDate);
   // Find the Thursday on or before start_date
-  const dow = d.getDay(); // 0=Sun,4=Thu
+  const dow = d.getUTCDay(); // 0=Sun,4=Thu
   const daysBack = (dow + 3) % 7; // how many days back to Thursday
   d.setDate(d.getDate() - daysBack);
   d.setUTCHours(12, 0, 0, 0);
