@@ -104,7 +104,27 @@ function recalcMemberPoints(memberId) {
 // ── Players ────────────────────────────────────────────────────────────────────
 router.get('/players', authMiddleware, (req, res) => {
   try {
-    const players = db.prepare('SELECT * FROM golf_players WHERE is_active = 1 ORDER BY world_ranking ASC').all();
+    const tid = req.query.tournament_id;
+    let players;
+
+    if (tid) {
+      // If tournament field is populated, return only field players
+      const fieldCount = db.prepare('SELECT COUNT(*) as cnt FROM golf_tournament_fields WHERE tournament_id = ?').get(tid).cnt;
+      if (fieldCount > 0) {
+        players = db.prepare(`
+          SELECT gp.*, COALESCE(tf.odds_display, gp.odds_display) as odds_display,
+                 COALESCE(tf.odds_decimal, gp.odds_decimal) as odds_decimal
+          FROM golf_players gp
+          INNER JOIN golf_tournament_fields tf ON tf.player_id = gp.id AND tf.tournament_id = ?
+          ORDER BY gp.world_ranking ASC
+        `).all(tid);
+      }
+    }
+
+    if (!players) {
+      players = db.prepare('SELECT * FROM golf_players WHERE is_active = 1 ORDER BY world_ranking ASC').all();
+    }
+
     res.json({ players });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });

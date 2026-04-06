@@ -1901,4 +1901,119 @@ runOnce('reset-masters-2026-status-and-scores', () => {
   }
 });
 
+// ── Generate fallback odds from world ranking for players missing odds ────────
+// DataGolf sync populates real odds, but until it runs, players need rank-based
+// odds so the pick sheet and tier assignment have something to work with.
+runOnce('generate-rank-based-odds-2026', () => {
+  try {
+    function rankToOdds(rank) {
+      const r = rank || 9999;
+      const bands = [
+        { minRank: 1,   maxRank: 5,    minOdds: 8,   maxOdds: 15   },
+        { minRank: 6,   maxRank: 15,   minOdds: 18,  maxOdds: 33   },
+        { minRank: 16,  maxRank: 30,   minOdds: 35,  maxOdds: 80   },
+        { minRank: 31,  maxRank: 60,   minOdds: 90,  maxOdds: 150  },
+        { minRank: 61,  maxRank: 100,  minOdds: 175, maxOdds: 400  },
+        { minRank: 101, maxRank: 9999, minOdds: 500, maxOdds: 2000 },
+      ];
+      const band = bands.find(b => r >= b.minRank && r <= b.maxRank) || bands[bands.length - 1];
+      const pos = Math.min(1, (r - band.minRank) / Math.max(1, band.maxRank - band.minRank));
+      const rawOdds = Math.round(band.minOdds + pos * (band.maxOdds - band.minOdds));
+      const nice = rawOdds < 20 ? Math.round(rawOdds / 2) * 2 :
+                   rawOdds < 100 ? Math.round(rawOdds / 5) * 5 :
+                   Math.round(rawOdds / 25) * 25;
+      return { odds_display: `${nice}:1`, odds_decimal: nice + 1 };
+    }
+
+    const players = db.prepare(
+      "SELECT id, world_ranking FROM golf_players WHERE (odds_display IS NULL OR odds_display = '') AND world_ranking IS NOT NULL"
+    ).all();
+
+    const upd = db.prepare('UPDATE golf_players SET odds_display = ?, odds_decimal = ? WHERE id = ?');
+    let count = 0;
+    db.transaction(() => {
+      for (const p of players) {
+        const odds = rankToOdds(p.world_ranking);
+        upd.run(odds.odds_display, odds.odds_decimal, p.id);
+        count++;
+      }
+    })();
+
+    console.log(`[migration] rank-based-odds: generated odds for ${count} players`);
+  } catch (e) {
+    console.error('[migration] rank-based-odds error:', e.message);
+  }
+});
+
+// ── Seed Masters 2026 field from top-ranked players ──────────────────────────
+// Until DataGolf sync runs with a real field list, populate golf_tournament_fields
+// with the top ~90 ranked active players. The /field-players endpoint returns
+// all 500+ players when this table is empty. DataGolf sync will overwrite with
+// the actual field once it runs.
+runOnce('seed-masters-2026-field-v2', () => {
+  try {
+    const masters = db.prepare(
+      "SELECT id FROM golf_tournaments WHERE name = 'Masters Tournament' AND season_year = 2026"
+    ).get();
+    if (!masters) return;
+
+    // Skip if DataGolf already populated the field
+    const existing = db.prepare('SELECT COUNT(*) as cnt FROM golf_tournament_fields WHERE tournament_id = ?').get(masters.id);
+    if (existing.cnt > 0) {
+      console.log(`[migration] seed-masters-field: already has ${existing.cnt} field entries, skipping`);
+      return;
+    }
+
+    // Masters invites ~90 players. Seed with top 90 ranked active players.
+    const players = db.prepare(
+      'SELECT id, name, world_ranking, odds_display, odds_decimal FROM golf_players WHERE is_active = 1 AND world_ranking IS NOT NULL ORDER BY world_ranking ASC LIMIT 90'
+    ).all();
+
+    const ins = db.prepare(
+      "INSERT OR IGNORE INTO golf_tournament_fields (id, tournament_id, player_id, player_name, world_ranking, odds_display, odds_decimal) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?)"
+    );
+    db.transaction(() => {
+      for (const p of players) {
+        ins.run(masters.id, p.id, p.name, p.world_ranking, p.odds_display, p.odds_decimal);
+      }
+    })();
+
+    console.log(`[migration] seed-masters-field: seeded ${players.length} players into Masters field`);
+
+    // Also populate pool_tier_players for any existing Masters leagues
+    const leagues = db.prepare(
+      "SELECT gl.id, gl.pool_tiers FROM golf_leagues WHERE gl.pool_tournament_id = ?"
+    ).all(masters.id);
+
+    for (const league of leagues) {
+      const existingTiers = db.prepare('SELECT COUNT(*) as cnt FROM pool_tier_players WHERE league_id = ? AND tournament_id = ?').get(league.id, masters.id);
+      if (existingTiers.cnt > 0) continue;
+
+      let tiersConfig = [];
+      try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
+      const tierCount = tiersConfig.length || 4;
+
+      // Sort players by odds and split into tiers
+      const sorted = [...players].sort((a, b) => (a.odds_decimal || 999) - (b.odds_decimal || 999));
+      const tierSize = Math.ceil(sorted.length / tierCount);
+
+      const insTier = db.prepare(
+        "INSERT OR IGNORE INTO pool_tier_players (id, league_id, tournament_id, player_id, player_name, tier_number, odds_display, odds_decimal, world_ranking) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?)"
+      );
+      db.transaction(() => {
+        for (let i = 0; i < sorted.length; i++) {
+          const tier = Math.min(tierCount, Math.floor(i / tierSize) + 1);
+          const p = sorted[i];
+          const gp = db.prepare('SELECT world_ranking FROM golf_players WHERE id = ?').get(p.id);
+          insTier.run(league.id, masters.id, p.id, p.name || '', tier, p.odds_display, p.odds_decimal, gp?.world_ranking);
+        }
+      })();
+
+      console.log(`[migration] seed-masters-field: populated ${sorted.length} tier players for league ${league.id}`);
+    }
+  } catch (e) {
+    console.error('[migration] seed-masters-field error:', e.message);
+  }
+});
+
 module.exports = db;
