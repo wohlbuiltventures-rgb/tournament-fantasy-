@@ -371,8 +371,16 @@ function _applyFieldToTournament(tourn, field) {
     try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
     if (!tiersConfig.length) { leagueResults.push({ league: league.name, skipped: 'no_tier_config' }); continue; }
 
-    db.prepare('DELETE FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? AND manually_overridden = 0')
-      .run(league.id, tourn.id);
+    // Delete non-overridden tier players EXCEPT those who have been picked —
+    // picked players must keep their tier row visible (mark WD instead of deleting).
+    db.prepare(`
+      DELETE FROM pool_tier_players
+      WHERE league_id = ? AND tournament_id = ? AND manually_overridden = 0
+        AND player_id NOT IN (
+          SELECT DISTINCT player_id FROM pool_picks
+          WHERE league_id = ? AND tournament_id = ?
+        )
+    `).run(league.id, tourn.id, league.id, tourn.id);
 
     // Use odds from golf_players + golf_tournament_fields; field was just updated.
     // GROUP BY gp.id deduplicates players who have multiple name-variant rows in
@@ -413,6 +421,23 @@ function _applyFieldToTournament(tourn, field) {
         count++;
       }
     })();
+
+    // Mark picked players as withdrawn if they're no longer in the field
+    const fieldPlayerIds = new Set(allTF.map(p => p.id));
+    const stalePickedPlayers = db.prepare(`
+      SELECT DISTINCT ptp.player_id FROM pool_tier_players ptp
+      WHERE ptp.league_id = ? AND ptp.tournament_id = ?
+        AND ptp.player_id NOT IN (${allTF.map(() => '?').join(',') || "''"})
+    `).all(league.id, tourn.id, ...allTF.map(p => p.id));
+
+    if (stalePickedPlayers.length > 0) {
+      const markWD = db.prepare('UPDATE pool_tier_players SET is_withdrawn = 1 WHERE league_id = ? AND tournament_id = ? AND player_id = ?');
+      for (const { player_id } of stalePickedPlayers) {
+        markWD.run(league.id, tourn.id, player_id);
+      }
+      console.log(`[datagolf] ${tourn.name}: marked ${stalePickedPlayers.length} picked player(s) as WD in league ${league.name}`);
+    }
+
     leagueResults.push({ league: league.name, players_assigned: count });
   }
 

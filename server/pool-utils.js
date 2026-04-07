@@ -85,6 +85,22 @@ function applyDropScoring(picks, dropCount, { lockedDroppedIds = null } = {}) {
   }
 
   // ── AUTO DROP: compute worst-N from live scores ──────────────────────────────
+  // Guard: don't compute drops until enough players have real scores.
+  // If fewer than (total - dropCount) players have teed off, drop badges
+  // are meaningless and misleading (the 1-2 players with stale/early scores
+  // would always show as "DROPPING" even though the round hasn't started).
+  const playersWithScores = enriched.filter(p => p._hasRounds).length;
+  const minNeeded = Math.max(1, enriched.length - dropCount);
+  if (playersWithScores < minNeeded) {
+    const counting = enriched.filter(p => p._hasRounds && !p._isMC);
+    return {
+      picks:          enriched, // all players shown as active, no drops
+      team_score:     counting.reduce((s, p) => s + p.player_total, 0),
+      counting_count: counting.length,
+      dropped_count:  0,
+    };
+  }
+
   const mc     = enriched.filter(p => p._isMC);
   const active = enriched.filter(p => p._hasRounds && !p._isMC);
 
