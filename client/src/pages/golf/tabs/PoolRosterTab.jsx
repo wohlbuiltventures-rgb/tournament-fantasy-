@@ -635,7 +635,7 @@ export default function PoolRosterTab({ leagueId, league }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <input
                   type="text"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   pattern="-?[0-9]*"
                   value={tiebreakerScore}
                   onChange={e => {
