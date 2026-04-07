@@ -625,7 +625,8 @@ export default function PoolRosterTab({ leagueId, league }) {
 
           {/* Tiebreaker stepper — shown once all picks are made */}
           {tiers.length > 0 && allPicksMade && (() => {
-            const tb = parseInt(tiebreakerScore) || -12;
+            const parsed = parseInt(tiebreakerScore);
+            const tb = isNaN(parsed) ? -12 : parsed;
             const clamp = v => String(Math.max(-30, Math.min(10, v)));
             const stepDown = () => setTiebreakerScore(clamp(tb - 1));
             const stepUp   = () => setTiebreakerScore(clamp(tb + 1));
