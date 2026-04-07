@@ -2311,4 +2311,125 @@ runOnce('backfill-ptp-country-from-golf-players', () => {
   }
 });
 
+// ── Correct Masters 2026 field to match official invitees ─────────────────────
+runOnce('correct-masters-2026-field-official', () => {
+  try {
+    const masters = db.prepare(
+      "SELECT id FROM golf_tournaments WHERE name = 'Masters Tournament' AND season_year = 2026"
+    ).get();
+    if (!masters) return;
+    const tid = masters.id;
+
+    // Official field from masters.com / Wikipedia (April 7, 2026)
+    const officialField = [
+      'Angel Cabrera', 'Fred Couples', 'Sergio Garcia', 'Dustin Johnson', 'Zach Johnson',
+      'Hideki Matsuyama', 'Rory McIlroy', 'Jose Maria Olazabal', 'Jon Rahm', 'Patrick Reed',
+      'Scottie Scheffler', 'Charl Schwartzel', 'Adam Scott', 'Vijay Singh', 'Jordan Spieth',
+      'Bubba Watson', 'Mike Weir', 'Danny Willett', 'Wyndham Clark', 'Bryson DeChambeau',
+      'Matt Fitzpatrick', 'J.J. Spaun', 'Brian Harman', 'Collin Morikawa', 'Xander Schauffele',
+      'Cameron Smith', 'Brooks Koepka', 'Justin Thomas', 'Cameron Young',
+      'Ludvig Åberg', 'Corey Conners', 'Jason Day', 'Harris English', 'Max Homa',
+      'Sungjae Im', 'Justin Rose', 'Tyrrell Hatton', 'Viktor Hovland', 'Robert MacIntyre',
+      'Carlos Ortiz', 'Chris Gotterup', 'Haotong Li', 'Davis Riley',
+      'Akshay Bhatia', 'Keegan Bradley', 'Jacob Bridgeman',
+      'Nico Echavarria', 'Tommy Fleetwood', 'Ben Griffin', 'Ryan Fox', 'Kurt Kitayama',
+      'Sepp Straka', 'Gary Woodland', 'Sam Burns', 'Patrick Cantlay', 'Harry Hall',
+      'Russell Henley', 'Shane Lowry', 'Maverick McNealy', 'Andrew Novak', 'Nick Taylor',
+      'Marco Penge', 'Tom McKibbin', 'Rasmus Neergaard-Petersen',
+      'Michael Brennan', 'Ryan Gerard', 'Max Greyserman', 'Rasmus Hojgaard',
+      'Johnny Keefer', 'Michael Kim', 'Si Woo Kim', 'Min Woo Lee', 'Alex Noren',
+      'Aaron Rai', 'Kristoffer Reitan', 'Sam Stevens', 'Sami Valimaki',
+      'Daniel Berger', 'Nicolai Hojgaard', 'Jake Knapp', 'Matt McCarty',
+      'Jackson Herrington', 'Mason Howell', 'Ethan Fang', 'Fifa Laopakdee',
+      'Mateo Pulcini', 'Brandon Holtz', 'Brian Campbell', 'Aldrich Potgieter',
+      'Naoyuki Kataoka', 'Casey Jarvis',
+    ];
+
+    const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[.]/g, '').trim();
+    const officialNorms = new Set(officialField.map(norm));
+
+    // Remove players NOT in official field
+    const currentField = db.prepare('SELECT id, player_name FROM golf_tournament_fields WHERE tournament_id = ?').all(tid);
+    let removed = 0;
+    for (const row of currentField) {
+      if (!officialNorms.has(norm(row.player_name))) {
+        db.prepare('DELETE FROM golf_tournament_fields WHERE id = ?').run(row.id);
+        removed++;
+      }
+    }
+
+    // Add missing official players
+    const currentNorms = new Set(
+      db.prepare('SELECT player_name FROM golf_tournament_fields WHERE tournament_id = ?').all(tid)
+        .map(r => norm(r.player_name))
+    );
+
+    const ins = db.prepare(
+      "INSERT OR IGNORE INTO golf_tournament_fields (id, tournament_id, player_id, player_name, world_ranking, odds_display, odds_decimal) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?)"
+    );
+    const insPlayer = db.prepare(
+      "INSERT OR IGNORE INTO golf_players (id, name, country, is_active, world_ranking) VALUES (lower(hex(randomblob(16))), ?, ?, 1, ?)"
+    );
+
+    let added = 0;
+    for (const name of officialField) {
+      if (currentNorms.has(norm(name))) continue;
+
+      // Find or create golf_players record
+      let gp = db.prepare('SELECT id, world_ranking, odds_display, odds_decimal FROM golf_players WHERE name = ?').get(name);
+      if (!gp) {
+        // Try normalized match
+        const allP = db.prepare('SELECT id, name, world_ranking, odds_display, odds_decimal FROM golf_players').all();
+        gp = allP.find(p => norm(p.name) === norm(name));
+      }
+      if (!gp) {
+        // Create new player
+        insPlayer.run(name, null, 999);
+        gp = db.prepare('SELECT id, world_ranking, odds_display, odds_decimal FROM golf_players WHERE name = ?').get(name);
+      }
+      if (!gp) continue;
+      ins.run(tid, gp.id, name, gp.world_ranking, gp.odds_display || '200:1', gp.odds_decimal || 201);
+      added++;
+    }
+
+    // Also clean pool_tier_players for affected leagues
+    const leagues = db.prepare('SELECT id FROM golf_leagues WHERE pool_tournament_id = ?').all(tid);
+    for (const league of leagues) {
+      // Remove tier players not in the official field
+      const tierPlayers = db.prepare('SELECT id, player_name FROM pool_tier_players WHERE league_id = ? AND tournament_id = ?').all(league.id, tid);
+      for (const tp of tierPlayers) {
+        if (!officialNorms.has(norm(tp.player_name))) {
+          db.prepare('DELETE FROM pool_tier_players WHERE id = ?').run(tp.id);
+        }
+      }
+    }
+
+    console.log(`[migration] correct-masters-field: removed ${removed}, added ${added} → field should be ${officialField.length}`);
+    const finalCount = db.prepare('SELECT COUNT(*) as cnt FROM golf_tournament_fields WHERE tournament_id = ?').get(tid);
+    console.log(`[migration] correct-masters-field: final field size = ${finalCount.cnt}`);
+  } catch (e) {
+    console.error('[migration] correct-masters-field error:', e.message);
+  }
+});
+
+// ── Fix player name spellings to match masters.com official names ─────────────
+runOnce('fix-masters-2026-name-spellings', () => {
+  try {
+    const fixes = [
+      ['Johnny Keefer', 'John Keefer'],
+      ['Nico Echavarria', 'Nicolas Echavarria'],
+      ['Sam Stevens', 'Samuel Stevens'],
+    ];
+    for (const [old, correct] of fixes) {
+      db.prepare('UPDATE golf_players SET name = ? WHERE name = ?').run(correct, old);
+      db.prepare('UPDATE golf_tournament_fields SET player_name = ? WHERE player_name = ?').run(correct, old);
+      db.prepare('UPDATE pool_tier_players SET player_name = ? WHERE player_name = ?').run(correct, old);
+      db.prepare('UPDATE pool_picks SET player_name = ? WHERE player_name = ?').run(correct, old);
+    }
+    console.log(`[migration] fix-masters-names: corrected ${fixes.length} name spellings`);
+  } catch (e) {
+    console.error('[migration] fix-masters-names error:', e.message);
+  }
+});
+
 module.exports = db;
