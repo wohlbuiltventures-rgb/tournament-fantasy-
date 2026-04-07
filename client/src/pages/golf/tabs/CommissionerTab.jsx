@@ -745,6 +745,7 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                   className="flex items-center justify-between px-4 py-3">
                   <div>
                     <div className="text-white text-sm font-semibold">{m.team_name}</div>
+                    {m.full_name && <div className="text-gray-400 text-xs">{m.full_name}</div>}
                     <div className="text-gray-500 text-xs">{m.username}</div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>

@@ -254,6 +254,7 @@ export default function Profile() {
 
   const [username, setUsername]     = useState('');
   const [email, setEmail]           = useState('');
+  const [fullName, setFullName]     = useState('');
   const [acctSaving, setAcctSaving] = useState(false);
 
   const [currentPw, setCurrentPw] = useState('');
@@ -277,6 +278,7 @@ export default function Profile() {
         setProfile(p);
         setUsername(p.username || '');
         setEmail(p.email || '');
+        setFullName(p.full_name || '');
       })
       .catch(() => showToast('Failed to load profile', 'error'))
       .finally(() => setPageLoading(false));
@@ -286,9 +288,9 @@ export default function Profile() {
   async function saveAccount() {
     setAcctSaving(true);
     try {
-      const res = await api.put('/profile', { username, email });
+      const res = await api.put('/profile', { username, email, full_name: fullName });
       setProfile(p => ({ ...p, ...res.data.user }));
-      updateUser({ username: res.data.user.username, email: res.data.user.email });
+      updateUser({ username: res.data.user.username, email: res.data.user.email, full_name: res.data.user.full_name });
       showToast('Profile saved ✓');
     } catch (err) {
       showToast(err.response?.data?.error || 'Failed to save', 'error');
@@ -375,7 +377,7 @@ export default function Profile() {
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 16 }}>
                   Account Settings
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 22 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 14 }}>
                   <Field label="Username">
                     <input
                       type="text"
@@ -395,6 +397,21 @@ export default function Profile() {
                       style={{ ...inputBase, color: '#374151', background: '#141414', cursor: 'default' }}
                     />
                   </Field>
+                </div>
+                <div style={{ marginBottom: 22 }}>
+                  <Field label="Full Name">
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={e => setFullName(e.target.value)}
+                      placeholder="e.g. John Smith"
+                      maxLength={60}
+                      style={inputBase}
+                      onFocus={e => e.currentTarget.style.borderColor = 'rgba(0,200,83,0.45)'}
+                      onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'}
+                    />
+                  </Field>
+                  <p style={{ color: '#4b5563', fontSize: 10, marginTop: 5 }}>Used by pool commissioners to identify you for payment tracking</p>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <GreenBtn onClick={saveAccount} loading={acctSaving}>

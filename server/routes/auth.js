@@ -41,7 +41,7 @@ function ensureUserReferralCode(userId) {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { email, username, password, agreement_accepted, age_confirmed, state_eligible, ref_code } = req.body;
+    const { email, username, password, full_name, agreement_accepted, age_confirmed, state_eligible, ref_code } = req.body;
     if (!email || !username || !password) {
       return res.status(400).json({ error: 'Email, username, and password are required' });
     }
@@ -59,12 +59,13 @@ router.post('/register', async (req, res) => {
 
     const password_hash = await bcrypt.hash(password, 10);
     const id = uuidv4();
+    const fullNameTrimmed = full_name ? full_name.trim() : null;
     db.prepare(`
-      INSERT INTO users (id, email, username, password_hash, agreement_accepted, age_confirmed, state_eligible)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, email, username, password_hash, 1, 1, 1);
+      INSERT INTO users (id, email, username, password_hash, full_name, agreement_accepted, age_confirmed, state_eligible)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, email, username, password_hash, fullNameTrimmed, 1, 1, 1);
 
-    const user = { id, email, username };
+    const user = { id, email, username, full_name: fullNameTrimmed };
     const token = signToken(user);
     res.status(201).json({ token, user });
 
@@ -286,7 +287,7 @@ router.post('/activate', async (req, res) => {
 
 // GET /api/auth/me
 router.get('/me', authMiddleware, (req, res) => {
-  const user = db.prepare('SELECT id, email, username, role, created_at FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare('SELECT id, email, username, full_name, role, created_at FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json({ user });
 });

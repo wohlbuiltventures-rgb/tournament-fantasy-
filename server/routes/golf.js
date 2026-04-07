@@ -490,10 +490,14 @@ router.get('/leagues/:id', authMiddleware, (req, res) => {
     }
 
     const members = db.prepare(`
-      SELECT glm.*, u.username, u.avatar_url
+      SELECT glm.*, u.username, u.avatar_url, u.full_name
       FROM golf_league_members glm JOIN users u ON glm.user_id = u.id
       WHERE glm.golf_league_id = ? ORDER BY glm.season_points DESC, glm.joined_at ASC
     `).all(req.params.id);
+    // Only expose full_name to the commissioner — strip it for non-commissioners
+    if (league.commissioner_id !== req.user.id) {
+      members.forEach(m => delete m.full_name);
+    }
     const isCommissioner = league.commissioner_id === req.user.id;
     const myMember = members.find(m => m.user_id === req.user.id);
     if (!myMember && !isCommissioner) return res.status(403).json({ error: 'Not a member' });

@@ -50,7 +50,7 @@ const logoUploader   = makeUploader(LOGO_DIR);
 // ── GET /api/profile ────────────────────────────────────────────────────────
 router.get('/', authMiddleware, (req, res) => {
   const user = db.prepare(`
-    SELECT id, email, username, avatar_url, default_team_name, team_logo_url,
+    SELECT id, email, username, full_name, avatar_url, default_team_name, team_logo_url,
            venmo_handle, notif_turn, notif_draft_start, notif_standings_recap,
            referral_code, created_at
     FROM users WHERE id = ?
@@ -75,7 +75,7 @@ router.get('/', authMiddleware, (req, res) => {
 router.put('/', authMiddleware, (req, res) => {
   try {
     const {
-      username, email, venmo_handle, default_team_name,
+      username, email, full_name, venmo_handle, default_team_name,
       notif_turn, notif_draft_start, notif_standings_recap,
     } = req.body;
 
@@ -95,6 +95,7 @@ router.put('/', authMiddleware, (req, res) => {
 
     if (username !== undefined)           { fields.push('username = ?');              values.push(username.trim()); }
     if (email !== undefined)              { fields.push('email = ?');                 values.push(email.trim()); }
+    if (full_name !== undefined)          { fields.push('full_name = ?');             values.push((full_name || '').trim() || null); }
     if (venmo_handle !== undefined)       { fields.push('venmo_handle = ?');          values.push(venmo_handle); }
     if (default_team_name !== undefined)  { fields.push('default_team_name = ?');     values.push(default_team_name); }
     if (notif_turn !== undefined)         { fields.push('notif_turn = ?');            values.push(notif_turn ? 1 : 0); }
@@ -107,7 +108,7 @@ router.put('/', authMiddleware, (req, res) => {
     }
 
     const updated = db.prepare(`
-      SELECT id, email, username, avatar_url, default_team_name, team_logo_url,
+      SELECT id, email, username, full_name, avatar_url, default_team_name, team_logo_url,
              venmo_handle, notif_turn, notif_draft_start, notif_standings_recap, referral_code
       FROM users WHERE id = ?
     `).get(req.user.id);

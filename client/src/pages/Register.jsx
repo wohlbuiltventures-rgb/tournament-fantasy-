@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useDocTitle } from '../hooks/useDocTitle';
@@ -7,14 +7,14 @@ import api from '../api';
 
 export default function Register() {
   useDocTitle('Create Account | TourneyRun');
-  const { register } = useAuth();
+  const { register, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sdSession = searchParams.get('smartdraft_session');
   const thenUrl   = searchParams.get('then');
   const refCode   = searchParams.get('ref') || localStorage.getItem('ref_code') || '';
 
-  const [form, setForm]     = useState({ email: '', username: '', password: '', confirmPassword: '' });
+  const [form, setForm]     = useState({ email: '', username: '', full_name: '', password: '', confirmPassword: '' });
   const [checks, setChecks] = useState({ terms: false, age: false, state: false });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,6 +23,16 @@ export default function Register() {
   const [showCPw, setShowCPw] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Navigate AFTER React commits the auth state update — keeps Register visible
+  // until the route actually changes (no null flash from <Navigate> returning null).
+  useEffect(() => {
+    if (authLoading || !user) return;
+    const dest = sdSession
+      ? '/basketball/create-league?smartdraft=1'
+      : thenUrl || '/golf/dashboard';
+    navigate(dest, { replace: true });
+  }, [user, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,20 +43,17 @@ export default function Register() {
     setLoading(true);
     try {
       await register(form.email, form.username, form.password, {
+        full_name: form.full_name,
         agreement_accepted: checks.terms,
         age_confirmed: checks.age,
         state_eligible: checks.state,
         ...(refCode && { ref_code: refCode }),
       });
       if (refCode) localStorage.removeItem('ref_code');
-      // Claim the standalone Smart Draft credit if we came from Stripe checkout
+      // Claim the standalone Smart Draft credit if we came from Stripe checkout.
+      // Navigation is handled by the useEffect above.
       if (sdSession) {
         try { await api.post('/payments/claim-credit', { session_id: sdSession }); } catch {}
-        navigate('/basketball/create-league?smartdraft=1');
-      } else if (thenUrl) {
-        navigate(thenUrl);
-      } else {
-        navigate('/basketball/dashboard');
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed');
@@ -98,6 +105,17 @@ export default function Register() {
             required
             autoComplete="username"
           />
+          <div>
+            <IconInput
+              icon="🪪"
+              type="text"
+              placeholder="Full Name (e.g. John Smith)"
+              value={form.full_name}
+              onChange={e => set('full_name', e.target.value)}
+              autoComplete="name"
+            />
+            <p className="text-gray-600 text-[10px] mt-1 ml-1">Used by pool commissioners to identify you for payment tracking</p>
+          </div>
           <IconInput
             icon="📧"
             type="email"

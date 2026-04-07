@@ -2228,6 +2228,9 @@ runOnce('dedup-pool-tier-players-unique-constraint', () => {
   }
 });
 
+// ── Add full_name column to users table ───────────────────────────────────────
+try { db.exec('ALTER TABLE users ADD COLUMN full_name TEXT'); } catch (_) {}
+
 // ── Dedup golf_players by name + fix pool_tier_players references ─────────────
 // DataGolf sync creates players by datagolf_id; seed migrations create by name.
 // This produces two rows for the same person (e.g. "Jordan Spieth" with and
