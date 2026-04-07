@@ -517,9 +517,9 @@ export default function PoolRosterTab({ leagueId, league }) {
       });
       setShowConfirm(false);
       const submittedEntry = currentEntryNumber;
-      setCurrentEntryNumber(1);
+      // Don't reset currentEntryNumber — keep it so "Edit Entry N" works correctly.
+      // It will be reset when user clicks "+ Add Another Entry" or switches entries.
       setEntryTeamName('');
-      setTiebreakerScore('-12');
       setViewingEntry(submittedEntry);
       await load(submittedEntry);
     } catch (err) {
