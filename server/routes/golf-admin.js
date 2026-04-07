@@ -2121,4 +2121,113 @@ router.post('/admin/dev/rebuild-league-tiers', superadmin, (req, res) => {
   }
 });
 
+// ── Pre-tournament player integrity check + fix ──────────────────────────────
+// Finds tier players with no golf_players record or null country, and fixes them.
+router.post('/admin/dev/preflight-players', superadmin, async (req, res) => {
+  try {
+    const mastersId = db.prepare(
+      "SELECT id FROM golf_tournaments WHERE name = 'Masters Tournament' AND season_year = 2026"
+    ).get()?.id;
+    if (!mastersId) return res.json({ error: 'Masters not found' });
+
+    // 1. Find tier players with missing golf_players record or null country
+    const problems = db.prepare(`
+      SELECT DISTINCT ptp.player_name, ptp.player_id, ptp.country AS ptp_country,
+        gp.id AS gp_id, gp.name AS gp_name, gp.country AS gp_country
+      FROM pool_tier_players ptp
+      LEFT JOIN golf_players gp ON gp.id = ptp.player_id
+      WHERE ptp.tournament_id = ?
+        AND (gp.id IS NULL OR gp.country IS NULL OR gp.country = '' OR ptp.country IS NULL OR ptp.country = '')
+    `).all(mastersId);
+
+    // 2. Also check golf_tournament_fields for unlinked players
+    const fieldOrphans = db.prepare(`
+      SELECT tf.player_name, tf.player_id, gp.id AS gp_id
+      FROM golf_tournament_fields tf
+      LEFT JOIN golf_players gp ON gp.id = tf.player_id
+      WHERE tf.tournament_id = ? AND gp.id IS NULL
+    `).all(mastersId);
+
+    // 3. Try to fix: fetch ESPN field for country data
+    let espnCountries = {};
+    try {
+      const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?event=401811941');
+      const d = await r.json();
+      const comps = d?.events?.[0]?.competitions?.[0]?.competitors || [];
+      const COUNTRY_MAP = {
+        'United States': 'US', 'England': 'GB', 'Scotland': 'GB', 'Wales': 'GB',
+        'Northern Ireland': 'GB', 'Ireland': 'IE', 'Canada': 'CA', 'Australia': 'AU',
+        'South Korea': 'KR', 'Korea': 'KR', 'Japan': 'JP', 'South Africa': 'ZA',
+        'Sweden': 'SE', 'Norway': 'NO', 'Denmark': 'DK', 'Germany': 'DE', 'France': 'FR',
+        'Spain': 'ES', 'Italy': 'IT', 'Colombia': 'CO', 'Argentina': 'AR', 'Mexico': 'MX',
+        'China': 'CN', 'Thailand': 'TH', 'New Zealand': 'NZ', 'Belgium': 'BE',
+        'Finland': 'FI', 'Austria': 'AT', 'Fiji': 'FJ', 'Netherlands': 'NL',
+      };
+      for (const c of comps) {
+        const name = c.athlete?.displayName || '';
+        const countryAlt = c.athlete?.flag?.alt || '';
+        if (name && countryAlt) espnCountries[name] = COUNTRY_MAP[countryAlt] || null;
+      }
+    } catch (e) { /* non-fatal */ }
+
+    // 4. Fix missing golf_players records and null countries
+    const insPlayer = db.prepare(
+      "INSERT OR IGNORE INTO golf_players (id, name, country, is_active, world_ranking) VALUES (lower(hex(randomblob(16))), ?, ?, 1, 999)"
+    );
+    const updCountry = db.prepare('UPDATE golf_players SET country = ? WHERE id = ? AND (country IS NULL OR country = \'\')');
+    const updPtpCountry = db.prepare('UPDATE pool_tier_players SET country = ? WHERE player_name = ? AND (country IS NULL OR country = \'\')');
+
+    let created = 0, countriesFixed = 0;
+
+    // Create missing golf_players
+    for (const p of [...problems, ...fieldOrphans]) {
+      if (!p.gp_id && p.player_name) {
+        const country = espnCountries[p.player_name] || null;
+        insPlayer.run(p.player_name, country);
+        created++;
+        // Re-link pool_tier_players and tournament_fields
+        const newGp = db.prepare('SELECT id FROM golf_players WHERE name = ?').get(p.player_name);
+        if (newGp) {
+          db.prepare('UPDATE pool_tier_players SET player_id = ? WHERE player_name = ? AND player_id = ?')
+            .run(newGp.id, p.player_name, p.player_id);
+          db.prepare('UPDATE golf_tournament_fields SET player_id = ? WHERE player_name = ? AND player_id = ?')
+            .run(newGp.id, p.player_name, p.player_id);
+        }
+      }
+    }
+
+    // Fix null countries from ESPN data
+    const allPlayers = db.prepare("SELECT id, name FROM golf_players WHERE country IS NULL OR country = ''").all();
+    for (const gp of allPlayers) {
+      const country = espnCountries[gp.name];
+      if (country) {
+        updCountry.run(country, gp.id);
+        updPtpCountry.run(country, gp.name);
+        countriesFixed++;
+      }
+    }
+
+    // Re-check after fixes
+    const remaining = db.prepare(`
+      SELECT DISTINCT ptp.player_name, gp.id AS gp_id, gp.country
+      FROM pool_tier_players ptp
+      LEFT JOIN golf_players gp ON gp.id = ptp.player_id
+      WHERE ptp.tournament_id = ?
+        AND (gp.id IS NULL OR gp.country IS NULL OR gp.country = '')
+    `).all(mastersId);
+
+    res.json({
+      problems_found: problems.length,
+      field_orphans: fieldOrphans.length,
+      players_created: created,
+      countries_fixed: countriesFixed,
+      espn_countries_available: Object.keys(espnCountries).length,
+      still_missing: remaining.map(r => ({ name: r.player_name, has_gp: !!r.gp_id, country: r.country })),
+    });
+  } catch (err) {
+    console.error('[preflight-players]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
