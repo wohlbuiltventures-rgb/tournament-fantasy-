@@ -1987,7 +1987,14 @@ router.post('/admin/dev/tier-diag', superadmin, (req, res) => {
       `).all(leagueId);
     }
 
-    res.json({ leagues, tier_distribution, null_odds_count, sample_players, league_id: leagueId });
+    // Flag tier imbalance warnings
+    const warnings = [];
+    for (const t of tier_distribution) {
+      if (t.cnt > 30) warnings.push(`T${t.tier_number} has ${t.cnt} players — consider narrowing the odds range`);
+      if (t.cnt === 0) warnings.push(`T${t.tier_number} is empty — no players match the odds range`);
+    }
+
+    res.json({ leagues, tier_distribution, null_odds_count, sample_players, league_id: leagueId, warnings });
   } catch (err) {
     console.error('[tier-diag]', err);
     res.status(500).json({ error: err.message });
@@ -2092,6 +2099,12 @@ router.post('/admin/dev/rebuild-league-tiers', superadmin, (req, res) => {
     const dist = db.prepare('SELECT tier_number, COUNT(*) as cnt FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? GROUP BY tier_number ORDER BY tier_number')
       .all(league_id, tid);
 
+    const warnings = [];
+    for (const t of dist) {
+      if (t.cnt > 30) warnings.push(`T${t.tier_number} has ${t.cnt} players — odds range may be too wide`);
+      if (t.cnt === 0) warnings.push(`T${t.tier_number} is empty — no players match the odds range`);
+    }
+
     res.json({
       ok: true,
       league: league.name,
@@ -2100,6 +2113,7 @@ router.post('/admin/dev/rebuild-league-tiers', superadmin, (req, res) => {
       overridden: overridden.size,
       tier_distribution: dist,
       tiers_config: tiersConfig,
+      warnings,
     });
   } catch (err) {
     console.error('[rebuild-tiers]', err);

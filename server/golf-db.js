@@ -2563,4 +2563,20 @@ try {
   }
 }
 
+// ── Fix Dhaul's pool tier 3 odds_min typo: "49:11" → "49:1" ─────────────────
+runOnce('fix-dhaul-tier3-odds-typo', () => {
+  try {
+    const r = db.prepare(`
+      UPDATE golf_leagues
+      SET pool_tiers = REPLACE(pool_tiers, '"49:11"', '"49:1"')
+      WHERE id = '5d8fd85b-b7de-4713-a188-c2b564db8c23'
+        AND pool_tiers LIKE '%49:11%'
+    `).run();
+    if (r.changes > 0) console.log('[migration] fix-dhaul-tier3: corrected odds_min "49:11" → "49:1"');
+    else console.log('[migration] fix-dhaul-tier3: no typo found (already fixed or league not present)');
+  } catch (e) {
+    console.error('[migration] fix-dhaul-tier3 error:', e.message);
+  }
+});
+
 module.exports = db;
