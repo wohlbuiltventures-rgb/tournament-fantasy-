@@ -774,10 +774,10 @@ async function syncDgOddsTiers(tournamentId) {
   // Bulk UPDATE by player_id — updates ALL duplicate pool_tier_players rows for a player at once.
   // Previous approach used sel.get() + UPDATE WHERE id=? which only fixed ONE of N duplicate rows.
   const updWithOdds = db.prepare(
-    'UPDATE pool_tier_players SET tier_number = ?, odds_display = ?, odds_decimal = ? WHERE league_id = ? AND tournament_id = ? AND player_id = ? AND (manually_overridden IS NULL OR manually_overridden = 0)'
+    'UPDATE pool_tier_players SET tier_number = ?, odds_display = ?, odds_decimal = ? WHERE league_id = ? AND tournament_id = ? AND player_id = ? AND (manually_overridden IS NULL OR manually_overridden = 0) AND odds_locked_at IS NULL'
   );
   const updNoOdds = db.prepare(
-    'UPDATE pool_tier_players SET tier_number = 4, odds_display = NULL, odds_decimal = NULL WHERE league_id = ? AND tournament_id = ? AND player_id = ? AND (manually_overridden IS NULL OR manually_overridden = 0)'
+    'UPDATE pool_tier_players SET tier_number = 4, odds_display = NULL, odds_decimal = NULL WHERE league_id = ? AND tournament_id = ? AND player_id = ? AND (manually_overridden IS NULL OR manually_overridden = 0) AND odds_locked_at IS NULL'
   );
 
   // One-time dedup: remove stale duplicate pool_tier_players rows, keeping the MAX id per player.

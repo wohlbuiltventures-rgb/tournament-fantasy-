@@ -1994,7 +1994,21 @@ router.post('/admin/dev/tier-diag', superadmin, (req, res) => {
       if (t.cnt === 0) warnings.push(`T${t.tier_number} is empty — no players match the odds range`);
     }
 
-    res.json({ leagues, tier_distribution, null_odds_count, sample_players, league_id: leagueId, warnings });
+    // Check pick/tier mismatches
+    let pick_tier_mismatches = [];
+    if (leagueId) {
+      pick_tier_mismatches = db.prepare(`
+        SELECT pp.player_name, pp.tier_number as pick_tier, ptp.tier_number as current_tier
+        FROM pool_picks pp
+        JOIN pool_tier_players ptp ON pp.player_id = ptp.player_id AND pp.league_id = ptp.league_id
+        WHERE pp.league_id = ? AND pp.tier_number != ptp.tier_number
+      `).all(leagueId);
+      if (pick_tier_mismatches.length > 0) {
+        warnings.push(`${pick_tier_mismatches.length} picks have tier mismatches — players moved tiers since picks were submitted`);
+      }
+    }
+
+    res.json({ leagues, tier_distribution, null_odds_count, sample_players, league_id: leagueId, warnings, pick_tier_mismatches });
   } catch (err) {
     console.error('[tier-diag]', err);
     res.status(500).json({ error: err.message });
@@ -2320,18 +2334,23 @@ router.post('/admin/dev/restore-league-from-datagolf', superadmin, async (req, r
         WHERE tf.tournament_id = ?
       `).all(tid);
 
-      // Rebuild pool_tier_players with FRESH DataGolf odds
-      const updPtp = db.prepare(`
-        INSERT OR REPLACE INTO pool_tier_players
+      // Rebuild pool_tier_players — skip rows where odds are already locked
+      const force = !!req.body.force; // pass force:true to overwrite locked odds
+      const insPtp = db.prepare(`
+        INSERT OR IGNORE INTO pool_tier_players
           (id, league_id, tournament_id, player_id, player_name, tier_number,
-           odds_display, odds_decimal, world_ranking, salary, country)
-        VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           odds_display, odds_decimal, world_ranking, salary, country, odds_locked_at)
+        VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `);
+      const updPtp = db.prepare(`
+        UPDATE pool_tier_players SET tier_number = ?, odds_display = ?, odds_decimal = ?,
+          world_ranking = ?, salary = ?, country = ?, odds_locked_at = datetime('now')
+        WHERE league_id = ? AND player_id = ? AND (odds_locked_at IS NULL OR ? = 1)
       `);
       const TIER_SALARY = { 1: 900, 2: 700, 3: 500, 4: 300, 5: 150, 6: 100, 7: 50 };
 
-      let assigned = 0, noOdds = 0;
+      let assigned = 0, noOdds = 0, skippedLocked = 0;
       db.transaction(() => {
-        // Don't delete — INSERT OR REPLACE handles existing rows via unique index
         for (const p of fieldPlayers) {
           const norm = (p.gp_name || p.player_name || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
           const o = byName.get(norm);
@@ -2356,13 +2375,30 @@ router.post('/admin/dev/restore-league-from-datagolf', superadmin, async (req, r
 
           const salary = TIER_SALARY[tierNum] || 100;
           const gp = db.prepare('SELECT world_ranking FROM golf_players WHERE id = ?').get(p.player_id);
-          updPtp.run(league_id, tid, p.player_id, p.player_name, tierNum, display, decimal, gp?.world_ranking, salary, p.country);
-          assigned++;
+
+          // Try INSERT first (new player), then UPDATE (existing — respects lock)
+          const insResult = insPtp.run(league_id, tid, p.player_id, p.player_name, tierNum, display, decimal, gp?.world_ranking, salary, p.country);
+          if (insResult.changes === 0) {
+            // Row exists — update only if not locked (or force=true)
+            const updResult = updPtp.run(tierNum, display, decimal, gp?.world_ranking, salary, p.country, league_id, p.player_id, force ? 1 : 0);
+            if (updResult.changes === 0) skippedLocked++;
+            else assigned++;
+          } else {
+            assigned++;
+          }
         }
       })();
 
       const dist = db.prepare('SELECT tier_number, COUNT(*) as cnt, MIN(odds_decimal) as min_odds, MAX(odds_decimal) as max_odds FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? GROUP BY tier_number ORDER BY tier_number')
         .all(league_id, tid);
+
+      // Check pick/tier mismatches
+      const mismatches = db.prepare(`
+        SELECT pp.player_name, pp.tier_number as pick_tier, ptp.tier_number as current_tier
+        FROM pool_picks pp
+        JOIN pool_tier_players ptp ON pp.player_id = ptp.player_id AND pp.league_id = ptp.league_id
+        WHERE pp.league_id = ? AND pp.tier_number != ptp.tier_number
+      `).all(league_id);
 
       res.json({
         ok: true,
@@ -2370,8 +2406,10 @@ router.post('/admin/dev/restore-league-from-datagolf', superadmin, async (req, r
         dg_odds_count: byName.size,
         assigned,
         no_odds: noOdds,
+        skipped_locked: skippedLocked,
         tier_distribution: dist,
         event_name: oddsData.event_name || '',
+        pick_tier_mismatches: mismatches,
       });
     } catch (e) {
       console.error('[restore] odds rebuild error:', e.message);

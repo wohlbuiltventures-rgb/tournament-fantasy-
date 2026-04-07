@@ -2605,4 +2605,24 @@ runOnce('delete-stale-masters-2026-scores-v2', () => {
   }
 });
 
+// ── Add odds_locked_at column + freeze all current Masters tier odds ──────────
+try { db.exec('ALTER TABLE pool_tier_players ADD COLUMN odds_locked_at TEXT'); } catch (_) {}
+
+// Lock all existing tier odds RIGHT NOW so no future sync/restore/migration can change them.
+// This runs on every boot (not runOnce) as a safety net.
+try {
+  const locked = db.prepare(`
+    UPDATE pool_tier_players SET odds_locked_at = COALESCE(odds_locked_at, datetime('now'))
+    WHERE odds_locked_at IS NULL
+      AND league_id IN (
+        SELECT id FROM golf_leagues WHERE pool_tournament_id IN (
+          SELECT id FROM golf_tournaments WHERE end_date >= date('now')
+        )
+      )
+  `).run();
+  if (locked.changes > 0) console.log(`[boot] Locked odds on ${locked.changes} tier players (odds_locked_at set)`);
+} catch (e) {
+  console.error('[boot] odds lock error:', e.message);
+}
+
 module.exports = db;
