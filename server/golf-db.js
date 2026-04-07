@@ -2439,6 +2439,11 @@ runOnce('rebuild-masters-2026-pool-tier-players', () => {
   // no-op: replaced by v2 below
 });
 runOnce('rebuild-masters-2026-pool-tier-players-v2', () => {
+  // DISABLED: this migration corrupted Dhaul's pool by overwriting DataGolf odds
+  // with rank-based odds from golf_tournament_fields. On production, DataGolf is
+  // the source of truth for odds and tier assignments. Never overwrite from here.
+  console.log('[migration] rebuild-masters-tiers-v2: DISABLED — DataGolf owns tier data on prod');
+  return;
   try {
     const masters = db.prepare(
       "SELECT id FROM golf_tournaments WHERE name = 'Masters Tournament' AND season_year = 2026"

@@ -2230,4 +2230,157 @@ router.post('/admin/dev/preflight-players', superadmin, async (req, res) => {
   }
 });
 
+// ── Force DataGolf odds re-sync for a specific league (bypasses tier lock) ────
+// Use ONLY to restore corrupted tier data from DataGolf source of truth.
+router.post('/admin/dev/restore-league-from-datagolf', superadmin, async (req, res) => {
+  try {
+    const { league_id } = req.body;
+    if (!league_id) return res.status(400).json({ error: 'league_id required' });
+
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(league_id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (!league.pool_tournament_id) return res.status(400).json({ error: 'No tournament linked' });
+
+    // Step 1: trigger DataGolf field sync to refresh golf_tournament_fields with real odds
+    try {
+      const { syncCurrentField } = require('../dataGolfService');
+      await syncCurrentField();
+      console.log('[restore] DataGolf field sync complete');
+    } catch (e) {
+      console.error('[restore] DataGolf field sync error:', e.message);
+    }
+
+    // Step 2: trigger DataGolf odds sync — temporarily remove the guard
+    try {
+      const { syncDgOddsTiers } = require('../dataGolfService');
+      // The guard blocks when leagues exist, so we call the internal rebuild directly
+      const tid = league.pool_tournament_id;
+      const tourn = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tid);
+
+      // Fetch fresh odds from DataGolf
+      const https = require('https');
+      const key = process.env.DATAGOLF_API_KEY;
+      if (!key) return res.status(400).json({ error: 'DATAGOLF_API_KEY not set' });
+
+      const oddsData = await new Promise((resolve, reject) => {
+        https.get(
+          `https://feeds.datagolf.com/betting-tools/outrights?tour=pga&market=win&odds_format=american&key=${key}`,
+          { headers: { 'User-Agent': 'TourneyRun/1.0', Accept: 'application/json' }, timeout: 20000 },
+          r => {
+            let body = '';
+            r.on('data', c => body += c);
+            r.on('end', () => { try { resolve(JSON.parse(body)); } catch { reject(new Error('JSON parse error')); } });
+          }
+        ).on('error', reject);
+      });
+
+      const odds = Array.isArray(oddsData) ? oddsData : (oddsData.odds || oddsData.players || oddsData.data || []);
+
+      // Build player odds lookup
+      const DG_BOOK_PREFS = ['draftkings', 'fanduel', 'betmgm', 'caesars', 'pointsbetus', 'betrivers'];
+      const byName = new Map();
+      for (const p of odds) {
+        let american = null;
+        for (const bk of DG_BOOK_PREFS) {
+          if (p[bk] != null) { american = p[bk]; break; }
+        }
+        if (american == null) continue;
+        const ratio = american > 0 ? american / 100 : 100 / Math.abs(american);
+        const nice = ratio < 5 ? Math.round(ratio * 4) / 4 :
+                     ratio < 20 ? Math.round(ratio * 2) / 2 :
+                     ratio < 100 ? Math.round(ratio / 5) * 5 :
+                     Math.round(ratio / 25) * 25;
+        const display = `${nice}:1`;
+        const decimal = nice + 1;
+        const norm = (p.player_name || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        byName.set(norm, { display, decimal, american });
+        if (p.player_name?.includes(',')) {
+          const [last, first] = p.player_name.split(',').map(s => s.trim().toLowerCase());
+          if (first) byName.set(`${first} ${last}`.normalize('NFD').replace(/[\u0300-\u036f]/g, ''), { display, decimal, american });
+        }
+      }
+
+      // Parse league tier config
+      let tiersConfig = [];
+      try { tiersConfig = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
+      tiersConfig.sort((a, b) => a.tier - b.tier);
+
+      function oddsStrToDecimal(str) {
+        if (!str) return Infinity;
+        const parts = String(str).split(':').map(Number);
+        if (parts.length !== 2 || isNaN(parts[0]) || !parts[1]) return Infinity;
+        return parts[0] / parts[1] + 1;
+      }
+
+      // Get all field players
+      const fieldPlayers = db.prepare(`
+        SELECT tf.player_id, tf.player_name, gp.country, gp.name as gp_name
+        FROM golf_tournament_fields tf
+        LEFT JOIN golf_players gp ON gp.id = tf.player_id
+        WHERE tf.tournament_id = ?
+      `).all(tid);
+
+      // Rebuild pool_tier_players with FRESH DataGolf odds
+      const updPtp = db.prepare(`
+        INSERT OR REPLACE INTO pool_tier_players
+          (id, league_id, tournament_id, player_id, player_name, tier_number,
+           odds_display, odds_decimal, world_ranking, salary, country)
+        VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const TIER_SALARY = { 1: 900, 2: 700, 3: 500, 4: 300, 5: 150, 6: 100, 7: 50 };
+
+      let assigned = 0, noOdds = 0;
+      db.transaction(() => {
+        // Don't delete — INSERT OR REPLACE handles existing rows via unique index
+        for (const p of fieldPlayers) {
+          const norm = (p.gp_name || p.player_name || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const o = byName.get(norm);
+
+          let display, decimal;
+          if (o) {
+            display = o.display;
+            decimal = o.decimal;
+          } else {
+            display = '200:1';
+            decimal = 201;
+            noOdds++;
+          }
+
+          // Assign tier from league config
+          let tierNum = tiersConfig.length ? tiersConfig[tiersConfig.length - 1].tier : 1;
+          for (const t of tiersConfig) {
+            const min = oddsStrToDecimal(t.odds_min) || 0;
+            const max = oddsStrToDecimal(t.odds_max) || Infinity;
+            if (decimal >= min && decimal <= max) { tierNum = t.tier; break; }
+          }
+
+          const salary = TIER_SALARY[tierNum] || 100;
+          const gp = db.prepare('SELECT world_ranking FROM golf_players WHERE id = ?').get(p.player_id);
+          updPtp.run(league_id, tid, p.player_id, p.player_name, tierNum, display, decimal, gp?.world_ranking, salary, p.country);
+          assigned++;
+        }
+      })();
+
+      const dist = db.prepare('SELECT tier_number, COUNT(*) as cnt, MIN(odds_decimal) as min_odds, MAX(odds_decimal) as max_odds FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? GROUP BY tier_number ORDER BY tier_number')
+        .all(league_id, tid);
+
+      res.json({
+        ok: true,
+        league: league.name,
+        dg_odds_count: byName.size,
+        assigned,
+        no_odds: noOdds,
+        tier_distribution: dist,
+        event_name: oddsData.event_name || '',
+      });
+    } catch (e) {
+      console.error('[restore] odds rebuild error:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  } catch (err) {
+    console.error('[restore]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
