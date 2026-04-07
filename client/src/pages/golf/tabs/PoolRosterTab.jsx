@@ -410,7 +410,7 @@ export default function PoolRosterTab({ leagueId, league }) {
   const [submitError, setSubmitError] = useState('');
   const [localSubmitted, setLocalSubmitted] = useState(null);
   // Feature: tiebreaker + multi-entry
-  const [tiebreakerScore, setTiebreakerScore] = useState('');
+  const [tiebreakerScore, setTiebreakerScore] = useState('-12');
   const [currentEntryNumber, setCurrentEntryNumber] = useState(1);
   const [entryTeamName, setEntryTeamName] = useState(''); // only used for entries 2+
 
@@ -519,7 +519,7 @@ export default function PoolRosterTab({ leagueId, league }) {
       const submittedEntry = currentEntryNumber;
       setCurrentEntryNumber(1);
       setEntryTeamName('');
-      setTiebreakerScore('');
+      setTiebreakerScore('-12');
       setViewingEntry(submittedEntry);
       await load(submittedEntry);
     } catch (err) {
@@ -623,58 +623,44 @@ export default function PoolRosterTab({ leagueId, league }) {
             );
           })}
 
-          {/* Tiebreaker input — shown once all picks are made */}
-          {tiers.length > 0 && allPicksMade && (
-            <div style={{ marginTop: 24, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 14, padding: '16px 18px' }}>
-              <label style={{ display: 'block', color: '#a5b4fc', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                Tiebreaker — Tournament Winning Score
-              </label>
-              <p style={{ color: '#9ca3af', fontSize: 12, marginBottom: 10, lineHeight: 1.5 }}>
-                Enter the winner's final score to par (e.g. <strong style={{ color: '#c7d2fe' }}>-14</strong>). Used to break ties only.
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  pattern="-?[0-9]*"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  value={tiebreakerScore}
-                  onKeyDown={e => {
-                    const val = e.currentTarget.value;
-                    // Allow: digits, minus (only at start), backspace, tab, arrow keys
-                    if (['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete'].includes(e.key)) return;
-                    if (/\d/.test(e.key)) return;
-                    if (e.key === '-' && val.length === 0) return;
-                    e.preventDefault();
-                  }}
-                  onChange={e => {
-                    const raw = e.target.value.replace(/[^0-9-]/g, '');
-                    // Ensure minus only at start, no double minus
-                    const cleaned = raw.startsWith('-')
-                      ? '-' + raw.slice(1).replace(/-/g, '')
-                      : raw.replace(/-/g, '');
-                    setTiebreakerScore(cleaned);
-                  }}
-                  placeholder="-14"
-                  style={{
-                    width: 100, background: '#111827', border: `1.5px solid ${tbValid ? '#6366f1' : tiebreakerScore !== '' && tiebreakerScore !== '-' ? '#ef4444' : 'rgba(255,255,255,0.12)'}`,
-                    borderRadius: 10, padding: '10px 14px', color: '#f1f5f9', fontSize: 16, fontWeight: 700,
-                    outline: 'none', transition: 'border-color 0.15s', fontVariantNumeric: 'tabular-nums',
-                  }}
-                  onFocus={e => { e.target.style.borderColor = '#6366f1'; }}
-                  onBlur={e => { e.target.style.borderColor = tbValid ? '#6366f1' : tiebreakerScore !== '' && tiebreakerScore !== '-' ? '#ef4444' : 'rgba(255,255,255,0.12)'; }}
-                />
-                <span style={{ color: '#4b5563', fontSize: 11 }}>Score to par, not total strokes</span>
+          {/* Tiebreaker stepper — shown once all picks are made */}
+          {tiers.length > 0 && allPicksMade && (() => {
+            const tb = parseInt(tiebreakerScore) || -12;
+            const clamp = v => String(Math.max(-30, Math.min(10, v)));
+            const stepDown = () => setTiebreakerScore(clamp(tb - 1));
+            const stepUp   = () => setTiebreakerScore(clamp(tb + 1));
+            const stepBtnStyle = (disabled) => ({
+              width: 48, height: 48, borderRadius: 12,
+              background: disabled ? 'rgba(255,255,255,0.03)' : 'rgba(99,102,241,0.15)',
+              border: `1.5px solid ${disabled ? '#1f2937' : 'rgba(99,102,241,0.4)'}`,
+              color: disabled ? '#374151' : '#a5b4fc',
+              fontSize: 22, fontWeight: 700, cursor: disabled ? 'default' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.12s', userSelect: 'none', WebkitTapHighlightColor: 'transparent',
+            });
+            return (
+              <div style={{ marginTop: 24, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 14, padding: '16px 18px' }}>
+                <label style={{ display: 'block', color: '#a5b4fc', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                  Winning Score Prediction
+                </label>
+                <p style={{ color: '#9ca3af', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
+                  Closest prediction wins all ties. Masters winners typically finish <strong style={{ color: '#c7d2fe' }}>-12 to -18</strong>.
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+                  <button type="button" onClick={stepDown} disabled={tb <= -30} style={stepBtnStyle(tb <= -30)}>−</button>
+                  <div style={{
+                    minWidth: 80, textAlign: 'center', background: '#111827',
+                    border: '1.5px solid rgba(99,102,241,0.4)', borderRadius: 12, padding: '10px 16px',
+                  }}>
+                    <span style={{ color: '#f1f5f9', fontSize: 24, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                      {tb > 0 ? '+' : ''}{tb}
+                    </span>
+                  </div>
+                  <button type="button" onClick={stepUp} disabled={tb >= 10} style={stepBtnStyle(tb >= 10)}>+</button>
+                </div>
               </div>
-              {tiebreakerScore === '' && (
-                <p style={{ color: '#f87171', fontSize: 11, marginTop: 6 }}>Please enter a tiebreaker score to submit your picks</p>
-              )}
-              {tiebreakerScore !== '' && !tbValid && (
-                <p style={{ color: '#f87171', fontSize: 11, marginTop: 6 }}>Must be between -30 and +10</p>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* Sticky submit bar */}
           {tiers.length > 0 && (
@@ -696,9 +682,7 @@ export default function PoolRosterTab({ leagueId, league }) {
                 >
                   {!allPicksMade
                     ? `${totalTarget - totalDone} more pick${totalTarget - totalDone !== 1 ? 's' : ''} needed`
-                    : !tbValid
-                      ? 'Enter tiebreaker score above'
-                      : 'Submit Picks →'}
+                    : 'Submit Picks →'}
                 </Button>
               </div>
             </div>
@@ -784,7 +768,7 @@ export default function PoolRosterTab({ leagueId, league }) {
                       setNames(newNames);
                       setCurrentEntryNumber(viewingEntry);
                       const tb = picks[0]?.tiebreaker_score;
-                      setTiebreakerScore(tb != null ? String(tb) : '');
+                      setTiebreakerScore(tb != null ? String(tb) : '-12');
                       setLocalSubmitted(false);
                     }}
                     style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: '1.5px solid rgba(99,102,241,0.4)', background: 'transparent', color: '#a5b4fc' }}
@@ -810,7 +794,7 @@ export default function PoolRosterTab({ leagueId, league }) {
                   setNames(newNames);
                   setCurrentEntryNumber(1);
                   const tb = picks[0]?.tiebreaker_score;
-                  setTiebreakerScore(tb != null ? String(tb) : '');
+                  setTiebreakerScore(tb != null ? String(tb) : '-12');
                   setLocalSubmitted(false);
                 }}
                 style={{ display: 'block', width: '100%', marginBottom: 16, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1.5px solid rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.06)', color: '#a5b4fc' }}
@@ -888,7 +872,7 @@ export default function PoolRosterTab({ leagueId, league }) {
                       setCurrentEntryNumber(nextEntry);
                       setSelected({});
                       setNames({});
-                      setTiebreakerScore('');
+                      setTiebreakerScore('-12');
                       setEntryTeamName('');
                       setLocalSubmitted(false);
                     }}
