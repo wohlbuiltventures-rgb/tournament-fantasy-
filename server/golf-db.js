@@ -2625,4 +2625,35 @@ try {
   console.error('[boot] odds lock error:', e.message);
 }
 
+// ── Merge "Last, First" duplicate golf_players into "First Last" ──────────────
+// DataGolf stores names as "Scheffler, Scottie" while our system uses "Scottie Scheffler".
+// This creates duplicates. Merge all "Last, First" records into their "First Last" counterpart.
+// Runs every boot (idempotent — no-op when no dupes).
+try {
+  const lastFirst = db.prepare(`
+    SELECT id, name FROM golf_players WHERE name LIKE '%,%'
+  `).all();
+
+  let merged = 0;
+  for (const dup of lastFirst) {
+    const [last, first] = dup.name.split(',').map(s => s.trim());
+    if (!first) continue;
+    const canonical = `${first} ${last}`;
+    const target = db.prepare('SELECT id FROM golf_players WHERE name = ? AND id != ?').get(canonical, dup.id);
+    if (!target) continue;
+
+    // Re-point all references
+    db.prepare('UPDATE pool_picks SET player_id = ? WHERE player_id = ?').run(target.id, dup.id);
+    db.prepare('UPDATE pool_tier_players SET player_id = ? WHERE player_id = ?').run(target.id, dup.id);
+    db.prepare('UPDATE golf_tournament_fields SET player_id = ? WHERE player_id = ?').run(target.id, dup.id);
+    db.prepare('UPDATE golf_scores SET player_id = ? WHERE player_id = ?').run(target.id, dup.id);
+    db.prepare('DELETE FROM golf_players WHERE id = ?').run(dup.id);
+    merged++;
+    console.log(`[boot] Merged "${dup.name}" → "${canonical}"`);
+  }
+  if (merged > 0) console.log(`[boot] Merged ${merged} Last,First duplicate player(s)`);
+} catch (e) {
+  console.error('[boot] Last,First merge error:', e.message);
+}
+
 module.exports = db;
