@@ -640,12 +640,9 @@ export default function PoolRosterTab({ leagueId, league }) {
             });
             return (
               <div style={{ marginTop: 24, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 14, padding: '16px 18px' }}>
-                <label style={{ display: 'block', color: '#a5b4fc', fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
-                  Winning Score Prediction
+                <label style={{ display: 'block', color: '#a5b4fc', fontSize: 13, fontWeight: 700, marginBottom: 14 }}>
+                  Tiebreaker — predict the winning score vs par
                 </label>
-                <p style={{ color: '#9ca3af', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
-                  Closest prediction wins all ties. Masters winners typically finish <strong style={{ color: '#c7d2fe' }}>-12 to -18</strong>.
-                </p>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
                   <button type="button" onClick={stepDown} disabled={tb <= -30} style={stepBtnStyle(tb <= -30)}>−</button>
                   <div style={{
