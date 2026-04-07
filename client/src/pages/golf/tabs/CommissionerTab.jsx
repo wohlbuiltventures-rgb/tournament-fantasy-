@@ -399,12 +399,13 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   // Blast modal
   const [blastModal, setBlastModal] = useState(null); // string (pre-filled message) or null
 
-  // Member paid status (optimistic)
+  // Member paid status — keyed by "userId_entryNumber" to support multi-entry
   const [paidMap, setPaidMap] = useState(() => {
     const map = {};
-    (members || []).forEach(m => { map[m.user_id] = !!m.is_paid; });
+    (members || []).forEach(m => { map[`${m.user_id}_1`] = !!m.is_paid; });
     return map;
   });
+  const [entryPaidMap, setEntryPaidMap] = useState({});
 
   // Pool standings (for winner announcement)
   const [poolStandings, setPoolStandings] = useState([]);
@@ -586,13 +587,14 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
     setPmSaving(false);
   }
 
-  async function togglePaid(userId) {
-    const next = !paidMap[userId];
-    setPaidMap(prev => ({ ...prev, [userId]: next }));
+  async function togglePaid(userId, entryNumber = 1) {
+    const key = `${userId}_${entryNumber}`;
+    const next = !paidMap[key];
+    setPaidMap(prev => ({ ...prev, [key]: next }));
     try {
-      await api.post(`/golf/leagues/${leagueId}/members/${userId}/paid`, { is_paid: next });
+      await api.post(`/golf/leagues/${leagueId}/members/${userId}/paid`, { is_paid: next, entry_number: entryNumber });
     } catch {
-      setPaidMap(prev => ({ ...prev, [userId]: !next })); // revert on error
+      setPaidMap(prev => ({ ...prev, [key]: !next })); // revert on error
     }
   }
 
@@ -728,50 +730,85 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
             <span className="bg-purple-500/15 text-purple-400 border border-purple-500/30 text-xs font-bold px-2 py-1 rounded-full">PRO</span>
           </div>
 
-          {/* Member roster */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-              <h4 className="text-white text-sm font-bold">Member Roster ({members.length})</h4>
-              {(league?.buy_in_amount > 0) && (
-                <span className="text-xs text-gray-500">
-                  <span className="text-green-400 font-bold">{Object.values(paidMap).filter(Boolean).length}</span>/{members.length} paid
-                </span>
-              )}
-            </div>
-            <div>
-              {members.map((m, i) => (
-                <div key={m.user_id}
-                  style={{ borderBottom: i < members.length - 1 ? '1px solid #111827' : 'none' }}
-                  className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <div className="text-white text-sm font-semibold">{m.team_name}</div>
-                    {m.full_name && <div className="text-gray-400 text-xs">{m.full_name}</div>}
-                    <div className="text-gray-500 text-xs">{m.username}</div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
-                    <button
-                      onClick={() => togglePaid(m.user_id)}
-                      title={paidMap[m.user_id] ? 'Mark as unpaid' : 'Mark as paid'}
-                      style={{
-                        width: 30, height: 30, borderRadius: '50%',
-                        background: paidMap[m.user_id] ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.04)',
-                        border: `1.5px solid ${paidMap[m.user_id] ? '#22c55e' : '#374151'}`,
-                        color: paidMap[m.user_id] ? '#22c55e' : '#4b5563',
-                        cursor: 'pointer', fontSize: 15, fontWeight: 700,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      {paidMap[m.user_id] ? '✓' : '○'}
-                    </button>
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', color: paidMap[m.user_id] ? '#22c55e' : '#4b5563', textTransform: 'uppercase' }}>
-                      {paidMap[m.user_id] ? 'Paid' : 'Unpaid'}
+          {/* Member roster — shows each entry as a separate row for multi-entry leagues */}
+          {(() => {
+            // Build entry rows: one per member entry (entry 1 from members, entries 2+ from standings)
+            const entryRows = members.map(m => ({ userId: m.user_id, username: m.username, team_name: m.team_name, full_name: m.full_name, entryNumber: 1 }));
+            // Add extra entries from standings data
+            const seen = new Set(members.map(m => `${m.user_id}_1`));
+            for (const s of poolStandings) {
+              const key = `${s.user_id}_${s.entry_number || 1}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                const member = members.find(m => m.user_id === s.user_id);
+                entryRows.push({
+                  userId: s.user_id,
+                  username: member?.username || s.username || '',
+                  team_name: s.team_name || member?.team_name || '',
+                  full_name: member?.full_name,
+                  entryNumber: s.entry_number || 1,
+                });
+              }
+            }
+            const totalEntries = entryRows.length;
+            const paidCount = entryRows.filter(r => paidMap[`${r.userId}_${r.entryNumber}`]).length;
+            const maxEntries = league?.pool_max_entries || 1;
+
+            return (
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                  <h4 className="text-white text-sm font-bold">
+                    {maxEntries > 1 ? `Entries (${totalEntries})` : `Member Roster (${members.length})`}
+                  </h4>
+                  {(league?.buy_in_amount > 0) && (
+                    <span className="text-xs text-gray-500">
+                      <span className="text-green-400 font-bold">{paidCount}</span>/{totalEntries} paid
                     </span>
-                  </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
+                <div>
+                  {entryRows.map((row, i) => {
+                    const key = `${row.userId}_${row.entryNumber}`;
+                    const isPaid = !!paidMap[key];
+                    return (
+                      <div key={key}
+                        style={{ borderBottom: i < entryRows.length - 1 ? '1px solid #111827' : 'none' }}
+                        className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <div className="text-white text-sm font-semibold">
+                            {row.team_name}
+                            {row.entryNumber > 1 && <span className="text-indigo-400 text-xs ml-2">Entry #{row.entryNumber}</span>}
+                          </div>
+                          {row.full_name && <div className="text-gray-400 text-xs">{row.full_name}</div>}
+                          <div className="text-gray-500 text-xs">{row.username}</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                          <button
+                            onClick={() => togglePaid(row.userId, row.entryNumber)}
+                            title={isPaid ? 'Mark as unpaid' : 'Mark as paid'}
+                            style={{
+                              width: 30, height: 30, borderRadius: '50%',
+                              background: isPaid ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.04)',
+                              border: `1.5px solid ${isPaid ? '#22c55e' : '#374151'}`,
+                              color: isPaid ? '#22c55e' : '#4b5563',
+                              cursor: 'pointer', fontSize: 15, fontWeight: 700,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            {isPaid ? '✓' : '○'}
+                          </button>
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', color: isPaid ? '#22c55e' : '#4b5563', textTransform: 'uppercase' }}>
+                            {isPaid ? 'Paid' : 'Unpaid'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── Edit Pool Settings ── */}
           {league?.format_type === 'pool' && (
