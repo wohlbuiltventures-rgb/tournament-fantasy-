@@ -151,13 +151,13 @@ const LeaderboardRow = memo(function LeaderboardRow({
               : '—'}
           </div>
           <div style={{ color: '#4b5563', fontSize: 10 }}>{isTotalStrokes ? '' : 'pts'}</div>
-          {/* Tiebreaker — always show when entry has one */}
-          {s.tiebreaker_score != null && (
-            <div style={{ fontSize: 9, color: rankInfo.tied ? '#6366f1' : '#4b5563', fontWeight: 700, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+          {/* Tiebreaker — show on tied teams during active tournament */}
+          {s.tiebreaker_score != null && hasScores && rankInfo.tied && (
+            <div style={{ fontSize: 9, color: '#6366f1', fontWeight: 700, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
               Tiebreaker: {s.tiebreaker_score > 0 ? '+' : ''}{s.tiebreaker_score}
             </div>
           )}
-          {/* Tiebreaker proximity to actual winning score */}
+          {/* Tiebreaker proximity — show after tournament completes (winning_score known) */}
           {winningScore != null && s.tiebreaker_score != null && (() => {
             const delta = Math.abs(s.tiebreaker_score - winningScore);
             return (

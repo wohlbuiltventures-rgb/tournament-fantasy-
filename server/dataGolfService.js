@@ -669,10 +669,22 @@ async function syncDgOddsTiers(tournamentId) {
 
   // Guard: never re-tier after picks are locked for any league linked to this tournament.
   // Odds shift throughout the week, but tiers must be frozen once picks close.
+  // Check three conditions — any one is enough to block:
+  //   1. picks_locked = 1 (explicitly locked by scheduler or commissioner)
+  //   2. picks_lock_time has passed (stale DB but time-based truth)
+  //   3. tournament start_date has passed (ultimate safety net)
   const lockedLeague = db.prepare(`
     SELECT gl.id, gl.name FROM golf_leagues gl
     WHERE gl.pool_tournament_id = ?
-      AND (gl.picks_locked = 1 OR gl.picks_lock_time <= datetime('now'))
+      AND (
+        gl.picks_locked = 1
+        OR gl.picks_lock_time <= datetime('now')
+        OR EXISTS (
+          SELECT 1 FROM golf_tournaments gt
+          WHERE gt.id = gl.pool_tournament_id
+            AND datetime(gt.start_date || 'T12:00:00') <= datetime('now')
+        )
+      )
     LIMIT 1
   `).get(tournamentId);
   if (lockedLeague) {
