@@ -678,7 +678,7 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
       picks: enrichedPicks,
       submitted: picks.length > 0,
       submitted_entries: submittedEntries,
-      picks_locked: !!league.picks_locked,
+      picks_locked: isLocked,
       lock_time: lockTime,
       tournament: tourn,
       tiers,
@@ -690,6 +690,9 @@ router.get('/leagues/:id/my-roster', authMiddleware, (req, res) => {
       dropped_count:   droppedCount,
       tiebreaker_score: tiebreakerScore,
       pool_max_entries: league.pool_max_entries || 1,
+      // Team name for inline editing
+      entry_team_name: picks.length > 0 ? (picks[0].entry_team_name || null) : null,
+      team_name: member?.team_name || null,
     });
   } catch (err) {
     console.error('[golf-pool] my-roster error:', err);
@@ -1232,6 +1235,54 @@ router.post('/admin/set-drop-count', authMiddleware, (req, res) => {
     res.json({ ok: true, pool_drop_count: count });
   } catch (err) {
     console.error('[golf-pool] admin set-drop-count error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── PATCH /leagues/:id/team-name ───────────────────────────────────────────────
+// User renames their entry's team name (pre-lock only).
+router.patch('/leagues/:id/team-name', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+
+    const member = db.prepare('SELECT * FROM golf_league_members WHERE golf_league_id = ? AND user_id = ?').get(req.params.id, req.user.id);
+    if (!member) return res.status(403).json({ error: 'Not a member' });
+
+    // Check lock
+    const tid = league.pool_tournament_id;
+    const tourn = tid ? db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tid) : null;
+    if (tourn) {
+      const lockTime = computeLockTime(tourn.start_date);
+      if (new Date() >= lockTime) return res.status(403).json({ error: 'Picks are locked — team names cannot be changed.' });
+    }
+
+    const { entry_number = 1, team_name } = req.body;
+    if (!team_name || !team_name.trim()) return res.status(400).json({ error: 'Team name cannot be empty' });
+
+    const cleaned = team_name.trim().replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 20);
+    if (!cleaned) return res.status(400).json({ error: 'Team name must contain letters or numbers' });
+
+    const entryNum = parseInt(entry_number) || 1;
+
+    if (entryNum === 1) {
+      // Entry 1: update golf_league_members.team_name
+      const r = db.prepare('UPDATE golf_league_members SET team_name = ? WHERE golf_league_id = ? AND user_id = ?')
+        .run(cleaned, req.params.id, req.user.id);
+      if (r.changes === 0) return res.status(404).json({ error: 'Member not found', rows_affected: 0 });
+      // Also update pool_picks.entry_team_name for entry 1 consistency
+      db.prepare('UPDATE pool_picks SET entry_team_name = ? WHERE league_id = ? AND user_id = ? AND COALESCE(entry_number, 1) = 1')
+        .run(cleaned, req.params.id, req.user.id);
+    } else {
+      // Entry 2+: update pool_picks.entry_team_name
+      const r = db.prepare('UPDATE pool_picks SET entry_team_name = ? WHERE league_id = ? AND user_id = ? AND COALESCE(entry_number, 1) = ?')
+        .run(cleaned, req.params.id, req.user.id, entryNum);
+      if (r.changes === 0) return res.status(404).json({ error: 'Entry not found', rows_affected: 0 });
+    }
+
+    res.json({ ok: true, team_name: cleaned, entry_number: entryNum });
+  } catch (err) {
+    console.error('[team-name]', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

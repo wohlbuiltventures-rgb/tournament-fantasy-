@@ -416,6 +416,12 @@ export default function PoolRosterTab({ leagueId, league }) {
 
   const [viewingEntry, setViewingEntry] = useState(1);
 
+  // Team name editing
+  const [showTeamNameModal, setShowTeamNameModal] = useState(null); // { entryNumber, currentName }
+  const [teamNameInput, setTeamNameInput] = useState('');
+  const [teamNameSaving, setTeamNameSaving] = useState(false);
+  const [editingTeamName, setEditingTeamName] = useState(null); // inline edit for entry tab
+
   async function load(entryNum) {
     try {
       const entry = entryNum || viewingEntry || 1;
@@ -498,6 +504,21 @@ export default function PoolRosterTab({ leagueId, league }) {
     setLocalSubmitted(false);
   }
 
+  async function saveTeamName(entryNumber, name) {
+    const cleaned = (name || '').trim().replace(/[^a-zA-Z0-9 _-]/g, '').slice(0, 20);
+    if (!cleaned) return;
+    setTeamNameSaving(true);
+    try {
+      await api.patch(`/golf/leagues/${leagueId}/team-name`, { entry_number: entryNumber, team_name: cleaned });
+      setShowTeamNameModal(null);
+      setEditingTeamName(null);
+      await load(entryNumber);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to save team name');
+    }
+    setTeamNameSaving(false);
+  }
+
   async function handleConfirmSubmit() {
     setSubmitting(true);
     setSubmitError('');
@@ -539,12 +560,17 @@ export default function PoolRosterTab({ leagueId, league }) {
         entry_team_name: entryToSubmit > 1 ? entryTeamName : undefined,
       });
       setShowConfirm(false);
-      const submittedEntry = currentEntryNumber;
-      // Don't reset currentEntryNumber — keep it so "Edit Entry N" works correctly.
-      // It will be reset when user clicks "+ Add Another Entry" or switches entries.
+      const submittedEntry = entryToSubmit;
       setEntryTeamName('');
       setViewingEntry(submittedEntry);
       await load(submittedEntry);
+      // Show team name prompt after successful submit (pre-lock only)
+      if (!picksLocked) {
+        const member = league.team_name || '';
+        const defaultName = submittedEntry === 1 ? member : `${member}_${submittedEntry}`;
+        setTeamNameInput(defaultName);
+        setShowTeamNameModal({ entryNumber: submittedEntry, currentName: defaultName });
+      }
     } catch (err) {
       setSubmitError(err.response?.data?.error || 'Submission failed. Try again.');
     }
@@ -757,6 +783,40 @@ export default function PoolRosterTab({ leagueId, league }) {
               </div>
               {!picksLocked && lockTime && <PicksCountdown lockTime={lockTime} />}
             </div>
+
+            {/* Team name with inline edit (pre-lock) */}
+            {(() => {
+              const currentName = data?.entry_team_name || data?.team_name || league?.team_name || `Entry ${viewingEntry}`;
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  {editingTeamName === viewingEntry ? (
+                    <form onSubmit={e => { e.preventDefault(); saveTeamName(viewingEntry, teamNameInput); }} style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <input
+                        type="text" autoFocus maxLength={20}
+                        value={teamNameInput}
+                        onChange={e => setTeamNameInput(e.target.value.replace(/[^a-zA-Z0-9 _-]/g, ''))}
+                        style={{ flex: 1, background: '#111827', border: '1.5px solid #6366f1', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 14, fontWeight: 700, outline: 'none' }}
+                      />
+                      <button type="submit" disabled={teamNameSaving} style={{ padding: '6px 12px', borderRadius: 8, background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                        {teamNameSaving ? '...' : 'Save'}
+                      </button>
+                      <button type="button" onClick={() => setEditingTeamName(null)} style={{ padding: '6px 8px', borderRadius: 8, background: 'none', border: '1px solid #374151', color: '#6b7280', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>{currentName}</span>
+                      {!picksLocked && tournStatus !== 'active' && tournStatus !== 'completed' && (
+                        <button onClick={() => { setEditingTeamName(viewingEntry); setTeamNameInput(currentName); }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#4b5563', fontSize: 14 }}
+                          title="Edit team name">✏️</button>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Entry switcher + edit button (multi-entry) */}
             {maxEntries > 1 && submittedEntryNumbers.length > 0 && (
@@ -992,6 +1052,39 @@ export default function PoolRosterTab({ leagueId, league }) {
                 {submitting ? 'Submitting…' : 'Submit Picks'}
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Post-submit team name modal ── */}
+      {showTeamNameModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16 }}
+          onClick={() => setShowTeamNameModal(null)}>
+          <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ color: '#fff', fontWeight: 800, fontSize: 16, margin: '0 0 4px' }}>Name your team</h3>
+            <p style={{ color: '#6b7280', fontSize: 12, margin: '0 0 16px' }}>
+              {showTeamNameModal.entryNumber > 1 ? `Entry #${showTeamNameModal.entryNumber}` : 'This shows on the standings page'}
+            </p>
+            <form onSubmit={e => { e.preventDefault(); saveTeamName(showTeamNameModal.entryNumber, teamNameInput); }}>
+              <input
+                type="text" autoFocus maxLength={20}
+                value={teamNameInput}
+                onChange={e => setTeamNameInput(e.target.value.replace(/[^a-zA-Z0-9 _-]/g, ''))}
+                placeholder="Team name"
+                style={{ width: '100%', boxSizing: 'border-box', background: '#1f2937', border: '1.5px solid rgba(99,102,241,0.4)', borderRadius: 10, padding: '10px 14px', color: '#fff', fontSize: 15, fontWeight: 700, outline: 'none', marginBottom: 16 }}
+              />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="button" onClick={() => setShowTeamNameModal(null)}
+                  style={{ flex: 1, padding: '10px 0', borderRadius: 10, background: '#1f2937', border: 'none', color: '#9ca3af', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  Skip
+                </button>
+                <button type="submit" disabled={teamNameSaving || !teamNameInput.trim()}
+                  style={{ flex: 1, padding: '10px 0', borderRadius: 10, background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  {teamNameSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
