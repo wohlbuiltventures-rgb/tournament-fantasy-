@@ -1236,5 +1236,182 @@ router.post('/admin/set-drop-count', authMiddleware, (req, res) => {
   }
 });
 
+// ── Audit table for commissioner actions ──────────────────────────────────────
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS commissioner_actions (
+    id TEXT PRIMARY KEY,
+    league_id TEXT NOT NULL,
+    commissioner_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+} catch (_) {}
+
+function logAction(leagueId, commId, action, details) {
+  db.prepare('INSERT INTO commissioner_actions (id, league_id, commissioner_id, action, details) VALUES (?, ?, ?, ?, ?)')
+    .run(uuidv4(), leagueId, commId, action, typeof details === 'string' ? details : JSON.stringify(details));
+}
+
+// ── PATCH /leagues/:id/admin/swap-pick ────────────────────────────────────────
+// Commissioner replaces one player with another in a member's entry.
+router.patch('/leagues/:id/admin/swap-pick', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
+
+    const { user_id, entry_number = 1, old_player_id, new_player_id } = req.body;
+    if (!user_id || !old_player_id || !new_player_id) {
+      return res.status(400).json({ error: 'user_id, old_player_id, and new_player_id required' });
+    }
+    const tid = league.pool_tournament_id;
+    if (!tid) return res.status(400).json({ error: 'No tournament linked' });
+    const entryNum = parseInt(entry_number) || 1;
+
+    // 1. Verify old pick exists
+    const oldPick = db.prepare(
+      'SELECT * FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ? AND COALESCE(entry_number, 1) = ? AND player_id = ?'
+    ).get(req.params.id, tid, user_id, entryNum, old_player_id);
+    if (!oldPick) return res.status(404).json({ error: 'Original pick not found for this user/entry' });
+
+    // 2. Verify new player is in same tier
+    const newTierPlayer = db.prepare(
+      'SELECT * FROM pool_tier_players WHERE league_id = ? AND player_id = ?'
+    ).get(req.params.id, new_player_id);
+    if (!newTierPlayer) return res.status(404).json({ error: 'Replacement player not in tier list' });
+    if (newTierPlayer.tier_number !== oldPick.tier_number) {
+      return res.status(400).json({ error: `Replacement must be in same tier (T${oldPick.tier_number}). ${newTierPlayer.player_name} is in T${newTierPlayer.tier_number}.` });
+    }
+
+    // 3. Verify new player not already picked by this entry
+    const dupe = db.prepare(
+      'SELECT 1 FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ? AND COALESCE(entry_number, 1) = ? AND player_id = ?'
+    ).get(req.params.id, tid, user_id, entryNum, new_player_id);
+    if (dupe) return res.status(409).json({ error: `${newTierPlayer.player_name} is already picked in this entry` });
+
+    // 4. Perform the swap
+    const result = db.prepare(
+      'UPDATE pool_picks SET player_id = ?, player_name = ? WHERE id = ?'
+    ).run(new_player_id, newTierPlayer.player_name, oldPick.id);
+
+    if (result.changes === 0) return res.status(500).json({ error: 'Swap failed — no rows updated' });
+
+    // 5. Audit log
+    logAction(req.params.id, req.user.id, 'swap_pick', {
+      user_id, entry_number: entryNum,
+      old_player: { id: old_player_id, name: oldPick.player_name },
+      new_player: { id: new_player_id, name: newTierPlayer.player_name },
+      tier: oldPick.tier_number,
+    });
+
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(user_id);
+    res.json({
+      ok: true,
+      rows_affected: result.changes,
+      swap: { old: oldPick.player_name, new: newTierPlayer.player_name, tier: oldPick.tier_number },
+      user: user?.username,
+    });
+  } catch (err) {
+    console.error('[swap-pick]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /leagues/:id/admin/delete-entry ─────────────────────────────────────
+// Commissioner deletes an entire entry (all picks for a user's entry_number).
+router.delete('/leagues/:id/admin/delete-entry', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
+
+    const { user_id, entry_number = 1 } = req.body;
+    if (!user_id) return res.status(400).json({ error: 'user_id required' });
+    const tid = league.pool_tournament_id;
+    if (!tid) return res.status(400).json({ error: 'No tournament linked' });
+    const entryNum = parseInt(entry_number) || 1;
+
+    // Get picks before deleting (for audit log)
+    const picks = db.prepare(
+      'SELECT player_name, tier_number FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ? AND COALESCE(entry_number, 1) = ?'
+    ).all(req.params.id, tid, user_id, entryNum);
+
+    if (picks.length === 0) return res.status(404).json({ error: 'No picks found for this entry', rows_affected: 0 });
+
+    // Delete the picks
+    const result = db.prepare(
+      'DELETE FROM pool_picks WHERE league_id = ? AND tournament_id = ? AND user_id = ? AND COALESCE(entry_number, 1) = ?'
+    ).run(req.params.id, tid, user_id, entryNum);
+
+    // Also clean pool_entry_paid if exists
+    try {
+      db.prepare(
+        'DELETE FROM pool_entry_paid WHERE league_id = ? AND tournament_id = ? AND user_id = ? AND entry_number = ?'
+      ).run(req.params.id, tid, user_id, entryNum);
+    } catch (_) {}
+
+    // Audit log
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(user_id);
+    logAction(req.params.id, req.user.id, 'delete_entry', {
+      user_id, username: user?.username, entry_number: entryNum,
+      picks_deleted: picks.map(p => p.player_name),
+    });
+
+    res.json({ deleted: true, rows_affected: result.changes, username: user?.username, entry_number: entryNum });
+  } catch (err) {
+    console.error('[delete-entry]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /leagues/:id/admin/entry-picks ────────────────────────────────────────
+// Returns all picks for a specific user/entry (for the roster editor modal).
+router.get('/leagues/:id/admin/entry-picks', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
+
+    const tid = league.pool_tournament_id;
+    const userId = req.query.user_id;
+    const entryNum = parseInt(req.query.entry_number) || 1;
+    if (!userId || !tid) return res.json({ picks: [] });
+
+    const picks = db.prepare(`
+      SELECT pp.player_id, pp.player_name, pp.tier_number,
+             ptp.odds_display, ptp.odds_decimal, gp.country
+      FROM pool_picks pp
+      LEFT JOIN pool_tier_players ptp ON ptp.league_id = pp.league_id AND ptp.player_id = pp.player_id
+      LEFT JOIN golf_players gp ON gp.id = pp.player_id
+      WHERE pp.league_id = ? AND pp.tournament_id = ? AND pp.user_id = ? AND COALESCE(pp.entry_number, 1) = ?
+      ORDER BY pp.tier_number ASC
+    `).all(req.params.id, tid, userId, entryNum);
+
+    // Available replacements per tier (for swap modal)
+    const pickedIds = new Set(picks.map(p => p.player_id));
+    const tiers = {};
+    for (const pick of picks) {
+      if (!tiers[pick.tier_number]) {
+        const available = db.prepare(`
+          SELECT ptp.player_id, ptp.player_name, ptp.odds_display, ptp.odds_decimal,
+                 COALESCE(ptp.country, gp.country) AS country
+          FROM pool_tier_players ptp
+          LEFT JOIN golf_players gp ON gp.id = ptp.player_id
+          WHERE ptp.league_id = ? AND ptp.tier_number = ?
+            AND (ptp.is_withdrawn IS NULL OR ptp.is_withdrawn = 0)
+          ORDER BY ptp.odds_decimal ASC
+        `).all(req.params.id, pick.tier_number);
+        tiers[pick.tier_number] = available.filter(p => !pickedIds.has(p.player_id));
+      }
+    }
+
+    res.json({ picks, available_by_tier: tiers });
+  } catch (err) {
+    console.error('[entry-picks]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 module.exports.assignSalaryCapSalaries = assignSalaryCapSalaries;

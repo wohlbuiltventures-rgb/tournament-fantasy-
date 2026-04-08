@@ -396,6 +396,17 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   const [applyingDrops, setApplyingDrops] = useState(false);
   const [dropResult, setDropResult] = useState(null);
 
+  // Roster editor
+  const [editingEntry, setEditingEntry] = useState(null); // { userId, entryNumber, username, teamName }
+  const [entryPicks, setEntryPicks] = useState([]);
+  const [availableByTier, setAvailableByTier] = useState({});
+  const [swapping, setSwapping] = useState(null); // { pick, tier } when replacing
+  const [swapLoading, setSwapLoading] = useState(false);
+
+  // Delete entry
+  const [deletingEntry, setDeletingEntry] = useState(null); // { userId, entryNumber, username, teamName }
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   // Blast modal
   const [blastModal, setBlastModal] = useState(null); // string (pre-filled message) or null
 
@@ -593,6 +604,56 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
     setPmSaving(false);
   }
 
+  async function openRosterEditor(userId, entryNumber, username, teamName) {
+    setEditingEntry({ userId, entryNumber, username, teamName });
+    try {
+      const r = await api.get(`/golf/leagues/${leagueId}/admin/entry-picks?user_id=${userId}&entry_number=${entryNumber}`);
+      setEntryPicks(r.data.picks || []);
+      setAvailableByTier(r.data.available_by_tier || {});
+    } catch { setEntryPicks([]); setAvailableByTier({}); }
+  }
+
+  async function confirmSwap(oldPick, newPlayer) {
+    setSwapLoading(true);
+    try {
+      const r = await api.patch(`/golf/leagues/${leagueId}/admin/swap-pick`, {
+        user_id: editingEntry.userId,
+        entry_number: editingEntry.entryNumber,
+        old_player_id: oldPick.player_id,
+        new_player_id: newPlayer.player_id,
+      });
+      if (r.data.ok) {
+        // Refresh picks
+        await openRosterEditor(editingEntry.userId, editingEntry.entryNumber, editingEntry.username, editingEntry.teamName);
+        setSwapping(null);
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || 'Swap failed');
+    }
+    setSwapLoading(false);
+  }
+
+  async function confirmDeleteEntry() {
+    setDeleteLoading(true);
+    try {
+      const r = await api.delete(`/golf/leagues/${leagueId}/admin/delete-entry`, {
+        data: { user_id: deletingEntry.userId, entry_number: deletingEntry.entryNumber },
+      });
+      if (r.data.deleted && r.data.rows_affected > 0) {
+        setDeletingEntry(null);
+        // Refresh standings to update entry list
+        api.get(`/golf/leagues/${leagueId}/standings`)
+          .then(r => { setPoolStandings(r.data.standings || []); if (r.data.entry_paid) setPaidMap(prev => ({ ...prev, ...r.data.entry_paid })); })
+          .catch(() => {});
+      } else {
+        alert('Delete failed — entry not found');
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || 'Delete failed');
+    }
+    setDeleteLoading(false);
+  }
+
   async function togglePaid(userId, entryNumber = 1) {
     const key = `${userId}_${entryNumber}`;
     const next = !paidMap[key];
@@ -788,25 +849,32 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
                           {row.full_name && <div className="text-gray-400 text-xs">{row.full_name}</div>}
                           <div className="text-gray-500 text-xs">{row.username}</div>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                           <button
-                            onClick={() => togglePaid(row.userId, row.entryNumber)}
-                            title={isPaid ? 'Mark as unpaid' : 'Mark as paid'}
-                            style={{
-                              width: 30, height: 30, borderRadius: '50%',
-                              background: isPaid ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.04)',
-                              border: `1.5px solid ${isPaid ? '#22c55e' : '#374151'}`,
-                              color: isPaid ? '#22c55e' : '#4b5563',
-                              cursor: 'pointer', fontSize: 15, fontWeight: 700,
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              transition: 'all 0.15s',
-                            }}
-                          >
-                            {isPaid ? '✓' : '○'}
-                          </button>
-                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', color: isPaid ? '#22c55e' : '#4b5563', textTransform: 'uppercase' }}>
-                            {isPaid ? 'Paid' : 'Unpaid'}
-                          </span>
+                            onClick={() => openRosterEditor(row.userId, row.entryNumber, row.username, row.team_name)}
+                            style={{ padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.08)', color: '#a5b4fc' }}
+                          >Edit</button>
+                          <button
+                            onClick={() => setDeletingEntry({ userId: row.userId, entryNumber: row.entryNumber, username: row.username, teamName: row.team_name })}
+                            style={{ padding: '4px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#f87171' }}
+                          >Del</button>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                            <button
+                              onClick={() => togglePaid(row.userId, row.entryNumber)}
+                              title={isPaid ? 'Mark as unpaid' : 'Mark as paid'}
+                              style={{
+                                width: 26, height: 26, borderRadius: '50%',
+                                background: isPaid ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.04)',
+                                border: `1.5px solid ${isPaid ? '#22c55e' : '#374151'}`,
+                                color: isPaid ? '#22c55e' : '#4b5563',
+                                cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              }}
+                            >{isPaid ? '✓' : '○'}</button>
+                            <span style={{ fontSize: 8, fontWeight: 700, color: isPaid ? '#22c55e' : '#4b5563', textTransform: 'uppercase' }}>
+                              {isPaid ? 'Paid' : ''}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1420,6 +1488,93 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
             <h4 className="text-white text-sm font-bold mb-3">🔗 Referral Link</h4>
             <ReferralSection />
+          </div>
+        </div>
+      )}
+
+      {/* ── Roster Editor Modal ── */}
+      {editingEntry && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => { if (!swapLoading) { setEditingEntry(null); setSwapping(null); } }}>
+          <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '80vh', overflow: 'auto', padding: 20 }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h3 style={{ color: '#fff', fontSize: 16, fontWeight: 800, margin: 0 }}>Edit Roster</h3>
+                <p style={{ color: '#6b7280', fontSize: 12, margin: '2px 0 0' }}>
+                  {editingEntry.teamName} · {editingEntry.username}{editingEntry.entryNumber > 1 ? ` · Entry #${editingEntry.entryNumber}` : ''}
+                </p>
+              </div>
+              <button onClick={() => { setEditingEntry(null); setSwapping(null); }} style={{ color: '#6b7280', fontSize: 20, background: 'none', border: 'none', cursor: 'pointer' }}>&times;</button>
+            </div>
+
+            {swapping ? (
+              <div>
+                <p style={{ color: '#9ca3af', fontSize: 12, marginBottom: 12 }}>
+                  Replace <strong style={{ color: '#f87171' }}>{swapping.pick.player_name}</strong> (T{swapping.pick.tier_number}) with:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflow: 'auto' }}>
+                  {(availableByTier[swapping.pick.tier_number] || []).map(p => (
+                    <button key={p.player_id} disabled={swapLoading}
+                      onClick={() => { if (confirm(`Replace ${swapping.pick.player_name} with ${p.player_name}? This cannot be undone.`)) confirmSwap(swapping.pick, p); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid #1f2937', cursor: 'pointer', textAlign: 'left' }}>
+                      <span style={{ fontSize: 16 }}>{p.country && p.country.length === 2 ? p.country.toUpperCase().replace(/./g, c => String.fromCodePoint(c.charCodeAt(0) + 127397)) : '⛳'}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{p.player_name}</div>
+                        <div style={{ color: '#6b7280', fontSize: 10 }}>{p.odds_display || ''}</div>
+                      </div>
+                    </button>
+                  ))}
+                  {(availableByTier[swapping.pick.tier_number] || []).length === 0 && (
+                    <p style={{ color: '#4b5563', fontSize: 12, textAlign: 'center', padding: 16 }}>No available replacements in this tier</p>
+                  )}
+                </div>
+                <button onClick={() => setSwapping(null)} style={{ marginTop: 12, width: '100%', padding: '10px 0', borderRadius: 10, background: '#1f2937', border: 'none', color: '#9ca3af', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Back</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {entryPicks.map(pick => (
+                  <div key={pick.player_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid #1f2937' }}>
+                    <span style={{ fontSize: 16 }}>{pick.country && pick.country.length === 2 ? pick.country.toUpperCase().replace(/./g, c => String.fromCodePoint(c.charCodeAt(0) + 127397)) : '⛳'}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{pick.player_name}</div>
+                      <div style={{ color: '#6b7280', fontSize: 10 }}>T{pick.tier_number} · {pick.odds_display || ''}</div>
+                    </div>
+                    <button onClick={() => setSwapping({ pick })}
+                      style={{ padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)', color: '#fbbf24' }}>
+                      Replace
+                    </button>
+                  </div>
+                ))}
+                {entryPicks.length === 0 && (
+                  <p style={{ color: '#4b5563', fontSize: 12, textAlign: 'center', padding: 16 }}>No picks submitted for this entry</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Entry Confirmation Modal ── */}
+      {deletingEntry && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => { if (!deleteLoading) setDeletingEntry(null); }}>
+          <div style={{ background: '#111827', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 16, width: '100%', maxWidth: 400, padding: 24 }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ color: '#fff', fontSize: 16, fontWeight: 800, margin: '0 0 8px' }}>Delete Entry</h3>
+            <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.5, margin: '0 0 16px' }}>
+              Delete <strong style={{ color: '#fff' }}>{deletingEntry.teamName}</strong>
+              {deletingEntry.entryNumber > 1 ? ` Entry #${deletingEntry.entryNumber}` : "'s picks"}
+              ? This will permanently remove their picks and cannot be undone. Payment records will not be affected.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setDeletingEntry(null)} disabled={deleteLoading}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 10, background: '#1f2937', border: 'none', color: '#9ca3af', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={confirmDeleteEntry} disabled={deleteLoading}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 10, background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                {deleteLoading ? 'Deleting...' : 'Delete Permanently'}
+              </button>
+            </div>
           </div>
         </div>
       )}
