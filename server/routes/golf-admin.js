@@ -2459,7 +2459,26 @@ router.post('/admin/dev/emergency-reset-league', superadmin, (req, res) => {
 
     const after = db.prepare('SELECT status, picks_locked, picks_lock_time FROM golf_leagues WHERE id = ?').get(league_id);
 
-    res.json({ ok: true, league: league.name, before, after });
+    // Full diagnostic
+    let poolTiers = [];
+    try { poolTiers = JSON.parse(league.pool_tiers || '[]'); } catch (_) {}
+
+    const tid = league.pool_tournament_id;
+    const tierPlayerCount = tid ? db.prepare('SELECT COUNT(*) as cnt FROM pool_tier_players WHERE league_id = ? AND tournament_id = ?').get(league_id, tid)?.cnt : 0;
+    const tierDist = tid ? db.prepare('SELECT tier_number, COUNT(*) as cnt FROM pool_tier_players WHERE league_id = ? AND tournament_id = ? GROUP BY tier_number ORDER BY tier_number').all(league_id, tid) : [];
+    const tourn = tid ? db.prepare('SELECT id, name, status, espn_event_id, start_date FROM golf_tournaments WHERE id = ?').get(tid) : null;
+
+    res.json({
+      ok: true, league: league.name, before, after,
+      diagnostic: {
+        pool_tournament_id: tid,
+        tournament: tourn,
+        pool_tiers_config_count: poolTiers.length,
+        pool_tiers_config: poolTiers,
+        tier_player_count: tierPlayerCount,
+        tier_distribution: tierDist,
+      },
+    });
   } catch (err) {
     console.error('[emergency-reset]', err);
     res.status(500).json({ error: err.message });
