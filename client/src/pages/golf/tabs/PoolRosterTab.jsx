@@ -507,13 +507,28 @@ export default function PoolRosterTab({ leagueId, league }) {
         picksList.push({ player_id: pid, player_name: names[pid] || '', tier_number: parseInt(tn) });
       }
     }
+
+    // Safety: if currentEntryNumber is 1 but entry 1 already has picks and we're in
+    // "new entry" mode (localSubmitted === false + selected is different from entry 1),
+    // auto-detect the correct entry number from submitted_entries.
+    let entryToSubmit = currentEntryNumber;
+    const existingEntries = data?.submitted_entries || [];
+    if (entryToSubmit === 1 && existingEntries.includes(1) && localSubmitted === false) {
+      // We're adding a new entry but currentEntryNumber wasn't updated (e.g. page refresh)
+      // Find the next available entry number
+      for (let n = 2; n <= (league.pool_max_entries || 3); n++) {
+        if (!existingEntries.includes(n)) { entryToSubmit = n; break; }
+      }
+      setCurrentEntryNumber(entryToSubmit);
+    }
+
     try {
       await api.post(`/golf/leagues/${leagueId}/picks`, {
         tournament_id: league.pool_tournament_id,
         picks: picksList,
         tiebreaker_score: parseInt(tiebreakerScore),
-        entry_number: currentEntryNumber,
-        entry_team_name: currentEntryNumber > 1 ? entryTeamName : undefined,
+        entry_number: entryToSubmit,
+        entry_team_name: entryToSubmit > 1 ? entryTeamName : undefined,
       });
       setShowConfirm(false);
       const submittedEntry = currentEntryNumber;
