@@ -508,19 +508,27 @@ export default function PoolRosterTab({ leagueId, league }) {
       }
     }
 
-    // Safety: if currentEntryNumber is 1 but entry 1 already has picks and we're in
-    // "new entry" mode (localSubmitted === false + selected is different from entry 1),
-    // auto-detect the correct entry number from submitted_entries.
+    // Use viewingEntry as ground truth when editing an existing entry.
+    // currentEntryNumber can reset to 1 on mobile remount, but viewingEntry
+    // is set by the entry switcher tab click which happens before edit.
+    // For new entries (not yet submitted), currentEntryNumber is correct
+    // because it was just set by "+ Add Another Entry".
     let entryToSubmit = currentEntryNumber;
     const existingEntries = data?.submitted_entries || [];
-    if (entryToSubmit === 1 && existingEntries.includes(1) && localSubmitted === false) {
-      // We're adding a new entry but currentEntryNumber wasn't updated (e.g. page refresh)
-      // Find the next available entry number
+
+    // If we're in edit mode viewing a specific entry, use that entry number
+    if (viewingEntry > 1 && existingEntries.includes(viewingEntry)) {
+      entryToSubmit = viewingEntry;
+    }
+
+    // Safety: if still entry 1 but entry 1 already submitted and we have empty
+    // localSubmitted (new entry mode), find the next available slot
+    if (entryToSubmit === 1 && existingEntries.includes(1) && !submitted) {
       for (let n = 2; n <= (league.pool_max_entries || 3); n++) {
         if (!existingEntries.includes(n)) { entryToSubmit = n; break; }
       }
-      setCurrentEntryNumber(entryToSubmit);
     }
+    setCurrentEntryNumber(entryToSubmit);
 
     try {
       await api.post(`/golf/leagues/${leagueId}/picks`, {
