@@ -821,7 +821,7 @@ export default function PoolRosterTab({ leagueId, league }) {
             {/* Entry switcher + edit button (multi-entry) */}
             {maxEntries > 1 && submittedEntryNumbers.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-                {submittedEntryNumbers.map(en => (
+                {[...submittedEntryNumbers].sort((a, b) => a - b).map(en => (
                   <button
                     key={en}
                     onClick={() => { setViewingEntry(en); load(en); }}
