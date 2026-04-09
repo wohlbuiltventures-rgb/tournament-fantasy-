@@ -113,29 +113,29 @@ async function sendWelcome(toEmail, username) {
 
   await sendEmail({
     to: toEmail,
-    subject: 'Welcome to TourneyRun ⛳',
+    subject: 'Welcome to TourneyRun 🏆',
     html: emailShell(`
 ${emailHeader()}
       <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">Getting Started</div>
         <h1 style="margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0;font-size:26px;font-weight:700;color:#ffffff;">Welcome, ${username}!</h1>
-        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:24px;margin-left:0;">You're in. Draft real college basketball players, score points every time they score, and win your league's prize pool.</p>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:24px;margin-left:0;">You're in. Run fantasy pools for golf, basketball, and more &mdash; draft players, score points, and win your league's prize pool.</p>
         <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
           <tr>
             <td style="padding-right:6px;">
-              <a href="${baseUrl}/basketball/create-league" style="display:block;background-color:#22c55e;color:#0a1a10;padding-top:13px;padding-right:0;padding-bottom:13px;padding-left:0;border-radius:8px;font-weight:700;font-size:14px;text-align:center;text-decoration:none;">Create a League &rarr;</a>
+              <a href="${baseUrl}/golf/create" style="display:block;background-color:#22c55e;color:#0a1a10;padding-top:13px;padding-right:0;padding-bottom:13px;padding-left:0;border-radius:8px;font-weight:700;font-size:14px;text-align:center;text-decoration:none;">Create a League &rarr;</a>
             </td>
             <td style="padding-left:6px;">
-              <a href="${baseUrl}/basketball/join-league" style="display:block;background-color:#1a2733;color:#ffffff;padding-top:12px;padding-right:0;padding-bottom:12px;padding-left:0;border-radius:8px;font-weight:600;font-size:14px;text-align:center;text-decoration:none;border-top-width:1px;border-top-style:solid;border-top-color:#374151;border-right-width:1px;border-right-style:solid;border-right-color:#374151;border-bottom-width:1px;border-bottom-style:solid;border-bottom-color:#374151;border-left-width:1px;border-left-style:solid;border-left-color:#374151;">Join a League</a>
+              <a href="${baseUrl}/golf/join" style="display:block;background-color:#1a2733;color:#ffffff;padding-top:12px;padding-right:0;padding-bottom:12px;padding-left:0;border-radius:8px;font-weight:600;font-size:14px;text-align:center;text-decoration:none;border-top-width:1px;border-top-style:solid;border-top-color:#374151;border-right-width:1px;border-right-style:solid;border-right-color:#374151;border-bottom-width:1px;border-bottom-style:solid;border-bottom-color:#374151;border-left-width:1px;border-left-style:solid;border-left-color:#374151;">Join a League</a>
             </td>
           </tr>
         </table>
         <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;">How it works</div>
-        ${card('Step 1', '🎯 Draft real college basketball players')}
-        ${card('Step 2', '📊 Score points every time they score')}
+        ${card('Step 1', '🏆 Create or join a pool for your favorite sport')}
+        ${card('Step 2', '📊 Pick your players and track live scores')}
         ${card('Step 3', '💵 Win your league\'s prize pool')}
       </td></tr>
-${emailFooter('tourneyrun.app &middot; Skill-based fantasy &middot; Payments powered by Stripe')}
+${emailFooter('tourneyrun.app &middot; Fantasy pools for every sport &middot; Payments powered by Square')}
 `),
   });
 }
