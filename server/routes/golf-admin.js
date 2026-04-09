@@ -2722,4 +2722,33 @@ router.post('/admin/dev/fix-pick-names', superadmin, (req, res) => {
   }
 });
 
+// ── Manually send lock emails for an already-locked league ───────────────────
+router.post('/admin/dev/send-lock-emails', superadmin, async (req, res) => {
+  try {
+    const { league_id } = req.body;
+    if (!league_id) return res.status(400).json({ error: 'league_id required' });
+
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(league_id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+
+    const tourn = league.pool_tournament_id
+      ? db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(league.pool_tournament_id)
+      : null;
+    if (!tourn) return res.status(400).json({ error: 'No tournament linked' });
+
+    // Clear previous send tracking so emails re-send
+    db.prepare('DELETE FROM lock_emails_sent WHERE league_id = ?').run(league_id);
+
+    // Use the sendLockEmails function from golfPoolLockService
+    const { sendLockEmails } = require('../golfPoolLockService');
+    await sendLockEmails(league, tourn);
+
+    const sent = db.prepare('SELECT COUNT(*) as c FROM lock_emails_sent WHERE league_id = ?').get(league_id).c;
+    res.json({ ok: true, league: league.name, emails_sent: sent });
+  } catch (err) {
+    console.error('[send-lock-emails]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
