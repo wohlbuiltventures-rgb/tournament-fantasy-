@@ -785,6 +785,7 @@ async function sendRoundEmails(tournamentId, roundNumber, isFinal) {
       const standings = allEntries.map(entry => {
         const picks = db.prepare(`
           SELECT pp.player_id, pp.player_name, pp.tier_number, pp.is_dropped,
+                 pp.tiebreaker_score,
                  gs.fantasy_points, gs.round1, gs.round2, gs.round3, gs.round4,
                  gs.finish_position, gs.made_cut
           FROM pool_picks pp
@@ -802,16 +803,47 @@ async function sendRoundEmails(tournamentId, roundNumber, isFinal) {
           score = Math.round(picks.reduce((s, p) => s + (p.fantasy_points || 0), 0) * 10) / 10;
         }
 
-        return { ...entry, score, submitted: picks.length > 0 };
+        const tiebreaker = picks.length > 0 ? (picks[0].tiebreaker_score ?? null) : null;
+        return { ...entry, score, tiebreaker, submitted: picks.length > 0 };
       }).filter(e => e.submitted);
 
-      // Sort: stroke=ascending, fantasy=descending
-      standings.sort((a, b) => isStroke ? a.score - b.score : b.score - a.score);
+      // Sort: stroke=ascending, fantasy=descending. Tiebreaker as secondary sort.
+      // Get winning golf score for tiebreaker comparison
+      let winningGolfScore = null;
+      if (isFinal) {
+        const winner = db.prepare('SELECT round1, round2, round3, round4 FROM golf_scores WHERE tournament_id = ? AND finish_position = 1 LIMIT 1').get(tournamentId);
+        if (winner) winningGolfScore = [winner.round1, winner.round2, winner.round3, winner.round4].filter(r => r != null).reduce((s, r) => s + r, 0);
+      }
+      const tbDelta = s => (winningGolfScore != null && s.tiebreaker != null) ? Math.abs(s.tiebreaker - winningGolfScore) : Infinity;
+
+      standings.sort((a, b) => {
+        const scoreCmp = isStroke ? a.score - b.score : b.score - a.score;
+        if (scoreCmp !== 0) return scoreCmp;
+        return tbDelta(a) - tbDelta(b);
+      });
       standings.forEach((s, i) => { s.rank = i + 1; });
 
       const top5 = standings.slice(0, 5).map(s => ({ rank: s.rank, teamName: s.team_name, score: s.score }));
-      const winnerName = isFinal && standings[0] ? standings[0].team_name : null;
       const totalEntries = standings.length;
+
+      // Determine winner name — show team name (username), handle ties
+      let winnerName = null;
+      if (isFinal && standings.length > 0) {
+        const first = standings[0];
+        const tied = standings.filter(s => s.score === first.score);
+        if (tied.length === 1) {
+          winnerName = first.team_name;
+        } else {
+          // Multiple teams tied on score — check tiebreaker
+          const bestTb = Math.min(...tied.map(s => tbDelta(s)));
+          const tbWinners = tied.filter(s => tbDelta(s) === bestTb);
+          if (tbWinners.length === 1) {
+            winnerName = `${tbWinners[0].team_name} (won tiebreaker)`;
+          } else {
+            winnerName = tbWinners.map(s => s.team_name).join(' & ') + ' (tied!)';
+          }
+        }
+      }
 
       // Send one email per unique user (not per entry)
       const userMap = new Map();

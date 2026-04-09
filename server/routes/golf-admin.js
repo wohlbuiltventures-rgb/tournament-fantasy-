@@ -2589,7 +2589,7 @@ router.post('/admin/dev/test-round-email', superadmin, async (req, res) => {
       tournamentName: 'Masters Tournament',
       roundNumber: isFinal ? 4 : 1,
       isFinal,
-      winnerName: isFinal ? 'Scottie Scheffler' : null,
+      winnerName: isFinal ? 'BirdieMachine (won tiebreaker)' : null,
       totalEntries: 34,
       scoringStyle: 'stroke_play',
       top5: [
