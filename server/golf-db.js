@@ -2656,4 +2656,23 @@ try {
   console.error('[boot] Last,First merge error:', e.message);
 }
 
+// ── Fix null country codes for Masters field players ─────────────────────────
+runOnce('fix-null-country-ortiz-amateurs', () => {
+  try {
+    const fixes = [
+      ['Carlos Ortiz', 'MX'], ['Jackson Herrington', 'US'], ['Ethan Fang', 'US'],
+      ['Fifa Laopakdee', 'TH'], ['Mateo Pulcini', 'AR'], ['Brandon Holtz', 'US'],
+      ['Naoyuki Kataoka', 'JP'], ['Casey Jarvis', 'ZA'],
+    ];
+    const upd = db.prepare("UPDATE golf_players SET country = ? WHERE name = ? AND (country IS NULL OR country = '')");
+    const updPtp = db.prepare("UPDATE pool_tier_players SET country = ? WHERE player_name = ? AND (country IS NULL OR country = '')");
+    let fixed = 0;
+    for (const [name, country] of fixes) {
+      fixed += upd.run(country, name).changes;
+      updPtp.run(country, name);
+    }
+    console.log(`[migration] fix-null-country: set country on ${fixed} player(s)`);
+  } catch (e) { console.error('[migration] fix-null-country error:', e.message); }
+});
+
 module.exports = db;
