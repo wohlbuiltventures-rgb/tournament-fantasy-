@@ -2695,4 +2695,34 @@ runOnce('rename-players-match-espn-masters-2026', () => {
   } catch (e) { console.error('[migration] rename-espn error:', e.message); }
 });
 
+// ── Normalize diacritic player names to ASCII in golf_players ─────────────────
+// ESPN matchPlayerName handles diacritics via NFD, but pool_picks stores ASCII.
+// The standings JOIN (pool_picks.player_id = golf_scores.player_id) requires the
+// golf_players.id to be the same one stored in pool_picks. If pool_picks has the
+// ASCII player_id but golf_players has a different row with diacritics, scores break.
+// Solution: store ASCII names in golf_players so the single canonical ID works everywhere.
+// Runs every boot to catch any new diacritic mismatches.
+try {
+  const withDiacritics = db.prepare("SELECT id, name FROM golf_players WHERE name != REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(name, 'å', 'a'), 'Å', 'A'), 'ö', 'o'), 'ü', 'u'), 'é', 'e')").all();
+  // Manual list of known diacritic → ASCII mappings
+  const DIACRITIC_MAP = [
+    ['Ludvig Åberg', 'Ludvig Aberg'],
+    ['Sami Välimäki', 'Sami Valimaki'],
+    ['Thorbjørn Olesen', 'Thorbjorn Olesen'],
+    ['Séamus Power', 'Seamus Power'],
+    ['Nicolás Echavarría', 'Nicolas Echavarria'],
+    ['Matthieu Pavon', 'Matthieu Pavon'],  // no change needed but safe
+  ];
+  for (const [diacritic, ascii] of DIACRITIC_MAP) {
+    const existing = db.prepare('SELECT id FROM golf_players WHERE name = ?').get(diacritic);
+    const asciiExists = db.prepare('SELECT id FROM golf_players WHERE name = ?').get(ascii);
+    if (existing && !asciiExists) {
+      db.prepare('UPDATE golf_players SET name = ? WHERE name = ?').run(ascii, diacritic);
+      db.prepare('UPDATE pool_tier_players SET player_name = ? WHERE player_name = ?').run(ascii, diacritic);
+      db.prepare('UPDATE golf_tournament_fields SET player_name = ? WHERE player_name = ?').run(ascii, diacritic);
+      console.log(`[boot] Normalized diacritic: "${diacritic}" → "${ascii}"`);
+    }
+  }
+} catch (e) { console.error('[boot] diacritic normalization error:', e.message); }
+
 module.exports = db;
