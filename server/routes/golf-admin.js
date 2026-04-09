@@ -2645,10 +2645,20 @@ router.post('/admin/dev/fix-pick-names', superadmin, (req, res) => {
       )
     `).run();
 
-    // Step 4: JS-level fuzzy match for diacritics (Åberg vs Aberg)
+    // Step 4: JS-level fuzzy match — diacritics + nicknames + last-name fallback
     const norm = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    const ALIASES = { sam: 'samuel', mike: 'michael', will: 'william', bob: 'robert', bill: 'william', jim: 'james', jimmy: 'james', johnny: 'john', nico: 'nicolas', nick: 'nicholas', matt: 'matthew', dan: 'daniel', ben: 'benjamin', chris: 'christopher', tom: 'thomas', tony: 'anthony', fred: 'frederick' };
+
     const allPlayers = db.prepare('SELECT id, name FROM golf_players').all();
     const playerByNorm = new Map(allPlayers.map(p => [norm(p.name), p.id]));
+    // Also index by last name for fallback
+    const playerByLast = new Map();
+    for (const p of allPlayers) {
+      const parts = norm(p.name).split(' ');
+      const last = parts[parts.length - 1];
+      if (!playerByLast.has(last)) playerByLast.set(last, []);
+      playerByLast.get(last).push(p);
+    }
 
     const broken = db.prepare(`
       SELECT id, player_name, player_id FROM pool_picks
@@ -2658,9 +2668,30 @@ router.post('/admin/dev/fix-pick-names', superadmin, (req, res) => {
     let fuzzyFixed = 0;
     const updPick = db.prepare('UPDATE pool_picks SET player_id = ? WHERE id = ?');
     for (const pick of broken) {
-      const match = playerByNorm.get(norm(pick.player_name));
+      const n = norm(pick.player_name);
+      // Try exact normalized match
+      let match = playerByNorm.get(n);
+      // Try alias expansion (Sam → Samuel)
+      if (!match) {
+        const parts = n.split(' ');
+        const expanded = ALIASES[parts[0]];
+        if (expanded) match = playerByNorm.get(expanded + ' ' + parts.slice(1).join(' '));
+      }
+      // Try last-name + first-initial match
+      if (!match) {
+        const parts = n.split(' ');
+        const last = parts[parts.length - 1];
+        const firstInit = parts[0]?.[0];
+        const candidates = playerByLast.get(last) || [];
+        if (candidates.length === 1) {
+          match = candidates[0].id;
+        } else if (firstInit) {
+          const byInit = candidates.find(c => norm(c.name).split(' ')[0][0] === firstInit);
+          if (byInit) match = byInit.id;
+        }
+      }
       if (match) {
-        updPick.run(match, pick.id);
+        updPick.run(typeof match === 'string' ? match : match, pick.id);
         fuzzyFixed++;
       }
     }
