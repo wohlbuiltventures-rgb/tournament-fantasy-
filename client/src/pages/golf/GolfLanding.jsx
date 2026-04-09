@@ -1311,7 +1311,14 @@ export default function GolfLanding() {
             <span style={{ color: '#eab308', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Major Tournament</span>
           </div>
           <h2 style={{ color: '#fff', fontSize: 'clamp(26px, 5vw, 40px)', fontWeight: 900, lineHeight: 1.15, marginBottom: 14 }}>
-            The Masters is April 10th.
+            {(() => {
+              const m = tournaments.find(t => t.is_major && t.name?.includes('Masters'));
+              if (m?.start_date) {
+                const d = new Date(m.start_date + 'T12:00:00');
+                return `The Masters is ${d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`;
+              }
+              return 'The Masters is coming.';
+            })()}
           </h2>
           <p style={{ color: '#9ca3af', fontSize: 16, lineHeight: 1.6, marginBottom: 8 }}>
             The biggest event in golf. All points × 1.5 for Masters week.
@@ -1529,7 +1536,8 @@ export default function GolfLanding() {
       {/* Sticky mobile CTA bar (Masters countdown)                            */}
       {/* ──────────────────────────────────────────────────────────────────── */}
       {(() => {
-        const days = daysUntil('2026-04-06');
+        const mastersTournament = tournaments.find(t => t.is_major && t.name?.includes('Masters'));
+        const days = mastersTournament ? daysUntil(mastersTournament.start_date) : -1;
         if (days < 0) return null;
         return (
           <div style={{
