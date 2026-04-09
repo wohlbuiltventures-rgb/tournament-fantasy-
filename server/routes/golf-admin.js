@@ -1588,48 +1588,89 @@ router.get('/admin/dev/standings-join-diag', superadmin, (req, res) => {
 
 // ── POST /admin/dev/fix-pool-picks-player-ids ────────────────────────────────
 // Re-links pool_picks.player_id to current golf_players.id via name match.
-// Fixes UUID mismatch when golf_players is rebuilt after picks are submitted.
+// Fixes NULL player_ids AND UUID mismatches from golf_players rebuilds/dedup.
 router.post('/admin/dev/fix-pool-picks-player-ids', superadmin, (req, res) => {
   try {
     const before = db.prepare('SELECT COUNT(*) as c FROM pool_picks').get().c;
-    db.prepare(`
+    const nullBefore = db.prepare('SELECT COUNT(*) as c FROM pool_picks WHERE player_id IS NULL').get().c;
+
+    // Helper: normalize "Last, First" → "first last" for matching
+    const normSql = (col) => `LOWER(
+      CASE WHEN INSTR(${col}, ', ') > 0
+      THEN TRIM(SUBSTR(${col}, INSTR(${col}, ', ') + 2))
+           || ' ' ||
+           TRIM(SUBSTR(${col}, 1, INSTR(${col}, ', ') - 1))
+      ELSE ${col}
+      END
+    )`;
+
+    // Fix 1: NULL player_ids — match by normalized name
+    const fixNull = db.prepare(`
       UPDATE pool_picks
       SET player_id = (
         SELECT gp.id FROM golf_players gp
-        WHERE LOWER(
-          CASE WHEN INSTR(pool_picks.player_name, ', ') > 0
-          THEN TRIM(SUBSTR(pool_picks.player_name, INSTR(pool_picks.player_name, ', ') + 2))
-               || ' ' ||
-               TRIM(SUBSTR(pool_picks.player_name, 1, INSTR(pool_picks.player_name, ', ') - 1))
-          ELSE pool_picks.player_name
-          END
-        ) = LOWER(gp.name)
+        WHERE ${normSql('pool_picks.player_name')} = LOWER(gp.name)
+        LIMIT 1
+      )
+      WHERE player_id IS NULL
+        AND EXISTS (
+          SELECT 1 FROM golf_players gp
+          WHERE ${normSql('pool_picks.player_name')} = LOWER(gp.name)
+        )
+    `).run();
+
+    // Fix 2: Wrong player_ids — player_id exists but doesn't match any golf_players record
+    const fixOrphan = db.prepare(`
+      UPDATE pool_picks
+      SET player_id = (
+        SELECT gp.id FROM golf_players gp
+        WHERE ${normSql('pool_picks.player_name')} = LOWER(gp.name)
+        LIMIT 1
+      )
+      WHERE player_id IS NOT NULL
+        AND player_id NOT IN (SELECT id FROM golf_players)
+        AND EXISTS (
+          SELECT 1 FROM golf_players gp
+          WHERE ${normSql('pool_picks.player_name')} = LOWER(gp.name)
+        )
+    `).run();
+
+    // Fix 3: Mismatched player_ids — player_id points to wrong player
+    const fixMismatch = db.prepare(`
+      UPDATE pool_picks
+      SET player_id = (
+        SELECT gp.id FROM golf_players gp
+        WHERE ${normSql('pool_picks.player_name')} = LOWER(gp.name)
         LIMIT 1
       )
       WHERE EXISTS (
         SELECT 1 FROM golf_players gp
-        WHERE LOWER(
-          CASE WHEN INSTR(pool_picks.player_name, ', ') > 0
-          THEN TRIM(SUBSTR(pool_picks.player_name, INSTR(pool_picks.player_name, ', ') + 2))
-               || ' ' ||
-               TRIM(SUBSTR(pool_picks.player_name, 1, INSTR(pool_picks.player_name, ', ') - 1))
-          ELSE pool_picks.player_name
-          END
-        ) = LOWER(gp.name)
-        AND gp.id != pool_picks.player_id
+        WHERE ${normSql('pool_picks.player_name')} = LOWER(gp.name)
+          AND gp.id != COALESCE(pool_picks.player_id, '')
       )
     `).run();
-    const fixed = db.prepare('SELECT changes() as c').get().c;
 
-    // Verify: how many picks now have a matching golf_scores row for active tournament?
-    const verified = db.prepare(`
-      SELECT COUNT(*) as c FROM pool_picks pp
-      JOIN golf_scores gs ON gs.player_id = pp.player_id
-      JOIN golf_tournaments gt ON gt.id = gs.tournament_id AND gt.status = 'active'
-    `).get().c;
+    const nullAfter = db.prepare('SELECT COUNT(*) as c FROM pool_picks WHERE player_id IS NULL').get().c;
+    const orphanAfter = db.prepare('SELECT COUNT(*) as c FROM pool_picks WHERE player_id NOT IN (SELECT id FROM golf_players)').get().c;
 
-    console.log(`[admin] fix-pool-picks-player-ids: ${fixed} updated, ${verified} now joined to golf_scores`);
-    res.json({ ok: true, total_picks: before, fixed, now_matched_to_scores: verified });
+    // Diagnostic: show remaining unresolved picks
+    const unresolved = db.prepare(`
+      SELECT DISTINCT player_name FROM pool_picks
+      WHERE player_id IS NULL OR player_id NOT IN (SELECT id FROM golf_players)
+    `).all().map(r => r.player_name);
+
+    console.log(`[admin] fix-pool-picks-player-ids: null ${nullBefore}→${nullAfter}, orphan→${orphanAfter}, fixes: null=${fixNull.changes} orphan=${fixOrphan.changes} mismatch=${fixMismatch.changes}`);
+    res.json({
+      ok: true,
+      total_picks: before,
+      null_before: nullBefore,
+      null_after: nullAfter,
+      orphan_after: orphanAfter,
+      fixed_null: fixNull.changes,
+      fixed_orphan: fixOrphan.changes,
+      fixed_mismatch: fixMismatch.changes,
+      unresolved_names: unresolved,
+    });
   } catch (e) {
     console.error('[admin] fix-pool-picks-player-ids error:', e.message);
     res.status(500).json({ error: e.message });
