@@ -2675,4 +2675,24 @@ runOnce('fix-null-country-ortiz-amateurs', () => {
   } catch (e) { console.error('[migration] fix-null-country error:', e.message); }
 });
 
+// ── Rename players to match ESPN displayName for score matching ───────────────
+// ESPN is the source of truth for live scoring names. Our DB must match.
+runOnce('rename-players-match-espn-masters-2026', () => {
+  try {
+    const renames = [
+      ['Nicolas Echavarria', 'Nico Echavarria'],
+      ['Samuel Stevens', 'Sam Stevens'],
+    ];
+    for (const [old, espn] of renames) {
+      const r = db.prepare('UPDATE golf_players SET name = ? WHERE name = ?').run(espn, old);
+      if (r.changes > 0) {
+        db.prepare('UPDATE pool_picks SET player_name = ? WHERE player_name = ?').run(espn, old);
+        db.prepare('UPDATE pool_tier_players SET player_name = ? WHERE player_name = ?').run(espn, old);
+        db.prepare('UPDATE golf_tournament_fields SET player_name = ? WHERE player_name = ?').run(espn, old);
+        console.log(`[migration] rename-espn: "${old}" → "${espn}"`);
+      }
+    }
+  } catch (e) { console.error('[migration] rename-espn error:', e.message); }
+});
+
 module.exports = db;

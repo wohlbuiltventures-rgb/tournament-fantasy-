@@ -50,6 +50,17 @@ function normalizePlayerName(name) {
  * @param {string} [tournamentName] - For log context
  * @returns {{id: string, name: string} | null}
  */
+// Common nickname → formal name mapping for ESPN ↔ DB matching
+const NICK_ALIASES = {
+  sam: 'samuel', nico: 'nicolas', nick: 'nicholas', mike: 'michael',
+  will: 'william', bob: 'robert', bill: 'william', jim: 'james',
+  jimmy: 'james', johnny: 'john', matt: 'matthew', dan: 'daniel',
+  ben: 'benjamin', chris: 'christopher', tom: 'thomas', tony: 'anthony',
+  fred: 'frederick', rick: 'richard', rickie: 'richard', ricky: 'richard',
+  alex: 'alexander', ed: 'edward', charlie: 'charles', joe: 'joseph',
+  jake: 'jacob', max: 'maximilian', cam: 'cameron',
+};
+
 function matchPlayerName(espnName, players, tournamentName) {
   const n = normalizePlayerName(espnName);
 
@@ -65,6 +76,21 @@ function matchPlayerName(espnName, players, tournamentName) {
 
   const last      = parts[parts.length - 1];
   const firstInit = parts[0][0];
+
+  // 1.5. Nickname alias — "Nico Echavarria" → try "Nicolas Echavarria"
+  const alias = NICK_ALIASES[parts[0]];
+  if (alias) {
+    const aliasName = alias + ' ' + parts.slice(1).join(' ');
+    m = players.find(p => normalizePlayerName(p.name) === aliasName);
+    if (m) return m;
+  }
+  // Reverse alias — DB has "Nico" but ESPN sends "Nicolas"
+  for (const [nick, formal] of Object.entries(NICK_ALIASES)) {
+    if (parts[0] === formal) {
+      m = players.find(p => normalizePlayerName(p.name) === nick + ' ' + parts.slice(1).join(' '));
+      if (m) return m;
+    }
+  }
 
   // 2. Last name + first initial
   // Guard: skip if first name token is exactly 2 chars — these are multi-initial
