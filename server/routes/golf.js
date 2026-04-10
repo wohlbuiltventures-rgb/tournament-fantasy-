@@ -1393,15 +1393,24 @@ router.post('/leagues/:id/blast', authMiddleware, async (req, res) => {
 </body>
 </html>`;
 
-    await sendEmailBatch(members.map(m => ({
+    const emails = members.map(m => ({
       from: 'TourneyRun Golf <noreply@tourneyrun.app>',
       to:   m.email,
       subject: `📣 Message from your ${league.name} commissioner`,
       html: emailBody(),
-    })));
+    }));
 
-    console.log('[golf] Blast: sent to', members.length, 'members');
-    res.json({ ok: true, sent: members.length });
+    // Chunk into batches of 100 (Resend batch API limit)
+    let totalSent = 0;
+    for (let i = 0; i < emails.length; i += 100) {
+      const chunk = emails.slice(i, i + 100);
+      await sendEmailBatch(chunk);
+      totalSent += chunk.length;
+      console.log(`[golf] Blast: sent batch ${Math.floor(i / 100) + 1} (${chunk.length} emails)`);
+    }
+
+    console.log('[golf] Blast: sent to', totalSent, 'members');
+    res.json({ ok: true, sent: totalSent });
   } catch (err) {
     console.error('[golf] blast error:', err.message, err.stack);
     res.status(500).json({ error: err.message || 'Server error' });
