@@ -560,32 +560,29 @@ async function runAutoSync() {
       const isFinal = tournAfter.status === 'completed' && statusBefore !== 'completed';
 
       if (isFinal || (result.synced > 0 && tournAfter.status === 'active')) {
-        // Detect which round just completed by checking scores
-        let completedRound = 0;
-        if (isFinal) {
-          completedRound = 4;
-        } else {
-          // Check how many rounds have scores for most players
-          const roundCounts = db.prepare(`
-            SELECT
-              SUM(CASE WHEN round1 IS NOT NULL THEN 1 ELSE 0 END) as r1,
-              SUM(CASE WHEN round2 IS NOT NULL THEN 1 ELSE 0 END) as r2,
-              SUM(CASE WHEN round3 IS NOT NULL THEN 1 ELSE 0 END) as r3,
-              SUM(CASE WHEN round4 IS NOT NULL THEN 1 ELSE 0 END) as r4,
-              COUNT(*) as total
-            FROM golf_scores WHERE tournament_id = ?
-          `).get(tournament.id);
-          // A round is "complete" if >60% of players have scores (accounts for cut)
-          const threshold = Math.max(10, (roundCounts.total || 0) * 0.6);
-          if (roundCounts.r4 >= threshold) completedRound = 4;
-          else if (roundCounts.r3 >= threshold) completedRound = 3;
-          else if (roundCounts.r2 >= threshold) completedRound = 2;
-          else if (roundCounts.r1 >= threshold) completedRound = 1;
-        }
+        // Check which rounds have enough scores to be considered complete
+        const roundCounts = db.prepare(`
+          SELECT
+            SUM(CASE WHEN round1 IS NOT NULL THEN 1 ELSE 0 END) as r1,
+            SUM(CASE WHEN round2 IS NOT NULL THEN 1 ELSE 0 END) as r2,
+            SUM(CASE WHEN round3 IS NOT NULL THEN 1 ELSE 0 END) as r3,
+            SUM(CASE WHEN round4 IS NOT NULL THEN 1 ELSE 0 END) as r4,
+            COUNT(*) as total
+          FROM golf_scores WHERE tournament_id = ?
+        `).get(tournament.id);
+        const threshold = Math.max(10, (roundCounts.total || 0) * 0.6);
 
-        if (completedRound > 0) {
-          sendRoundEmails(tournament.id, completedRound, isFinal).catch(err =>
-            console.error(`[golf-sync] Round email error for "${tournament.name}" R${completedRound}:`, err.message)
+        // Send emails for ALL completed rounds that haven't been sent yet
+        const completedRounds = [];
+        if (roundCounts.r1 >= threshold) completedRounds.push(1);
+        if (roundCounts.r2 >= threshold) completedRounds.push(2);
+        if (roundCounts.r3 >= threshold) completedRounds.push(3);
+        if (isFinal || roundCounts.r4 >= threshold) completedRounds.push(4);
+
+        for (const rnd of completedRounds) {
+          const isFinalRound = rnd === 4 && isFinal;
+          sendRoundEmails(tournament.id, rnd, isFinalRound).catch(err =>
+            console.error(`[golf-sync] Round email error for "${tournament.name}" R${rnd}:`, err.message)
           );
         }
       }
