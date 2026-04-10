@@ -475,7 +475,7 @@ async function syncTournamentScores(tournamentId, { par = 72, silent = false } =
     }
   }
 
-  return { synced, notMatched, espnEventName: event.name || event.shortName, isCompleted };
+  return { synced, notMatched, espnEventName: event.name || event.shortName, isCompleted, currentPeriod, espnStatusName };
 }
 
 
@@ -555,30 +555,25 @@ async function runAutoSync() {
         pushPoolStandings(tournament.id);
       }
 
-      // ── Round completion email detection ────────────────────────────────
+      // ── Round completion email detection (ESPN period-based) ────────────
+      // ESPN currentPeriod tells us exactly which round is active/complete.
+      // Independent of name matching — works even if some players have no scores.
       const tournAfter = db.prepare('SELECT * FROM golf_tournaments WHERE id = ?').get(tournament.id);
       const isFinal = tournAfter.status === 'completed' && statusBefore !== 'completed';
+      const period = result.currentPeriod || 0;
 
-      if (isFinal || (result.synced > 0 && tournAfter.status === 'active')) {
-        // Check which rounds have enough scores to be considered complete
-        const roundCounts = db.prepare(`
-          SELECT
-            SUM(CASE WHEN round1 IS NOT NULL THEN 1 ELSE 0 END) as r1,
-            SUM(CASE WHEN round2 IS NOT NULL THEN 1 ELSE 0 END) as r2,
-            SUM(CASE WHEN round3 IS NOT NULL THEN 1 ELSE 0 END) as r3,
-            SUM(CASE WHEN round4 IS NOT NULL THEN 1 ELSE 0 END) as r4,
-            COUNT(*) as total
-          FROM golf_scores WHERE tournament_id = ?
-        `).get(tournament.id);
-        const total = roundCounts.total || 0;
-
-        // Send emails for ALL completed rounds that haven't been sent yet
-        // A round is complete when 100% of players have that round's score
+      if (period > 0 || isFinal) {
         const completedRounds = [];
-        if (total > 0 && roundCounts.r1 >= total) completedRounds.push(1);
-        if (total > 0 && roundCounts.r2 >= total) completedRounds.push(2);
-        if (total > 0 && roundCounts.r3 >= total) completedRounds.push(3);
-        if (isFinal || (total > 0 && roundCounts.r4 >= total)) completedRounds.push(4);
+        if (period >= 2) completedRounds.push(1);  // R2 in progress → R1 done
+        if (period >= 3) completedRounds.push(2);  // R3 in progress → R2 done
+        if (period >= 4) completedRounds.push(3);  // R4 in progress → R3 done
+        if (isFinal || result.espnStatusName === 'STATUS_FINAL' || result.espnStatusName === 'STATUS_PLAY_COMPLETE') {
+          if (period >= 4) completedRounds.push(4);
+        }
+
+        if (completedRounds.length > 0) {
+          console.log(`[golf-sync] ESPN period=${period}, completed rounds: ${completedRounds.join(',')}`);
+        }
 
         for (const rnd of completedRounds) {
           const isFinalRound = rnd === 4 && isFinal;
