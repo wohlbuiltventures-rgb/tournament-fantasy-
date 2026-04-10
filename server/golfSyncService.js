@@ -354,8 +354,14 @@ async function syncTournamentScores(tournamentId, { par = 72, silent = false } =
 
   // Current round number from ESPN (1–4). STATUS_FINAL fires after every round,
   // so we use period >= 4 as the definitive "all rounds complete" signal.
-  const currentPeriod = event?.competitions?.[0]?.status?.period ?? 0;
-  console.log(`[golf-sync] ESPN period: ${currentPeriod}`);
+  // Scoreboard endpoint may not have status.period — fallback to max linescores.
+  let currentPeriod = event?.competitions?.[0]?.status?.period
+    ?? event?.status?.period ?? 0;
+  if (!currentPeriod && competitors.length > 0) {
+    // Infer from max linescore count across all competitors
+    currentPeriod = Math.max(...competitors.map(c => (c.linescores || []).length));
+  }
+  console.log(`[golf-sync] ESPN period: ${currentPeriod} (status: ${espnStatusName})`);
 
   const isTrulyComplete =
     (espnStatusName === 'STATUS_FINAL' || espnStatusName === 'STATUS_PLAY_COMPLETE') &&
@@ -562,14 +568,14 @@ async function runAutoSync() {
       const isFinal = tournAfter.status === 'completed' && statusBefore !== 'completed';
       const period = result.currentPeriod || 0;
 
+      const roundStatus = result.espnStatusName || '';
       if (period > 0 || isFinal) {
+        const isPlayComplete = roundStatus === 'STATUS_PLAY_COMPLETE';
         const completedRounds = [];
-        if (period >= 2) completedRounds.push(1);  // R2 in progress → R1 done
-        if (period >= 3) completedRounds.push(2);  // R3 in progress → R2 done
-        if (period >= 4) completedRounds.push(3);  // R4 in progress → R3 done
-        if (isFinal || result.espnStatusName === 'STATUS_FINAL' || result.espnStatusName === 'STATUS_PLAY_COMPLETE') {
-          if (period >= 4) completedRounds.push(4);
-        }
+        if (period >= 2 || (period === 1 && isPlayComplete)) completedRounds.push(1);
+        if (period >= 3 || (period === 2 && isPlayComplete)) completedRounds.push(2);
+        if (period >= 4 || (period === 3 && isPlayComplete)) completedRounds.push(3);
+        if (isFinal || roundStatus === 'STATUS_FINAL') completedRounds.push(4);
 
         if (completedRounds.length > 0) {
           console.log(`[golf-sync] ESPN period=${period}, completed rounds: ${completedRounds.join(',')}`);
