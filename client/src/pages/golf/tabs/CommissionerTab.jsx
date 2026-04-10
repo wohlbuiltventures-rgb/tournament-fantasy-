@@ -420,6 +420,30 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
   const [deletingEntry, setDeletingEntry] = useState(null); // { userId, entryNumber, username, teamName }
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Unpaid entry tracking
+  const [unpaidSummary, setUnpaidSummary] = useState(null);
+  const [remindingSending, setRemindingSending] = useState(false);
+  const [unpaidBannerDismissed, setUnpaidBannerDismissed] = useState(false);
+
+  useEffect(() => {
+    if (league?.buy_in_amount > 0) {
+      api.get(`/golf/leagues/${leagueId}/unpaid-summary`)
+        .then(r => setUnpaidSummary(r.data))
+        .catch(() => {});
+    }
+  }, [leagueId, league?.buy_in_amount]);
+
+  async function sendPayReminders() {
+    setRemindingSending(true);
+    try {
+      const r = await api.post(`/golf/leagues/${leagueId}/remind-unpaid`);
+      alert(`Reminders sent to ${r.data.sent} unpaid member${r.data.sent !== 1 ? 's' : ''}`);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to send reminders');
+    }
+    setRemindingSending(false);
+  }
+
   // Blast modal
   const [blastModal, setBlastModal] = useState(null); // string (pre-filled message) or null
 
@@ -706,6 +730,32 @@ export default function CommissionerTab({ leagueId, leagueName, members, league 
 
   return (
     <div className="space-y-4">
+      {/* Unpaid entries banner */}
+      {unpaidSummary && unpaidSummary.unpaid > 0 && !unpaidBannerDismissed && league?.buy_in_amount > 0 && (
+        <div style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 18 }}>⚠️</span>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ color: '#fbbf24', fontSize: 13, fontWeight: 700 }}>
+              {unpaidSummary.unpaid} entr{unpaidSummary.unpaid === 1 ? 'y hasn\'t' : 'ies haven\'t'} paid yet
+            </div>
+            <div style={{ color: '#92400e', fontSize: 12, marginTop: 2 }}>
+              Prize pool is currently ${unpaidSummary.prizePool} ({unpaidSummary.paid}/{unpaidSummary.total} paid)
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button
+              onClick={sendPayReminders}
+              disabled={remindingSending}
+              style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(251,191,36,0.4)', background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}
+            >{remindingSending ? 'Sending...' : `Remind Unpaid (${unpaidSummary.unpaid})`}</button>
+            <button
+              onClick={() => setUnpaidBannerDismissed(true)}
+              style={{ color: '#6b7280', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer' }}
+            >&times;</button>
+          </div>
+        </div>
+      )}
+
       {/* Blast modal */}
       {blastModal && (
         <BlastModal

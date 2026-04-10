@@ -2728,4 +2728,43 @@ try {
 // ── Admin fee column ─────────────────────────────────────────────────────────
 try { db.exec('ALTER TABLE golf_leagues ADD COLUMN admin_fee_pct REAL DEFAULT 0'); } catch (_) {}
 
+// ── Reminder emails tracking table ────────────────────────────────────────────
+try { db.exec(`CREATE TABLE IF NOT EXISTS reminder_emails_sent (
+  id TEXT PRIMARY KEY,
+  league_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(league_id, user_id, type)
+)`); } catch (_) {}
+
+// ── Commissioner lock notification dismissed state ───────────────────────────
+try { db.exec('ALTER TABLE golf_leagues ADD COLUMN lock_unpaid_dismissed INTEGER DEFAULT 0'); } catch (_) {}
+
+// ── Migrate golf_league_members.is_paid → pool_entry_paid (entry 1) ──────────
+// Unifies paid tracking into pool_entry_paid for all entries.
+runOnce('migrate-is-paid-to-pool-entry-paid', () => {
+  try {
+    const paidMembers = db.prepare(`
+      SELECT glm.golf_league_id as league_id, glm.user_id, glm.is_paid,
+             gl.pool_tournament_id as tournament_id
+      FROM golf_league_members glm
+      JOIN golf_leagues gl ON gl.id = glm.golf_league_id
+      WHERE glm.is_paid = 1 AND gl.pool_tournament_id IS NOT NULL
+    `).all();
+
+    const ins = db.prepare(`
+      INSERT OR IGNORE INTO pool_entry_paid (id, league_id, tournament_id, user_id, entry_number, is_paid)
+      VALUES (lower(hex(randomblob(16))), ?, ?, ?, 1, 1)
+    `);
+
+    let migrated = 0;
+    for (const m of paidMembers) {
+      const r = ins.run(m.league_id, m.tournament_id, m.user_id);
+      if (r.changes > 0) migrated++;
+    }
+    if (migrated > 0) console.log(`[migration] migrate-is-paid: migrated ${migrated} entry-1 paid records to pool_entry_paid`);
+  } catch (e) { console.error('[migration] migrate-is-paid error:', e.message); }
+});
+
 module.exports = db;

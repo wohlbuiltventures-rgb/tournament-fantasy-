@@ -599,4 +599,72 @@ module.exports = {
   sendSuperAdminBlast,
   sendPicksLockConfirmation,
   sendRoundStandings,
+  sendPayReminder,
+  sendCommUnpaidNotice,
 };
+
+// ── Pay reminder to unpaid member ────────────────────────────────────────────
+async function sendPayReminder(toEmail, { username, leagueName, buyIn, commissionerName, paymentMethods, lockTime }) {
+  const fmtLock = lockTime ? new Date(lockTime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET' : 'soon';
+  let methodsLine = '';
+  try {
+    const methods = typeof paymentMethods === 'string' ? JSON.parse(paymentMethods) : (paymentMethods || []);
+    if (methods.length) methodsLine = `Payment methods: ${methods.join(', ')}`;
+  } catch {}
+
+  await sendEmail({
+    from: FROM_GOLF,
+    to: toEmail,
+    subject: `Don't forget — pay your buy-in for ${leagueName}`,
+    html: emailShell(`
+${emailHeader()}
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
+        <div style="display:inline-block;background-color:rgba(251,191,36,0.15);border-radius:6px;padding-top:4px;padding-right:10px;padding-bottom:4px;padding-left:10px;font-size:11px;color:#fbbf24;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">Payment Reminder</div>
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0;font-size:22px;font-weight:700;color:#ffffff;">Hey ${username}, your buy-in is due</h1>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:20px;margin-left:0;">
+          Your <strong style="color:#ffffff;">$${buyIn}</strong> buy-in for <strong style="color:#ffffff;">${leagueName}</strong> hasn't been paid yet. Picks lock <strong style="color:#fbbf24;">${fmtLock}</strong>.
+        </p>
+        ${methodsLine ? card('Payment Methods', methodsLine) : ''}
+        ${commissionerName ? `<p style="font-size:13px;color:#6b7280;margin-top:12px;margin-bottom:0;">Sent by ${commissionerName}, your pool commissioner.</p>` : ''}
+      </td></tr>
+${emailFooter(`tourneyrun.app &middot; ${leagueName} &middot; <a href="mailto:support@tourneyrun.app" style="color:#6b7280;">Unsubscribe</a>`)}
+`),
+  });
+}
+
+// ── Commissioner notification: unpaid entries at lock time ────────────────────
+async function sendCommUnpaidNotice(toEmail, { commName, leagueName, unpaidMembers, paidCount, totalEntries, paidPrizePool, expectedPrizePool, leagueUrl }) {
+  const rows = unpaidMembers.map(m =>
+    `<tr>
+      <td style="padding-top:6px;padding-bottom:6px;padding-left:12px;font-size:14px;color:#ffffff;">${m.teamName}</td>
+      <td style="padding-top:6px;padding-bottom:6px;padding-left:8px;font-size:13px;color:#6b7280;">${m.username}</td>
+      <td style="padding-top:6px;padding-bottom:6px;padding-right:12px;font-size:12px;color:#f87171;text-align:right;">Unpaid</td>
+    </tr>`
+  ).join('');
+
+  await sendEmail({
+    from: FROM_GOLF,
+    to: toEmail,
+    subject: `Picks locked — ${unpaidMembers.length} entr${unpaidMembers.length === 1 ? 'y' : 'ies'} still unpaid in ${leagueName}`,
+    html: emailShell(`
+${emailHeader()}
+      <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
+        <div style="display:inline-block;background-color:rgba(239,68,68,0.15);border-radius:6px;padding-top:4px;padding-right:10px;padding-bottom:4px;padding-left:10px;font-size:11px;color:#f87171;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px;">Attention Required</div>
+        <h1 style="margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0;font-size:22px;font-weight:700;color:#ffffff;">Picks locked — unpaid entries</h1>
+        <p style="font-size:15px;color:#9ca3af;line-height:1.6;margin-top:0;margin-right:0;margin-bottom:20px;margin-left:0;">
+          ${unpaidMembers.length} entr${unpaidMembers.length === 1 ? 'y' : 'ies'} in <strong style="color:#fff;">${leagueName}</strong> locked in without paying.
+        </p>
+        ${card('Prize Pool', `$${paidPrizePool} from ${paidCount} paid entries (of ${totalEntries} total)`)}
+        ${expectedPrizePool > paidPrizePool ? card('Expected if all paid', `$${expectedPrizePool}`) : ''}
+        <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Unpaid Entries</div>
+        <div style="background-color:#1a2733;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        ${ctaButton(leagueUrl, 'Mark as Paid in Commissioner Hub &rarr;')}
+      </td></tr>
+${emailFooter('tourneyrun.app &middot; Commissioner notification')}
+`),
+  });
+}

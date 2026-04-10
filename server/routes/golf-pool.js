@@ -1240,6 +1240,128 @@ router.post('/admin/set-drop-count', authMiddleware, (req, res) => {
   }
 });
 
+// ── POST /leagues/:id/remind-unpaid ───────────────────────────────────────────
+// Commissioner sends targeted payment reminders to unpaid members only.
+router.post('/leagues/:id/remind-unpaid', authMiddleware, async (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
+
+    const tid = league.pool_tournament_id;
+    if (!tid) return res.status(400).json({ error: 'No tournament linked' });
+
+    const commissioner = db.prepare('SELECT username, full_name FROM users WHERE id = ?').get(req.user.id);
+    const commName = commissioner?.full_name || commissioner?.username || 'Your commissioner';
+
+    // Get all entries with picks submitted
+    const allEntries = db.prepare(`
+      SELECT DISTINCT pp.user_id, COALESCE(pp.entry_number, 1) as entry_number,
+             u.email, u.username
+      FROM pool_picks pp
+      JOIN users u ON u.id = pp.user_id
+      WHERE pp.league_id = ? AND pp.tournament_id = ?
+    `).all(req.params.id, tid);
+
+    // Get paid entries
+    const paidEntries = new Set();
+    db.prepare('SELECT user_id, entry_number FROM pool_entry_paid WHERE league_id = ? AND tournament_id = ? AND is_paid = 1')
+      .all(req.params.id, tid)
+      .forEach(r => paidEntries.add(`${r.user_id}_${r.entry_number}`));
+    // Legacy: entry 1 from golf_league_members
+    db.prepare('SELECT user_id FROM golf_league_members WHERE golf_league_id = ? AND is_paid = 1')
+      .all(req.params.id)
+      .forEach(r => paidEntries.add(`${r.user_id}_1`));
+
+    const unpaid = allEntries.filter(e => !paidEntries.has(`${e.user_id}_${e.entry_number}`));
+    if (unpaid.length === 0) return res.json({ ok: true, sent: 0, message: 'All entries are paid' });
+
+    // Deduplicate by user (send one email per user, not per entry)
+    const uniqueUsers = new Map();
+    for (const e of unpaid) {
+      if (!uniqueUsers.has(e.user_id)) uniqueUsers.set(e.user_id, e);
+    }
+
+    const { sendPayReminder } = require('../mailer');
+    const lockTime = league.picks_lock_time || (computeLockTime(db.prepare('SELECT start_date FROM golf_tournaments WHERE id = ?').get(tid)?.start_date || '').toISOString());
+
+    let sent = 0;
+    for (const [, member] of uniqueUsers) {
+      try {
+        await sendPayReminder(member.email, {
+          username: member.username,
+          leagueName: league.name,
+          buyIn: league.buy_in_amount || 0,
+          commissionerName: commName,
+          paymentMethods: league.payment_methods,
+          lockTime,
+        });
+        sent++;
+      } catch (err) {
+        console.error(`[remind-unpaid] Failed for ${member.email}:`, err.message);
+      }
+    }
+
+    res.json({ ok: true, sent, total_unpaid: unpaid.length });
+  } catch (err) {
+    console.error('[remind-unpaid]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── GET /leagues/:id/unpaid-summary ──────────────────────────────────────────
+// Returns unpaid count + paid prize pool for the commissioner banner.
+router.get('/leagues/:id/unpaid-summary', authMiddleware, (req, res) => {
+  try {
+    const league = db.prepare('SELECT * FROM golf_leagues WHERE id = ?').get(req.params.id);
+    if (!league) return res.status(404).json({ error: 'League not found' });
+    if (league.commissioner_id !== req.user.id) return res.status(403).json({ error: 'Commissioner only' });
+
+    const tid = league.pool_tournament_id;
+    if (!tid) return res.json({ unpaid: 0, paid: 0, total: 0, prizePool: 0 });
+
+    // Count all entries
+    const totalEntries = db.prepare(
+      'SELECT COUNT(DISTINCT user_id || \'_\' || COALESCE(entry_number, 1)) as cnt FROM pool_picks WHERE league_id = ? AND tournament_id = ?'
+    ).get(req.params.id, tid).cnt;
+
+    // Count paid entries
+    const paidFromTable = db.prepare(
+      'SELECT COUNT(*) as cnt FROM pool_entry_paid WHERE league_id = ? AND tournament_id = ? AND is_paid = 1'
+    ).get(req.params.id, tid).cnt;
+    const paidFromLegacy = db.prepare(
+      'SELECT COUNT(*) as cnt FROM golf_league_members WHERE golf_league_id = ? AND is_paid = 1'
+    ).get(req.params.id).cnt;
+    // Avoid double-counting: entries in pool_entry_paid for entry 1 were migrated from legacy
+    const paidEntry1InTable = db.prepare(
+      'SELECT COUNT(*) as cnt FROM pool_entry_paid WHERE league_id = ? AND tournament_id = ? AND entry_number = 1 AND is_paid = 1'
+    ).get(req.params.id, tid).cnt;
+    const paidCount = paidFromTable + Math.max(0, paidFromLegacy - paidEntry1InTable);
+
+    // If no paid tracking rows exist, assume all paid (legacy)
+    const hasAnyPaidTracking = (db.prepare('SELECT COUNT(*) as cnt FROM pool_entry_paid WHERE league_id = ?').get(req.params.id).cnt > 0) ||
+                               (db.prepare('SELECT COUNT(*) as cnt FROM golf_league_members WHERE golf_league_id = ? AND is_paid = 1').get(req.params.id).cnt > 0);
+    const effectivePaid = hasAnyPaidTracking ? paidCount : totalEntries;
+
+    const buyIn = league.buy_in_amount || 0;
+    const adminFee = league.admin_fee_pct || 0;
+    const grossPool = effectivePaid * buyIn;
+    const prizePool = Math.round(grossPool * (1 - adminFee / 100) * 100) / 100;
+
+    res.json({
+      unpaid: totalEntries - effectivePaid,
+      paid: effectivePaid,
+      total: totalEntries,
+      prizePool,
+      expectedPool: Math.round(totalEntries * buyIn * (1 - adminFee / 100) * 100) / 100,
+      buy_in: buyIn,
+    });
+  } catch (err) {
+    console.error('[unpaid-summary]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ── PATCH /leagues/:id/team-name ───────────────────────────────────────────────
 // User renames their entry's team name (pre-lock only).
 router.patch('/leagues/:id/team-name', authMiddleware, (req, res) => {
