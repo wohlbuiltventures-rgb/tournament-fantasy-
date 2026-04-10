@@ -570,14 +570,15 @@ async function runAutoSync() {
             COUNT(*) as total
           FROM golf_scores WHERE tournament_id = ?
         `).get(tournament.id);
-        const threshold = Math.max(10, (roundCounts.total || 0) * 0.6);
+        const total = roundCounts.total || 0;
 
         // Send emails for ALL completed rounds that haven't been sent yet
+        // A round is complete when 100% of players have that round's score
         const completedRounds = [];
-        if (roundCounts.r1 >= threshold) completedRounds.push(1);
-        if (roundCounts.r2 >= threshold) completedRounds.push(2);
-        if (roundCounts.r3 >= threshold) completedRounds.push(3);
-        if (isFinal || roundCounts.r4 >= threshold) completedRounds.push(4);
+        if (total > 0 && roundCounts.r1 >= total) completedRounds.push(1);
+        if (total > 0 && roundCounts.r2 >= total) completedRounds.push(2);
+        if (total > 0 && roundCounts.r3 >= total) completedRounds.push(3);
+        if (isFinal || (total > 0 && roundCounts.r4 >= total)) completedRounds.push(4);
 
         for (const rnd of completedRounds) {
           const isFinalRound = rnd === 4 && isFinal;
