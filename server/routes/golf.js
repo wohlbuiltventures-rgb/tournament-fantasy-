@@ -554,16 +554,14 @@ router.get('/leagues/:id/standings', authMiddleware, async (req, res) => {
       let tournament_winner = null;
       if (tourn?.status === 'completed' && tid) {
         const winner = db.prepare(`
-          SELECT gs.player_total, gs.round1, gs.round2, gs.round3, gs.round4, gp.name
+          SELECT gs.round1, gs.round2, gs.round3, gs.round4, gp.name
           FROM golf_scores gs
           LEFT JOIN golf_players gp ON gp.id = gs.player_id
           WHERE gs.tournament_id = ? AND gs.finish_position = 1 LIMIT 1
         `).get(tid);
         if (winner) {
-          winning_score = winner.player_total != null
-            ? winner.player_total
-            : [winner.round1, winner.round2, winner.round3, winner.round4]
-                .filter(r => r != null).reduce((s, r) => s + r, 0);
+          winning_score = [winner.round1, winner.round2, winner.round3, winner.round4]
+            .filter(r => r != null).reduce((s, r) => s + r, 0);
           tournament_winner = winner.name;
         }
       }
