@@ -705,7 +705,7 @@ function AmbassadorCodes() {
           <div style={{ background: '#0a1a0f', border: '1px solid #14532d', borderRadius: 20, padding: 32, width: '100%', maxWidth: 380, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 6px', color: '#fff', fontSize: 18, fontWeight: 800 }}>Card Assets — {qrModal.code}</h3>
             <p style={{ color: '#6b7280', fontSize: 12, margin: '0 0 20px', wordBreak: 'break-all' }}>{qrModal.referralUrl}</p>
-            <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, display: 'inline-block', minWidth: 200, minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, minWidth: 200, minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {qrLoading && <span style={{ color: '#6b7280', fontSize: 13 }}>Generating…</span>}
               {!qrLoading && qrModal.blobUrl && (
                 <img src={qrModal.blobUrl} alt={`QR for ${qrModal.code}`} style={{ width: 200, height: 200, display: 'block' }} />
