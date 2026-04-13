@@ -8,4 +8,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>,
 )
-// cache bust 1776039491
+if (typeof window !== 'undefined') window.__TR_BUILD = Date.now();
