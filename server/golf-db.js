@@ -2783,12 +2783,4 @@ runOnce('clear-r4-round-emails-for-final', () => {
   } catch (e) { console.error('[migration] clear-r4 error:', e.message); }
 });
 
-// ── Clear R3+R4 for Dhaul's pool (batch send fix) ────────────────────────────
-runOnce('clear-r3r4-for-batch-send-fix', () => {
-  try {
-    const del = db.prepare("DELETE FROM round_emails_sent WHERE round_number IN (3, 4)").run();
-    if (del.changes > 0) console.log(`[migration] clear-r3r4: deleted ${del.changes} sent record(s) — will retry with batch send`);
-  } catch (e) { console.error('[migration] clear-r3r4 error:', e.message); }
-});
-
 module.exports = db;

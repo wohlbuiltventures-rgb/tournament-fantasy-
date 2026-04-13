@@ -504,7 +504,7 @@ ${emailFooter(`tourneyrun.app &middot; You're in ${leagueName} &middot; <a href=
 
 // ── Round End Standings Update ────────────────────────────────────────────────
 // standings: [{ rank, teamName, score, isUser, entries: [{ entryNumber, teamName, rank, score }] }]
-function buildRoundStandingsHtml({ username, leagueName, tournamentName, roundNumber, isFinal, winnerName, totalEntries, top5, userEntries, leagueUrl, scoringStyle }) {
+async function sendRoundStandings(toEmail, { username, leagueName, tournamentName, roundNumber, isFinal, winnerName, totalEntries, top5, userEntries, leagueUrl, scoringStyle }) {
   const isStroke = ['stroke_play', 'total_score', 'total_strokes'].includes(scoringStyle);
   const fmtScore = s => isStroke ? (s === 0 ? 'E' : (s > 0 ? '+' : '') + s) : s + ' pts';
   const ROUND_DAYS = { 1: 'Thursday', 2: 'Friday', 3: 'Saturday', 4: 'Sunday' };
@@ -546,7 +546,11 @@ function buildRoundStandingsHtml({ username, leagueName, tournamentName, roundNu
       ? `<p style="font-size:14px;color:#9ca3af;text-align:center;margin-top:16px;margin-bottom:0;">Thanks for playing! 🏌️</p>`
       : '';
 
-  return emailShell(`
+  await sendEmail({
+    from: FROM_GOLF,
+    to: toEmail,
+    subject,
+    html: emailShell(`
 ${emailHeader()}
       <tr><td style="padding-top:28px;padding-right:32px;padding-bottom:28px;padding-left:32px;background-color:#0f1923;">
         ${headingBadge}
@@ -568,16 +572,8 @@ ${emailHeader()}
         ${nextRound}
       </td></tr>
 ${emailFooter(`tourneyrun.app &middot; You're in ${leagueName} &middot; <a href="mailto:support@tourneyrun.app" style="color:#6b7280;">Unsubscribe</a>`)}
-`);
-}
-
-// Wrapper for single-send (used by test endpoint)
-async function sendRoundStandings(toEmail, params) {
-  const html = buildRoundStandingsHtml(params);
-  const subject = params.isFinal
-    ? `${params.winnerName} wins ${params.leagueName}!`
-    : `Round ${params.roundNumber} complete — ${params.tournamentName} standings`;
-  await sendEmail({ from: FROM_GOLF, to: toEmail, subject, html });
+`),
+  });
 }
 
 // Ordinal helper: 1→1st, 2→2nd, 3→3rd, etc.
@@ -603,7 +599,6 @@ module.exports = {
   sendSuperAdminBlast,
   sendPicksLockConfirmation,
   sendRoundStandings,
-  buildRoundStandingsHtml,
   sendPayReminder,
   sendCommUnpaidNotice,
 };

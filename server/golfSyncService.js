@@ -859,14 +859,11 @@ async function sendRoundEmails(tournamentId, roundNumber, isFinal) {
         userMap.get(s.user_id).entries.push({ entryNumber: s.entry_number, teamName: s.team_name, rank: s.rank, score: s.score });
       }
 
-      // Build all emails, then batch send in chunks of 100 (Resend limit)
-      const { sendEmailBatch } = require('./mailer');
-      const { buildRoundStandingsHtml } = require('./mailer');
-      const allEmails = [];
+      let sent = 0;
       for (const [, data] of userMap) {
         if (!data.email) continue;
         try {
-          const html = buildRoundStandingsHtml({
+          const result = await sendRoundStandings(data.email, {
             username: data.username,
             leagueName: league.name,
             tournamentName: tourn.name,
@@ -879,31 +876,18 @@ async function sendRoundEmails(tournamentId, roundNumber, isFinal) {
             userEntries: data.entries,
             leagueUrl,
           });
-          const subject = isFinal
-            ? `${winnerName} wins ${league.name}!`
-            : `Round ${roundNumber} complete — ${tourn.name} standings`;
-          allEmails.push({ to: data.email, subject, html, from: 'TourneyRun Golf <noreply@tourneyrun.app>' });
+          console.log(`[round-email] Resend OK for ${data.email}`);
+          sent++;
         } catch (err) {
-          console.error(`[round-email] HTML build failed for ${data.email}:`, err.message);
+          console.error(`[round-email] Resend FAILED for ${data.email}:`, err.message);
         }
       }
 
-      let sent = 0;
-      for (let i = 0; i < allEmails.length; i += 100) {
-        const chunk = allEmails.slice(i, i + 100);
-        try {
-          await sendEmailBatch(chunk);
-          sent += chunk.length;
-          console.log(`[round-email] Batch ${Math.floor(i / 100) + 1} sent (${chunk.length} emails)`);
-        } catch (err) {
-          console.error(`[round-email] Batch ${Math.floor(i / 100) + 1} FAILED:`, err.message);
-        }
-      }
-
+      // Only mark as sent if at least one email succeeded
       if (sent > 0) {
         db.prepare('INSERT OR IGNORE INTO round_emails_sent (id, league_id, round_number) VALUES (?, ?, ?)')
           .run(uuidv4(), league.id, roundNumber);
-        console.log(`[round-email] R${roundNumber}${isFinal ? ' (FINAL)' : ''} sent to ${sent}/${allEmails.length} members of "${league.name}"`);
+        console.log(`[round-email] R${roundNumber}${isFinal ? ' (FINAL)' : ''} sent to ${sent}/${userMap.size} members of "${league.name}"`);
       } else {
         console.error(`[round-email] R${roundNumber} — ALL sends failed for "${league.name}", will retry next cycle`);
       }
